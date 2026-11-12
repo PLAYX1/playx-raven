@@ -227,3 +227,97 @@ test('쪽지 화면 1137×780 · 1440×900: 가로 넘침 없음 · 입력칸이
     } finally { await page.close(); }
   }
 });
+
+// 11-12 카톡 PC·텔레그램 결(src/talk-desk.ts): 그림 줄 · 목록 줄 크기 · 찾기 · Esc · 말풍선 메뉴 · 보내기 단추 · 말풍선 폭.
+test('카톡 PC 결: 줄 64~72px · 46px 동그라미 · Ctrl/⌘+F 찾기 · 말풍선 폭 · 보내기는 글이 있을 때만 · Esc 로 닫기', async () => {
+  const { page, errors } = await open(1440, 900);
+  try {
+    // 목록 줄: 테두리 없고 64~72px, 동그라미 44~48px, 이름 15px 굵게, 마지막 말 13px.
+    const row = await page.$eval(`#tk-chats [data-chat-key="${KIM}"]`, (r) => {
+      const cs = getComputedStyle(r), av = r.querySelector('.tkc-av').getBoundingClientRect();
+      return { h: Math.round(r.getBoundingClientRect().height), border: cs.borderTopWidth, radius: cs.borderTopLeftRadius, av: Math.round(av.width), avr: getComputedStyle(r.querySelector('.tkc-av')).borderRadius, name: getComputedStyle(r.querySelector('.tkc-name')).fontSize, last: getComputedStyle(r.querySelector('.tkc-last')).fontSize };
+    });
+    assert.ok(row.h >= 64 && row.h <= 72, `줄 높이 ${row.h}`);
+    assert.equal(row.border, '0px'); assert.equal(row.radius, '0px');
+    assert.ok(row.av >= 44 && row.av <= 48, `동그라미 ${row.av}`); assert.equal(row.avr, '50%');
+    assert.equal(row.name, '15px'); assert.equal(row.last, '13px');
+    // 그림 줄: 친구·채팅·광장이 세로로, 글자는 한 줄.
+    const rail = await page.$$eval('.tk-rail [role="tab"]', (b) => b.map((x) => ({ x: Math.round(x.getBoundingClientRect().left), ws: getComputedStyle(x).whiteSpace })));
+    assert.equal(rail.length, 3); assert.equal(new Set(rail.map((r) => r.x)).size, 1, '세로 한 줄'); assert.ok(rail.every((r) => r.ws === 'nowrap'));
+    // Ctrl/⌘+F → 목록 찾기 칸.
+    const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
+    await page.keyboard.down(mod); await page.keyboard.press('KeyF'); await page.keyboard.up(mod);
+    assert.equal(await page.evaluate(() => document.activeElement?.id), 'tk-filter');
+    await page.keyboard.type('김민');
+    assert.deepEqual(await page.$$eval('#tk-chats .tkc-row', (r) => r.filter((x) => getComputedStyle(x).display !== 'none').map((x) => x.querySelector('.tkc-name').textContent)), ['김민수']);
+    await page.keyboard.press('Escape');
+    assert.equal(await page.$eval('#tk-filter', (i) => i.value), '', 'Esc 로 찾기 지움');
+    assert.equal(await page.$$eval('#tk-chats .tk-filtered', (r) => r.length), 0);
+    // 대화 열기 → 말풍선 폭 ≤ 70% · 보내기 단추는 빈 칸이면 흐림.
+    await page.evaluate((k) => document.querySelector(`#tk-chats [data-chat-key="${k}"]`).click(), KIM);
+    await page.waitForFunction(() => document.querySelectorAll('#tk-list .bub').length === 3);
+    const geo = await page.evaluate(() => {
+      const pane = document.getElementById('tk-list').getBoundingClientRect().width;
+      return { pane, widest: Math.max(...[...document.querySelectorAll('#tk-list .bub')].map((b) => b.getBoundingClientRect().width)), who: document.querySelectorAll('#tk-list .who:not(.me) .rv-avatar').length };
+    });
+    assert.ok(geo.widest <= geo.pane * 0.7, `말풍선 ${geo.widest} / ${geo.pane}`);
+    assert.ok(geo.who >= 1, '상대 말 무리에 얼굴');
+    assert.equal(await page.$eval('.composer', (c) => c.classList.contains('tk-empty')), true, '빈 칸이면 보내기 흐림');
+    await page.type('#tk-text', '안녕');
+    assert.equal(await page.$eval('.composer', (c) => c.classList.contains('tk-empty')), false);
+    // 머리 단추는 그림(글자는 화면 읽기용) · 줄바꿈 없음.
+    for (const sel of ['#tk-info', '#tk-more']) {
+      const b = await page.$eval(sel, (e) => ({ h: Math.round(e.getBoundingClientRect().height), w: Math.round(e.getBoundingClientRect().width), label: e.textContent.trim() }));
+      assert.equal(b.h, 40, sel); assert.equal(b.w, 40, sel); assert.ok(b.label, `${sel} 화면 읽기 글자`);
+    }
+    // Esc: 입력칸에 있어도 대화를 닫는다 → 가운데는 「대화를 골라 주세요」.
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => document.querySelector('#page-talk.idle') && !document.querySelector('#page-talk.dmon'));
+    assert.equal(await page.$eval('#tk-idle', (e) => getComputedStyle(e).display !== 'none'), true);
+    // 다른 대화를 누르면 다시 열린다.
+    await page.evaluate((k) => document.querySelector(`#tk-chats [data-chat-key="${k}"]`).click(), GROUP);
+    await page.waitForFunction(() => !document.querySelector('#page-talk.idle') && document.querySelectorAll('#tk-list .bub').length === 2);
+    await shot(page, 'desk-group-1440.png');
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('말풍선 오른쪽 클릭: 방은 답장·복사·내 말로…(있는 단추를 대신 누른다) · 쪽지는 복사 · Esc 로 메뉴만 닫힘', async () => {
+  const { page, errors } = await open(1440, 900);
+  try {
+    await page.evaluate(() => { window.__copied = []; navigator.clipboard.writeText = async (s) => { window.__copied.push(s); }; });
+    await page.evaluate((k) => document.querySelector(`#tk-chats [data-chat-key="${k}"]`).click(), KIM);
+    await page.waitForFunction(() => document.querySelectorAll('#tk-list .bub').length === 3);
+    const at = await page.$$eval('#tk-list .line:not(.me) .bub', (bs) => { const r = bs[bs.length - 1].getBoundingClientRect(); return { x: r.left + 12, y: r.top + 8 }; });
+    await page.mouse.click(at.x, at.y, { button: 'right' });
+    await page.waitForFunction(() => document.getElementById('tk-ctx') && !document.getElementById('tk-ctx').hidden);
+    const items = await page.$$eval('#tk-ctx button', (b) => b.map((x) => x.textContent.trim()));
+    assert.deepEqual(items, ['복사'], '쪽지 메뉴');
+    const box = await page.$eval('#tk-ctx', (m) => { const r = m.getBoundingClientRect(); return { x: r.left, y: r.top }; });
+    assert.ok(Math.abs(box.x - at.x) < 4 && Math.abs(box.y - at.y) < 4, '커서 자리에');
+    await page.click('#tk-ctx button');
+    await page.waitForFunction(() => window.__copied.length === 1);
+    assert.equal(await page.evaluate(() => window.__copied[0]), '감사합니다! 도복 챙겨 갈게요', '받은 글자 그대로');
+    // Esc 는 메뉴만 닫는다(대화는 그대로).
+    await page.mouse.click(at.x, at.y, { button: 'right' });
+    await page.keyboard.press('Escape');
+    assert.equal(await page.$eval('#tk-ctx', (m) => m.hidden), true);
+    assert.equal(await page.$eval('#page-talk', (p) => p.classList.contains('dmon')), true, '대화는 열린 채');
+    // 방: 말풍선 아래 단추 줄(.bubacts)과 같은 일 — 「답장」을 누르면 답장 줄이 뜬다. Esc 는 답장부터 거둔다.
+    await page.evaluate((r) => document.querySelector(`#tk-chats [data-chat-room="${r}"]`).click(), ROOM);
+    await page.waitForFunction(() => !document.querySelector('#page-talk.dmon') && document.querySelector('#tk-list .bub[data-say]'));
+    const at2 = await page.$eval('#tk-list .bub[data-say]', (b) => { const r = b.getBoundingClientRect(); return { x: r.left + 12, y: r.top + 8 }; });
+    await page.mouse.click(at2.x, at2.y, { button: 'right' });
+    await page.waitForFunction(() => !document.getElementById('tk-ctx').hidden);
+    const roomItems = await page.$$eval('#tk-ctx button', (b) => b.map((x) => x.textContent.trim()));
+    assert.deepEqual(roomItems.slice(0, 2), ['답장', '복사']);
+    assert.ok(roomItems.includes('내 말로') && roomItems.includes('안 보기'), roomItems.join());
+    await shot(page, 'desk-roommenu-1440.png');
+    await page.click('#tk-ctx button');
+    await page.waitForFunction(() => !document.getElementById('tk-replybar').hidden);
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => document.getElementById('tk-replybar').hidden);
+    assert.match(await page.$eval('#tk-title', (e) => e.textContent), /서울 주짓수 모임/, '방은 그대로');
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});

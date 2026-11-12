@@ -1,43 +1,164 @@
-/* 11-12 이야기 왼쪽 칸 — 카톡 PC 결(src/talk-dm.ts). 기존 토큰(--panel·--line·--side·--ravi…)만 쓴다. 단추 글자는 두 줄로 안 접힌다. */
-#page-talk .tk-side { display:flex; gap:4px; margin:0 2px 8px; padding:4px; border-radius:14px; background:var(--side); }
-#page-talk .tk-side button { flex:1 1 0; min-width:0; min-height:40px; padding:0 8px; border:0; border-radius:10px; background:transparent; color:var(--muted); font-size:15px; font-weight:700; white-space:nowrap; display:inline-flex; align-items:center; justify-content:center; gap:6px; }
-#page-talk .tk-side button[aria-selected="true"] { background:var(--panel); color:var(--text); box-shadow:0 1px 3px #0002; }
-#page-talk .tk-side-n { min-width:20px; height:20px; padding:0 6px; border-radius:10px; background:var(--ravi); color:#fff; font-size:12px; line-height:20px; flex-shrink:0; }
+/* 11-12 이야기 = 카톡 PC · 텔레그램 데스크탑 결(src/talk-dm.ts · src/talk-desk.ts).
+ * 얇은 그림 줄(친구·채팅·광장) → 목록(320) → 대화. 기존 토큰(--panel·--line·--side·--ravi…)만 쓴다. 단추 글자는 두 줄로 안 접힌다.
+ * 광장(#page-talk.feedon)의 X 식 피드는 이 파일의 대화 규칙을 받지 않는다 — 대화 규칙은 전부 :not(.feedon) 아래에 있다. */
+
+#page-talk { --tk-mine: color-mix(in srgb, var(--ravi) 30%, var(--panel)); --tk-mine-text: var(--text); --tk-sel: color-mix(in srgb, var(--text) 8%, transparent); }
+
+/* ── 틀: 그림 줄 · 목록 · 대화 · (정보) ─────────────────────────── */
+#page-talk .talkwrap { position:relative; grid-template-columns:76px 320px minmax(0,1fr) auto; }
+@media (max-width:1240px) { #page-talk .talkwrap { grid-template-columns:76px 280px minmax(0,1fr) auto; } }
+#page-talk .rv-person { display:none; width:300px; box-sizing:border-box; }
+#page-talk.infoon .rv-person { display:block; }
+@media (max-width:1320px) { #page-talk.infoon .rv-person { position:absolute; top:0; right:0; bottom:0; z-index:8; box-shadow:-12px 0 32px #0002; } }
+
+/* 🔴 main 의 단추는 모두 64px·16px(!important, 어르신 손가락) — 대화 화면의 작은 그림 단추만 카톡 PC 밀도(40px)로 낮춘다(머리줄 「초대하기」·「더 보기」 40px 와 같은 선례). */
+/* 그림 줄 — 그림 아래 이름을 늘 적는다(13px, 대표 11-10). */
+#page-talk .tk-rail { display:flex; flex-direction:column; align-items:center; gap:4px; padding:14px 0; min-width:0; background:var(--side); border-right:1px solid var(--line); }
+#page-talk .tk-rail button { position:relative; width:64px; min-height:60px; padding:6px 2px; margin:0; border:0; border-radius:12px; background:transparent; color:var(--muted); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; font-size:13px; font-weight:600; line-height:1.2; white-space:nowrap; box-shadow:none; }
+#page-talk .tk-rail .tk-rail-t { font-size:13px; }
+#page-talk .tk-rail button svg { width:24px; height:24px; flex:none; }
+#page-talk .tk-rail button:hover { background:var(--tk-sel); color:var(--text); }
+#page-talk .tk-rail button[aria-selected="true"] { background:var(--panel); color:var(--text); font-weight:800; box-shadow:0 1px 2px #0001; }
+#page-talk .tk-rail button[aria-selected="true"] svg { color:var(--ravi); }
+#page-talk .tk-side-n { position:absolute; top:3px; right:5px; min-width:18px; height:18px; padding:0 5px; border-radius:9px; background:#E5483B; color:#fff; font-size:11px; font-weight:800; line-height:18px; text-align:center; }
 #page-talk .tk-side-n[hidden] { display:none; }
 #page-talk #tk-squarebox[hidden], #page-talk .tk-chats[hidden] { display:none; }
 
-.tk-chats { display:flex; flex-direction:column; gap:2px; }
-.tk-chats .tkc-tools { display:flex; justify-content:flex-end; padding:2px 4px 6px; }
-.tk-chats .tkc-tools button { min-height:36px; padding:0 12px; font-size:14px; white-space:nowrap; flex-shrink:0; }
-.tk-chats .tkc-note { margin:2px 6px 8px; padding:10px 12px; border-radius:12px; background:var(--side); color:var(--muted); font-size:13px; line-height:1.5; }
-.tk-chats .tkc-empty { margin:28px 10px; color:var(--muted); font-size:14px; line-height:1.8; text-align:center; }
-.tk-chats .tkc-row { display:flex; align-items:center; gap:12px; width:100%; min-height:68px; padding:8px 10px; border:0; border-radius:14px; background:transparent; color:var(--text); text-align:left; font:inherit; cursor:pointer; }
+/* 목록 칸 */
+#page-talk .rooms { padding:0 0 12px; gap:0; border:0; border-right:1px solid var(--line); border-radius:0; background:var(--panel); }
+#page-talk .tk-listhead { position:sticky; top:0; z-index:3; display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:60px; padding:8px 12px 4px 18px; background:var(--panel); }
+#page-talk .tk-listtitle { font-size:20px; font-weight:800; white-space:nowrap; }
+#page-talk .tk-iconbtn { display:inline-grid; place-items:center; width:40px; height:40px; min-height:40px !important; padding:0; border:0; border-radius:10px; background:transparent; color:var(--text); flex:none; white-space:nowrap; }
+#page-talk .tk-iconbtn:hover { background:var(--tk-sel); }
+#page-talk .tk-iconbtn svg { width:22px; height:22px; }
+#page-talk .tk-iconbtn[hidden] { display:none; }
+#page-talk .tk-filter { position:sticky; top:60px; z-index:3; display:flex; align-items:center; gap:8px; height:36px; margin:0 12px 8px; padding:0 12px; border-radius:10px; background:var(--side); color:var(--muted); box-shadow:0 -4px 0 var(--panel), 0 8px 0 var(--panel); cursor:text; }
+#page-talk .tk-filter svg { width:16px; height:16px; flex:none; }
+#page-talk .tk-filter input { flex:1; min-width:0; height:34px; min-height:0; padding:0; border:0; border-radius:0; background:transparent; color:var(--text); font:inherit; font-size:15px !important; outline:none; box-shadow:none; }
+#page-talk .tk-filter:focus-within { box-shadow:0 -4px 0 var(--panel), 0 8px 0 var(--panel), inset 0 0 0 2px var(--ravi); }
+#page-talk .tk-filtered { display:none !important; }
+
+/* 라비 줄 = 채팅 줄과 같은 결(카드 아님) */
+#page-talk .rv-room-ravi { width:100%; min-height:68px; margin:0; padding:10px 16px; gap:12px; border:0; border-radius:0; background:transparent; box-shadow:none; }
+#page-talk .rv-room-ravi:hover { background:var(--side); }
+#page-talk .rv-room-ravi b { font-size:15px; }
+#page-talk .rv-room-ravi small { font-size:13px; }
+#page-talk #rv-room-ravi-face > * { width:46px !important; height:46px !important; border-radius:50% !important; }
+
+/* 줄: 64~72px · 46px 동그라미 · 이름 15 굵게 · 마지막 말 13 회색 · 시각 12 · 안 읽음 알약. 테두리·카드 없음. */
+.tk-chats { display:flex; flex-direction:column; gap:0; }
+.tk-chats .tkc-note { margin:0 12px 6px; padding:6px 10px; border-radius:8px; background:var(--side); color:var(--muted); font-size:12px; line-height:1.4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.tk-chats .tkc-empty { margin:28px 16px; color:var(--muted); font-size:14px; text-align:center; }
+.tk-chats .tkc-row { display:flex; align-items:center; gap:12px; width:100%; min-height:68px; padding:10px 16px; margin:0; border:0; border-radius:0; background:transparent; color:var(--text); text-align:left; font:inherit; cursor:pointer; box-shadow:none; }
 .tk-chats .tkc-row:hover { background:var(--side); }
-.tk-chats .tkc-row.on { background:var(--ravi-tint, var(--side)); }
-.tk-chats .tkc-av { width:46px; height:46px; flex:none; border-radius:18px; display:grid; place-items:center; font-weight:800; font-size:18px; color:#fff; background:hsl(var(--h,260) 45% 50%); }
-.tk-chats .tkc-av.grp { border-radius:14px; background:hsl(var(--h,260) 35% 42%); }
+.tk-chats .tkc-row.on { background:var(--tk-sel); }
+.tk-chats .tkc-av { width:46px; height:46px; flex:none; border-radius:50%; display:grid; place-items:center; font-weight:800; font-size:18px; color:#fff; background:hsl(var(--h,260) 45% 50%); }
+.tk-chats .tkc-av.grp { background:hsl(var(--h,260) 35% 42%); }
 .tk-chats .tkc-mid { flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:3px; }
 .tk-chats .tkc-top { display:flex; align-items:baseline; gap:6px; min-width:0; }
-.tk-chats .tkc-name { font-size:16px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
-.tk-chats .tkc-kind { flex-shrink:0; color:var(--faint, var(--muted)); font-size:12px; white-space:nowrap; }
-.tk-chats .tkc-last { color:var(--muted); font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.tk-chats .tkc-side { flex:none; display:flex; flex-direction:column; align-items:flex-end; gap:6px; align-self:flex-start; padding-top:4px; }
-.tk-chats .tkc-side time { color:var(--faint, var(--muted)); font-size:12px; white-space:nowrap; font-variant-numeric:tabular-nums; }
-.tk-chats .tkc-n { min-width:22px; height:22px; padding:0 7px; border-radius:11px; background:#E5483B; color:#fff; font-size:12px; font-weight:800; line-height:22px; text-align:center; }
-.tk-chats .tkc-dot { width:10px; height:10px; border-radius:50%; background:#E5483B; }
-.tk-chats .tkc-friend { cursor:default; }
-.tk-chats .tkc-who { border:0; background:none; padding:0; color:inherit; font:inherit; text-align:left; cursor:pointer; }
-.tk-chats .tkc-dm { flex:none; min-height:36px; padding:0 14px; border-radius:18px; font-size:14px; white-space:nowrap; }
+.tk-chats .tkc-name { font-size:15px; font-weight:700; line-height:1.3; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+.tk-chats .tkc-kind { flex-shrink:0; color:var(--muted); font-size:13px; white-space:nowrap; }
+.tk-chats .tkc-last { color:var(--muted); font-size:13px; line-height:1.35; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.tk-chats .tkc-side { flex:none; display:flex; flex-direction:column; align-items:flex-end; gap:6px; align-self:flex-start; padding-top:3px; }
+.tk-chats .tkc-side time { color:var(--muted); font-size:12px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.tk-chats .tkc-n { min-width:20px; height:20px; padding:0 6px; border-radius:10px; background:#E5483B; color:#fff; font-size:12px; font-weight:800; line-height:20px; text-align:center; }
+.tk-chats .tkc-dot { width:8px; height:8px; margin-top:4px; border-radius:50%; background:#E5483B; }
+.tk-chats .tkc-friend { cursor:default; min-height:64px; }
+.tk-chats .tkc-who { border:0; background:none; padding:0; color:inherit; font:inherit; text-align:left; cursor:pointer; min-height:0 !important; justify-content:center; box-shadow:none; }
+.tk-chats .tkc-dm { flex:none; min-height:36px !important; height:36px; padding:0 14px; border-radius:18px; font-size:14px !important; white-space:nowrap; }
 
-/* 가운데: 쪽지를 열면 공개 방 표시·초대·방 설정·피드 탭·사진·@ 는 접는다(쪽지에는 안 맞는다). */
-.tkc-dmchip { display:none; color:var(--good, #1f7a3f); font-size:14px; font-weight:600; white-space:nowrap; }
+/* 광장 칸의 방 줄도 같은 결 */
+#page-talk #tk-rooms { display:flex; flex-direction:column; }
+#page-talk #tk-rooms .room { min-height:52px; padding:0 18px; border-radius:0; font-size:15px; display:flex; align-items:center; gap:6px; }
+#page-talk #tk-rooms .room:hover { background:var(--side); }
+#page-talk #tk-rooms .room.on { background:var(--tk-sel); color:var(--text); font-weight:700; }
+#page-talk #tk-squarebox > .ghost { min-height:40px !important; margin:8px 0 0 12px; padding:0 14px; font-size:15px !important; white-space:nowrap; }
+
+/* ── 대화 머리: 얼굴 · 이름 · 사람 수 · 그림 단추 ─────────────────── */
+#page-talk .chathead { min-height:64px; padding:0 12px 0 20px; gap:10px; flex-wrap:nowrap; }
+#page-talk .tk-headav { width:40px; height:40px; flex:none; border-radius:50%; display:grid; place-items:center; background:hsl(var(--h,260) 45% 50%); color:#fff; font-size:16px; font-weight:800; }
+#page-talk .tk-headav::before { content:attr(data-initial); } /* 머리글자는 사용자 자료 — 글자 칸이 아니라 ::before 로(번역기가 손대지 않게) */
+#page-talk .tk-headtxt { display:flex; flex-direction:column; justify-content:center; gap:1px; min-width:0; }
+#page-talk .tk-headline { display:flex; align-items:center; gap:6px; min-width:0; }
+#page-talk .chathead #tk-title { font-size:16px; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#page-talk .tk-headsub { display:flex; gap:6px; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#page-talk .tk-headsub :is(.rv-public, .tkc-dmchip) { font-size:12px; font-weight:500; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#page-talk .chathead :is(#tk-searchbtn, #tk-bell, #tk-info, #tk-more) { position:relative; display:inline-grid; place-items:center; width:40px; height:40px; min-height:40px !important; padding:0 !important; border:0; border-radius:10px; background:transparent; color:var(--text); flex:none; box-shadow:none; }
+#page-talk .chathead :is(#tk-searchbtn, #tk-bell, #tk-info, #tk-more):hover,
+#page-talk .chathead :is(#tk-searchbtn, #tk-bell, #tk-info, #tk-more)[aria-expanded="true"],
+#page-talk .chathead #tk-info[aria-pressed="true"] { background:var(--tk-sel); }
+#page-talk .chathead .tk-headbtn .tk-ico { display:inline-grid; place-items:center; }
+#page-talk .chathead .tk-headbtn .tk-ico svg { width:22px; height:22px; }
+#page-talk .chathead .tk-headbtn .tk-lbl { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+#page-talk .chathead .tk-bell-dot { position:absolute; top:7px; right:7px; }
+#page-talk.dmon .chathead :is(#tk-searchbtn, #tk-bell) { display:none; } /* 찾기·알림은 광장 글 것 — 쪽지 머리에는 안 맞는다 */
+
+/* ── 대화(방·쪽지): 말풍선 ──────────────────────────────────────── */
+#page-talk:not(.feedon) .chat { background:var(--side); }
+#page-talk:not(.feedon) #tk-list { padding:12px 24px 18px; gap:0; background:var(--side); }
+#page-talk:not(.feedon) #tk-list .line { max-width:min(74%, 680px); gap:6px; margin-top:10px; }
+#page-talk:not(.feedon) #tk-list .line.cont { margin-top:3px; }
+#page-talk:not(.feedon) #tk-list .line:not(.me) { margin-left:44px; }
+#page-talk:not(.feedon) #tk-list .who:not(.me) + .line,
+#page-talk:not(.feedon) #tk-list .who.me + .line { margin-top:3px; }
+#page-talk:not(.feedon) #tk-list .bub { padding:8px 12px; border:0; border-radius:16px; background:var(--panel); color:var(--text); font-size:15px; line-height:1.5; box-shadow:0 1px 1px #0000000d; }
+#page-talk:not(.feedon) #tk-list .line:not(.me):not(.cont) .bub { border-top-left-radius:4px; }
+#page-talk:not(.feedon) #tk-list .line.me:not(.cont) .bub { border-top-right-radius:4px; }
+#page-talk:not(.feedon) #tk-list .bub.me { background:var(--tk-mine); color:var(--tk-mine-text); }
+#page-talk:not(.feedon) #tk-list .bub.stk { background:transparent; box-shadow:none; padding:2px 0; }
+#page-talk:not(.feedon) #tk-list .bub:hover { border-color:transparent; filter:none; }
+#page-talk:not(.feedon) #tk-list .bub.tk-ctxon { outline:2px solid color-mix(in srgb, var(--ravi) 55%, transparent); outline-offset:1px; }
+/* 시각: 무리의 마지막 말풍선 바깥 아래쪽. 11px 반투명은 노안에 없는 글자였다(옛 지적) → 12px · 진한 회색. */
+#page-talk:not(.feedon) #tk-list .tstamp { font-size:12px; color:var(--muted); padding-bottom:1px; }
+#page-talk:not(.feedon) #tk-list .daysep { margin:16px 0 6px; padding:3px 12px; border:0; border-radius:999px; background:var(--tk-sel); color:var(--muted); font-size:12px; }
+/* 남의 말 무리: 얼굴(36) 왼쪽 · 이름은 첫 말풍선 위 한 번 */
+#page-talk:not(.feedon) #tk-list .who:not(.me) { display:flex; align-items:flex-start; gap:8px; height:20px; margin:12px 0 0; font-size:13px; font-weight:700; line-height:20px; overflow:visible; }
+#page-talk:not(.feedon) #tk-list .who:not(.me) .rv-avatar { width:36px; height:36px; font-size:14px; }
+#page-talk:not(.feedon) #tk-list .who.me { margin:12px 2px 0 0; font-size:13px; }
+#page-talk:not(.feedon) #tk-list .bubacts { margin-left:44px; }
+#page-talk:not(.feedon) #tk-list .bubacts.r { margin-left:0; }
+
+/* 쪽지를 열면 공개 방 표시·초대·방 설정·피드 탭·사진·@·안내 줄은 접는다(쪽지에는 안 맞는다). */
+.tkc-dmchip { display:none; }
 #page-talk.dmon .tkc-dmchip { display:inline; }
 #page-talk.dmon .rv-public, #page-talk.dmon #tk-me, #page-talk.dmon #tk-invite, #page-talk.dmon #tk-room-settings, #page-talk.dmon #tk-gate-head,
-#page-talk.dmon #tk-feedtabs, #page-talk.dmon #tk-photo, #page-talk.dmon #tk-at, #page-talk.dmon #tk-hint, #page-talk.dmon #tk-gate-note { display:none !important; }
-#page-talk.dmon .tkc-start { margin:auto; color:var(--muted); text-align:center; line-height:1.9; font-size:14px; }
+#page-talk.dmon #tk-feedtabs, #page-talk.dmon #tk-photo, #page-talk.dmon #tk-at, #page-talk.dmon #tk-hint, #page-talk.dmon #tk-gate-note, #page-talk.dmon #tk-first { display:none !important; }
+#page-talk:not(.feedon) #tk-hint { display:none !important; } /* 말풍선 안내 줄 — 오른쪽 클릭 메뉴가 대신한다 */
+#page-talk.dmon .tkc-start { margin:auto; color:var(--muted); text-align:center; font-size:14px; }
 #page-talk.dmon .tkc-photo { color:var(--muted); font-style:italic; }
 #page-talk .line.pending { opacity:.6; }
-#page-talk .tkc-retry { border:0; background:none; padding:0; color:var(--bad, #C0392B); cursor:pointer; white-space:nowrap; }
+#page-talk .tkc-retry { border:0; background:none; padding:0; min-height:0 !important; font-size:12px !important; color:var(--bad, #C0392B); cursor:pointer; white-space:nowrap; }
+
+/* ── 입력칸: 위는 여러 줄 칸, 아래는 그림 단추 · 보내기(글이 있을 때만 진하게) ── */
+#page-talk:not(.feedon) .composer { flex-wrap:wrap; align-items:center; gap:2px; padding:6px 12px 10px; border-top:1px solid var(--line); background:var(--panel); }
+#page-talk:not(.feedon) .composer:focus-within { box-shadow:inset 0 2px 0 color-mix(in srgb, var(--ravi) 60%, transparent); }
+#page-talk:not(.feedon) .composer textarea { order:-1; flex:1 0 100%; min-height:58px; max-height:200px; padding:8px 6px; border:0; border-radius:0; background:transparent; font-size:15px; line-height:1.5; box-shadow:none; outline:none; }
+#page-talk:not(.feedon) .composer .photobtn { min-height:40px !important; height:40px; padding:0 10px; border:0; border-radius:10px; background:transparent; color:var(--muted); font-size:15px !important; white-space:nowrap; box-shadow:none; }
+#page-talk:not(.feedon) .composer .photobtn:hover, #page-talk:not(.feedon) .composer .photobtn[aria-expanded="true"] { background:var(--tk-sel); color:var(--text); }
+#page-talk:not(.feedon) .composer :is(#tk-photo, #tk-stk) { width:40px; padding:0; justify-content:center; }
+#page-talk:not(.feedon) .composer :is(#tk-photo, #tk-stk) svg { width:22px; height:22px; }
+#page-talk:not(.feedon) .composer :is(#tk-photo, #tk-stk) > span { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+#page-talk .composer #tk-stk > svg { width:20px; height:20px; flex:none; }
+#page-talk.feedon .composer #tk-stk { display:inline-flex; align-items:center; gap:7px; }
+#page-talk:not(.feedon) .composer #tk-send { min-height:40px !important; height:40px; padding:0 20px; border-radius:10px; font-size:15px !important; white-space:nowrap; margin-left:auto; margin-right:84px; }
+#page-talk:not(.feedon) .composer.tk-empty #tk-send { background:var(--side); color:var(--muted); border-color:var(--line); box-shadow:none; }
+
+/* 새 메시지 알약 · 비었을 때 가운데 */
+#page-talk:not(.feedon) .tk-new-messages { bottom:128px; min-height:36px !important; padding:0 16px; font-size:14px !important; font-weight:700; white-space:nowrap; }
+#page-talk .tk-idle { flex:1 1 auto; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; color:var(--muted); font-size:15px; background:var(--side); }
+#page-talk .tk-idle[hidden] { display:none; }
+#page-talk .tk-idle svg { width:56px; height:56px; opacity:.45; }
+#page-talk.idle .chat > :not(.tk-idle) { display:none !important; }
+
+/* 말풍선 오른쪽 클릭 · 길게 누르기 메뉴 */
+.tk-ctx { position:fixed; z-index:70; min-width:168px; padding:6px; background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:12px; box-shadow:0 12px 32px #0000003a; }
+.tk-ctx[hidden] { display:none; }
+.tk-ctx button { display:flex; align-items:center; gap:10px; width:100%; min-height:36px; padding:0 12px; margin:0; border:0; border-radius:8px; background:transparent; color:inherit; font-size:14px; font-weight:500; text-align:left; white-space:nowrap; box-shadow:none; }
+.tk-ctx button:hover, .tk-ctx button:focus-visible { background:var(--side); outline:none; }
+.tk-ctx button svg { width:18px; height:18px; flex:none; color:var(--muted); }
+.tk-ctx button.harm { color:var(--danger); }
+.tk-ctx button.harm svg { color:currentColor; }
+.tk-ctx hr { margin:4px 6px; border:0; border-top:1px solid var(--line); }
 
 /* 「+ 새 쪽지」 칸 */
 #tk-dmbox input { display:block; width:100%; min-height:44px; margin:6px 0; padding:8px 12px; font:inherit; border:1px solid var(--line); border-radius:10px; background:var(--panel); color:var(--text); }

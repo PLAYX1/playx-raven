@@ -11,6 +11,7 @@
  */
 import "./talk-dm.css";
 import { copyHtml, setCopyText, t, tf } from "./i18n";
+import { applyFilter, talkIdle, unreadPill } from "./talk-desk";
 
 export type DmMsg = { id: string; from: string; to: string; at: number; text: string; wrap: string; members?: string[]; subject?: string; photo?: boolean };
 export type DmThread = { key: string; kind: "dm" | "group"; with?: string; members?: string[]; subject?: string; last: DmMsg; count: number; unread: number };
@@ -122,12 +123,15 @@ export function wireTalkDm(d: DmDeps) {
     $("tk-chats").hidden = side !== "chats";
     $("tk-friends").hidden = side !== "friends";
     $("tk-squarebox").hidden = side !== "square";
+    setCopyText($("tk-listtitle"), () => t(side === "friends" ? "친구" : side === "square" ? "광장" : "채팅"));
+    $("tk-newdm").hidden = side === "square";
     const total = threads.reduce((n, th) => n + (th.unread > 0 ? 1 : 0), 0);
     const badge = $("tk-side-chats-n");
     badge.textContent = unreadBadge(total);
     badge.hidden = !total;
     if (side === "chats") paintChats();
     if (side === "friends") void paintFriends();
+    applyFilter();
   }
 
   function rowHtml(r: ChatRow): string {
@@ -136,7 +140,7 @@ export function wireTalkDm(d: DmDeps) {
     if (r.kind === "room") {
       return `<button type="button" class="tkc-row${on ? " on" : ""}" data-chat-room="${esc(r.room.id)}">` +
         avatar(r.room.id, r.room.name, true) +
-        `<span class="tkc-mid"><span class="tkc-top"><b class="tkc-name" translate="no">${esc(r.room.name)}</b><span class="tkc-kind">${copyHtml("방")}</span></span>` +
+        `<span class="tkc-mid"><span class="tkc-top"><b class="tkc-name" translate="no">${esc(r.room.name)}</b></span>` +
         `<span class="tkc-last" translate="no">${esc((r.from === d.me() ? `${t("나")}: ` : `${d.nameOf(r.from)}: `) + snip(r.text))}</span></span>` +
         `<span class="tkc-side"><time>${esc(listTime(r.at))}</time>${r.unread ? `<span class="tkc-dot" aria-label="${esc(t("새 글"))}"></span>` : ""}</span></button>`;
     }
@@ -145,7 +149,7 @@ export function wireTalkDm(d: DmDeps) {
     const name = titleOf(th);
     return `<button type="button" class="tkc-row${on ? " on" : ""}" data-chat-key="${esc(th.key)}">` +
       avatar(group ? th.key : th.with || "", name, group) +
-      `<span class="tkc-mid"><span class="tkc-top"><b class="tkc-name" translate="no">${esc(name)}</b>${group ? `<span class="tkc-kind">${esc(tf("{0}명", (th.members || []).length))}</span>` : ""}</span>` +
+      `<span class="tkc-mid"><span class="tkc-top"><b class="tkc-name" translate="no">${esc(name)}</b>${group ? `<span class="tkc-kind">${esc(String((th.members || []).length))}</span>` : ""}</span>` +
       `<span class="tkc-last" translate="no">${esc(lastLine(th.last))}</span></span>` +
       `<span class="tkc-side"><time>${esc(listTime(th.last.at))}</time>${n ? `<span class="tkc-n">${esc(n)}</span>` : ""}</span></button>`;
   }
@@ -153,19 +157,20 @@ export function wireTalkDm(d: DmDeps) {
   function paintChats() {
     const box = $("tk-chats");
     const rows = chatRows(threads, d.rooms(), roomsLast, read, d.me(), d.muted());
-    const note = samePerson === false
-      ? `<p class="tkc-note">${copyHtml("이 컴퓨터의 이야기 이름이 폰과 다릅니다(옛 방식 열쇠). 폰에서 보낸 쪽지는 여기 안 보일 수 있어요 — 「내 이름」에서 같은 이름으로 바꿀 수 있어요.")}</p>`
-      : !reached ? `<p class="tkc-note">${copyHtml("바깥 릴레이에 닿지 못해 이 컴퓨터에 둔 쪽지만 보입니다.")}</p>` : "";
-    box.innerHTML =
-      `<div class="tkc-tools"><button type="button" class="ghost" id="tk-newdm">${copyHtml("+ 새 쪽지")}</button></div>` + note +
-      (rows.length ? rows.map(rowHtml).join("") : `<p class="tkc-empty">${copyHtml("아직 대화가 없어요.")}<br />${copyHtml("「친구」에서 「쪽지」를 누르거나 「+ 새 쪽지」로 시작하세요.")}</p>`);
+    // 알릴 것이 있을 때만 한 줄(넘치면 「…」 · 얹으면 전체).
+    const noteKey = samePerson === false
+      ? "이 컴퓨터의 이야기 이름이 폰과 다릅니다(옛 방식 열쇠). 폰에서 보낸 쪽지는 여기 안 보일 수 있어요 — 「내 이름」에서 같은 이름으로 바꿀 수 있어요."
+      : !reached ? "바깥 릴레이에 닿지 못해 이 컴퓨터에 둔 쪽지만 보입니다." : "";
+    const note = noteKey ? `<p class="tkc-note" title="${esc(t(noteKey))}">${copyHtml(noteKey)}</p>` : "";
+    box.innerHTML = note +
+      (rows.length ? rows.map(rowHtml).join("") : `<p class="tkc-empty">${copyHtml("아직 대화가 없어요.")}</p>`);
     box.querySelectorAll<HTMLElement>("[data-chat-key]").forEach((b) => {
       b.onclick = () => { const th = threads.find((x) => x.key === b.dataset.chatKey); if (th) void openThread({ key: th.key, with: th.with || "", members: th.members || [], subject: th.subject || "" }); };
     });
     box.querySelectorAll<HTMLElement>("[data-chat-room]").forEach((b) => {
-      b.onclick = () => { const id = String(b.dataset.chatRoom || ""); close(false); markRead(roomKey(id), roomsLast[id]?.at || 0); d.openRoom(id); paintChats(); };
+      b.onclick = () => { const id = String(b.dataset.chatRoom || ""); close(false); talkIdle(false); markRead(roomKey(id), roomsLast[id]?.at || 0); d.openRoom(id); paintChats(); };
     });
-    $("tk-newdm").onclick = () => openNewBox();
+    applyFilter();
   }
 
   async function paintFriends() {
@@ -179,27 +184,27 @@ export function wireTalkDm(d: DmDeps) {
     if (side !== "friends") return;
     list.sort((a, b) => d.nameOf(a).localeCompare(d.nameOf(b), "ko"));
     box.innerHTML =
-      `<div class="tkc-tools"><button type="button" class="ghost" id="tk-newdm2">${copyHtml("+ 아이디로 쪽지")}</button></div>` +
       (list.length
         ? list.map((p) => `<div class="tkc-row tkc-friend">` + avatar(p, d.nameOf(p)) +
             `<button type="button" class="tkc-mid tkc-who" data-friend="${esc(p)}"><span class="tkc-top"><b class="tkc-name" translate="no">${esc(d.nameOf(p))}</b></span>` +
-            `<span class="tkc-last" translate="no">…${esc(p.slice(-6))}${fol?.has(p) ? ` · ${esc(t("팔로우 중"))}` : ""}</span></button>` +
+            `</button>` +
             `<button type="button" class="tkc-dm" data-friend-dm="${esc(p)}">${copyHtml("쪽지")}</button></div>`).join("")
-        : `<p class="tkc-empty">${copyHtml("아직 친구가 없어요.")}<br />${copyHtml("광장 글에서 「팔로우」를 누르면 여기 생깁니다.")}</p>`);
+        : `<p class="tkc-empty">${copyHtml("아직 친구가 없어요.")}</p>`);
     box.querySelectorAll<HTMLElement>("[data-friend-dm]").forEach((b) => { b.onclick = () => { setSide("chats"); void openThread({ key: String(b.dataset.friendDm), with: String(b.dataset.friendDm), members: [], subject: "" }); }; });
     box.querySelectorAll<HTMLElement>("[data-friend]").forEach((b) => { b.onclick = () => d.showPerson(String(b.dataset.friend)); });
-    $("tk-newdm2").onclick = () => openNewBox();
+    applyFilter();
   }
 
   function setSide(s: Side) {
     side = s;
     save(SIDE_KEY, s);
-    if (s === "square" && open) d.openSquare(); // main openFeed 가 쪽지를 닫고 머리줄을 광장으로 되돌린다
+    if (s === "square" && (open || $("page-talk").classList.contains("idle"))) d.openSquare(); // main openFeed 가 쪽지를 닫고 머리줄을 광장으로 되돌린다
     paintSide();
   }
 
   // ── 「+ 새 쪽지」: 아이디(npub)로 1:1 · 여러 사람이면 단톡 ─────────────
   function openNewBox() {
+    talkIdle(false);
     const b = $("tk-dmbox");
     b.hidden = false;
     $("tk-dmsay").textContent = "";
@@ -241,9 +246,11 @@ export function wireTalkDm(d: DmDeps) {
     setCopyText($("tk-dmchip"), () => group ? tf("암호 단톡 · {0}명만 읽어요", o.members.length) : t("암호 쪽지 · 두 사람만 읽어요"));
     $("rv-person-name").textContent = name;
     setCopyText($("rv-person-sub"), () => group ? tf("암호 단톡 · {0}명", o.members.length) : t("암호 쪽지 · 두 사람만 읽어요"));
-    const av = $("rv-person-avatar");
-    av.dataset.initial = Array.from(name || "쪽")[0] || "쪽";
-    av.style.setProperty("--h", String(d.hue(group ? o.key : o.with)));
+    const initial = Array.from(name || "쪽")[0] || "쪽";
+    for (const av of [$("rv-person-avatar"), $("tk-headav")]) {
+      av.dataset.initial = initial;
+      av.style.setProperty("--h", String(d.hue(group ? o.key : o.with)));
+    }
     $("rv-person-key").textContent = group ? o.members.join("\n") : o.with;
     if (!group && HEX64.test(o.with) && o.with !== d.me()) d.showPerson(o.with);
     else $("rv-person-badges").hidden = true;
@@ -251,6 +258,7 @@ export function wireTalkDm(d: DmDeps) {
 
   async function openThread(o: Open) {
     open = o;
+    talkIdle(false);
     const page = $("page-talk");
     page.classList.add("dmon");
     page.classList.remove("feedon");
@@ -308,11 +316,11 @@ export function wireTalkDm(d: DmDeps) {
     const box = $("tk-list");
     const wasBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80 || box.dataset.dmPainted !== o.key;
     const list = [...(msgs.get(o.key) || [])].sort((a, b) => a.at - b.at);
-    const group = o.members.length > 2;
     const me = d.me();
     if (!list.length) {
-      box.innerHTML = `<div class="tkc-start">${copyHtml("아직 주고받은 쪽지가 없어요.")}<br />${copyHtml("쪽지는 봉해서 가서 릴레이도 누가 누구에게 보냈는지 모릅니다.")}</div>`;
+      box.innerHTML = `<div class="tkc-start">${copyHtml("아직 주고받은 쪽지가 없어요.")}</div>`;
       box.dataset.dmPainted = o.key;
+      $("tk-new-messages").hidden = true;
       return;
     }
     const day = (at: number) => new Date(at * 1000).toDateString();
@@ -321,8 +329,8 @@ export function wireTalkDm(d: DmDeps) {
       const prev = list[i - 1], next = list[i + 1];
       const sep = !prev || day(prev.at) !== day(m.at) ? `<div class="daysep">${esc(new Date(m.at * 1000).toLocaleDateString([], { month: "long", day: "numeric", weekday: "short" }))}</div>` : "";
       const joined = !sep && prev && prev.from === m.from && m.at - prev.at < 이음;
-      // 1:1 은 이름을 안 단다(카톡처럼 — 상대는 머리줄에 있다). 단톡은 사람이 바뀔 때마다.
-      const head = mine || joined || !group ? ""
+      // 남의 말 무리마다 얼굴·이름 한 번(카톡 PC 처럼 1:1 도). 이어 쓴 말에는 안 단다.
+      const head = mine || joined ? ""
         : `<div class="who" style="--h:${d.hue(m.from)}" data-person="${esc(m.from)}"><span class="rv-avatar" aria-hidden="true">${esc(Array.from(d.nameOf(m.from))[0] || "레")}</span> <span translate="no">${esc(d.nameOf(m.from))}</span></div>`;
       const showClock = !(next && next.from === m.from && day(next.at) === day(m.at) && next.at - m.at < 이음);
       const pending = m.id.startsWith("pending:");
@@ -333,10 +341,11 @@ export function wireTalkDm(d: DmDeps) {
         : showClock ? `<time class="tstamp" title="${esc(new Date(m.at * 1000).toLocaleString())}">${esc(new Date(m.at * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }))}</time>` : "";
       const body = m.photo ? `<span class="tkc-photo">${copyHtml("사진 쪽지 — 지금은 폰에서 볼 수 있어요")}</span>` : d.bodyHtml(m.text);
       return sep + head +
-        `<div class="line${mine ? " me" : ""}${pending && !failed ? " pending" : ""}"><div class="bub${mine ? " me" : ""}${!m.photo && d.stickerOnly(m.text) ? " stk" : ""}" data-dm="${esc(m.id)}">${body}</div>${clock}</div>`;
+        `<div class="line${mine ? " me" : ""}${joined ? " cont" : ""}${pending && !failed ? " pending" : ""}"><div class="bub${mine ? " me" : ""}${!m.photo && d.stickerOnly(m.text) ? " stk" : ""}" data-dm="${esc(m.id)}">${body}</div>${clock}</div>`;
     }).join("");
     box.dataset.dmPainted = o.key;
     if (wasBottom) box.scrollTop = box.scrollHeight;
+    unreadPill(box, list.map((m) => m.id), wasBottom, `dm:${o.key}`);
     box.querySelectorAll<HTMLElement>("[data-retry]").forEach((b) => {
       b.onclick = () => {
         const id = String(b.dataset.retry);
@@ -441,13 +450,14 @@ export function wireTalkDm(d: DmDeps) {
   for (const s of ["friends", "chats", "square"] as Side[]) {
     document.getElementById(`tk-side-${s}`)?.addEventListener("click", () => setSide(s));
   }
+  $("tk-newdm").addEventListener("click", () => openNewBox());
   $("tk-dmstart").addEventListener("click", () => void startFromBox());
   $("tk-dmto").addEventListener("keydown", (e) => { if ((e as KeyboardEvent).key === "Enter") { e.preventDefault(); void startFromBox(); } });
   $("tk-dmgo").addEventListener("click", () => void d.legacyOpen().catch((e) => { $("tk-dmsay").textContent = d.errText(e); }));
   $("tk-list").addEventListener("click", (ev) => {
     if (!open) return;
     const w = (ev.target as HTMLElement | null)?.closest<HTMLElement>(".who[data-person]");
-    if (w?.dataset.person) d.showPerson(w.dataset.person);
+    if (w?.dataset.person) { d.showPerson(w.dataset.person); $("page-talk").classList.add("infoon"); }
   });
 
   return {
@@ -461,12 +471,15 @@ export function wireTalkDm(d: DmDeps) {
     /** 「더 보기 › 쪽지」·「+ 새 쪽지」 — 아이디로 시작하는 칸. */
     newBox: () => openNewBox(),
     /** 방 목록이 바뀌었을 때(main talkPaintRooms) — 채팅 목록의 방 줄을 다시 맞춘다. */
-    roomsChanged: () => { if (side === "chats") paintChats(); },
+    roomsChanged: () => { if (side === "chats") paintChats(); applyFilter(); },
+    /** 말풍선 메뉴 「복사」 — 그린 글이 아니라 받은 글자 그대로. */
+    textOf: (id: string) => (open ? (msgs.get(open.key) || []).find((m) => m.id === id)?.text : undefined),
     roomOpened: (id: string) => { if (id) markRead(roomKey(id), roomsLast[id]?.at || Math.floor(Date.now() / 1000)); if (side === "chats") paintChats(); },
     /** 이야기 화면을 열 때. 먼저 이 컴퓨터 저장분으로 그리고 바깥을 읽는다. */
     start: async () => { paintSide(); await refresh(true); void refresh(false); },
     /** 앱이 켜져 있는 동안 새 쪽지를 살핀다(열쇠가 없으면 아무것도 안 한다). */
     watch: () => { schedule(); window.setTimeout(() => void refresh(false, true), 8_000); },
     side: () => side,
+    setSide: (s: Side) => setSide(s),
   };
 }

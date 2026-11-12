@@ -3434,15 +3434,19 @@
       </section>
       <section class="page" id="page-talk">
         <div class="talkwrap">
+          <!-- 11-12 카톡 PC·텔레그램 결: 맨 왼쪽 얇은 그림 줄(친구·채팅·광장) → 목록 → 대화. 그림 아래에 이름을 늘 적는다(대표 09-28 「그림만으로는 모른다」).
+               nav 가 아니라 div 다 — `.rv-talk-layout nav` 규칙(앱 왼쪽 메뉴)이 여기까지 먹지 않게. -->
+          <div class="tk-rail tk-side" role="tablist" aria-label="이야기 보기" aria-orientation="vertical">
+            <button type="button" role="tab" id="tk-side-friends" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg><span class="tk-rail-t">친구</span></button>
+            <button type="button" role="tab" id="tk-side-chats" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9.6 9.6 0 0 1-2.6-.4L3 21l1.6-4.6A8.2 8.2 0 0 1 3 11.5 8.4 8.4 0 0 1 12 3a8.4 8.4 0 0 1 9 8.5z"/></svg><span class="tk-rail-t">채팅</span><span class="tk-side-n" id="tk-side-chats-n" hidden></span></button>
+            <button type="button" role="tab" id="tk-side-square" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg><span class="tk-rail-t">광장</span></button>
+          </div>
           <aside class="rooms">
-            <div class="roomhead">이야기</div>
-            <!-- 11-12 대표 「켜 놓고 메신저로도 — 메신저·피드 둘 다」: 카톡 PC 처럼 왼쪽 위 작은 세 칸(src/talk-dm.ts).
-                 채팅 = 쪽지·단톡·글 있는 방을 최근순 · 친구 = 팔로우·쪽지 상대 · 광장 = 예전 방 목록 그대로. -->
-            <div class="tk-side" role="tablist" aria-label="이야기 보기">
-              <button type="button" role="tab" id="tk-side-friends" aria-selected="false">친구</button>
-              <button type="button" role="tab" id="tk-side-chats" aria-selected="true">채팅<span class="tk-side-n" id="tk-side-chats-n" hidden></span></button>
-              <button type="button" role="tab" id="tk-side-square" aria-selected="false">광장</button>
+            <div class="tk-listhead">
+              <b id="tk-listtitle" class="tk-listtitle">채팅</b>
+              <button type="button" class="tk-iconbtn" id="tk-newdm" aria-label="새 쪽지" title="새 쪽지"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
             </div>
+            <label class="tk-filter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="tk-filter" type="search" autocomplete="off" spellcheck="false" placeholder="이름·내용 찾기" aria-label="이름·내용 찾기" /></label>
             <button id="rv-room-ravi" class="rv-room-ravi" type="button"><span id="rv-room-ravi-face"></span><span><b>라비</b><small>AI 도우미</small></span></button>
             <div id="tk-chats" class="tk-chats"></div>
             <div id="tk-friends" class="tk-chats" hidden></div>
@@ -3478,6 +3482,8 @@
           </aside>
 
           <div class="chat">
+            <!-- 11-12 대화를 닫았을 때(Esc) 가운데 빈 자리 — 카톡 PC·텔레그램처럼 한 줄만. -->
+            <div class="tk-idle" id="tk-idle" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9.6 9.6 0 0 1-2.6-.4L3 21l1.6-4.6A8.2 8.2 0 0 1 3 11.5 8.4 8.4 0 0 1 12 3a8.4 8.4 0 0 1 9 8.5z"/></svg><span>대화를 골라 주세요</span></div>
             <!-- ── 머리줄 ──────────────────────────────────────────────
                  🔴 **대표님 지적(2026-08-30): "화면이 글로 가득 찼다."**
 
@@ -3495,7 +3501,8 @@
                     혼자 쓰는 방이고, 그건 매일 쓰는 자리다
                     (「헤더는 보이는 게 전부」). -->
             <div class="chathead">
-              <b id="tk-title">광장</b><span id="tk-gate-head"></span><span class="rv-public">공개 방 · 누구나 읽을 수 있어요</span><span class="tkc-dmchip" id="tk-dmchip"></span>
+              <span id="tk-headav" class="tk-headav" data-initial="광" aria-hidden="true"></span>
+              <span class="tk-headtxt"><span class="tk-headline"><b id="tk-title">광장</b><span id="tk-gate-head"></span></span><span class="tk-headsub"><span class="rv-public">공개 방 · 누구나 읽을 수 있어요</span><span class="tkc-dmchip" id="tk-dmchip"></span></span></span>
               <span class="meta" id="tk-me"></span>
               <span style="margin-left:auto"></span>
               <span id="tk-invite"></span>
@@ -3504,9 +3511,10 @@
               <!-- 🔴 「⋯」 하나만 두지 않는다. 40~70대에게 점 세 개는 단추로
                    안 읽힌다. **글자로** 적는다. -->
               <!-- 11-09 찾기 · 알림(src/talk-social.ts). 그림만 두지 않고 글자도 적는다. -->
-              <button class="ghost tk-headbtn" id="tk-searchbtn" type="button" aria-controls="tk-searchbox" aria-expanded="false"><span class="tk-ico" id="tk-search-ico"></span><span>찾기</span></button>
-              <button class="ghost tk-headbtn" id="tk-bell" type="button" aria-controls="tk-noticebox" aria-expanded="false"><span class="tk-ico" id="tk-bell-ico"></span><span>알림</span><span class="tk-bell-dot" id="tk-bell-dot" aria-hidden="true" hidden></span></button>
-              <button class="ghost" id="tk-more" aria-expanded="false">더 보기</button>
+              <button class="ghost tk-headbtn" id="tk-searchbtn" type="button" aria-controls="tk-searchbox" aria-expanded="false"><span class="tk-ico" id="tk-search-ico"></span><span class="tk-lbl">찾기</span></button>
+              <button class="ghost tk-headbtn" id="tk-bell" type="button" aria-controls="tk-noticebox" aria-expanded="false"><span class="tk-ico" id="tk-bell-ico"></span><span class="tk-lbl">알림</span><span class="tk-bell-dot" id="tk-bell-dot" aria-hidden="true" hidden></span></button>
+              <button class="ghost tk-headbtn" id="tk-info" type="button" aria-pressed="false"><span class="tk-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg></span><span class="tk-lbl">정보</span></button>
+              <button class="ghost tk-headbtn" id="tk-more" aria-expanded="false"><span class="tk-ico"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></span><span class="tk-lbl">더 보기</span></button>
             </div>
 
             <!-- ── 접어 둔 것들 ────────────────────────────────────────
@@ -3719,7 +3727,7 @@
               </button>
               <!-- 11-09 「@」 — 팔로우한 사람을 글에 넣는다(올릴 때 nostr:npub… 로 바뀌어 그 사람 알림에 뜬다). -->
               <!-- 11-10 라비 이모티콘 16종 — 누르면 입력칸에 들어간다(바로 보내지 않는다, 폰과 같다). -->
-              <button class="photobtn tk-stkbtn" id="tk-stk" type="button" aria-controls="tk-stickerbox" aria-expanded="false"><span>이모티콘</span></button>
+              <button class="photobtn tk-stkbtn" id="tk-stk" type="button" aria-controls="tk-stickerbox" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5c.9 1.3 2.1 2 3.5 2s2.6-.7 3.5-2"/><path d="M9 9.5v.5M15 9.5v.5"/></svg><span>이모티콘</span></button>
               <button class="photobtn tk-atbtn" id="tk-at" type="button" aria-controls="tk-mentionbox" aria-expanded="false" aria-label="사람 넣기">@</button>
               <!-- 🔴 안내문을 입력칸 안에 넣지 않는다. 칸이 좁아서 문장이
                    중간에 잘렸고, 잘린 경고는 경고가 아니라 잡음이다.

@@ -43,6 +43,7 @@ import { RAVI_CHAT_COPY } from "./ravi-chat-copy";
 import { WALLET_LINK_COPY } from "./wallet-link-copy";
 import { LISTING_MARKET_COPY } from "./listing-market-copy";
 import { TALK_SOCIAL_COPY } from "./talk-social-copy";
+import { TALK_DESK_COPY } from "./talk-desk-copy";
 
 const ARTIST_PHOTO_COPY: Record<string, [string, string, string]> = {
   "사진 읽는 중…": ["Reading photo…", "写真を読み込み中…", "正在读取照片…"],
@@ -5728,5 +5729,9 @@ for (const [source, values] of Object.entries(LISTING_MARKET_COPY)) {
 }
 // 11-09 이야기 SNS — 알림·찾기·글 속 링크·NIP-05·내 글 받기(src/talk-social.ts). 이미 있는 번역은 덮지 않는다.
 for (const [source, values] of Object.entries(TALK_SOCIAL_COPY)) {
+  (["en", "ja", "zh"] as const).forEach((language, index) => { DICT[language][source] ??= values[index]; });
+}
+// 11-12 이야기 카톡 PC 결 — 그림 줄·목록 찾기·말풍선 메뉴·쪽지(src/talk-desk.ts · src/talk-dm.ts). 이미 있는 번역은 덮지 않는다.
+for (const [source, values] of Object.entries(TALK_DESK_COPY)) {
   (["en", "ja", "zh"] as const).forEach((language, index) => { DICT[language][source] ??= values[index]; });
 }

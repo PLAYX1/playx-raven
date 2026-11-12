@@ -31,7 +31,8 @@ import { openRaviStory } from "./desktop-links";
 import { inviteLink } from "./links";
 // 이야기 방 운영(0.9.0 레인 C): 「방 설정」(만든 사람만 이름·설명 고치기)·「이 방 숨기기」 — 연결 줄만 여기에.
 import { wireTalkRoomsAdmin } from "./talk-rooms-admin";
-import { wireTalkDm } from "./talk-dm"; // 11-12 카톡 PC 처럼 — 친구·채팅·광장 + 이 창 안 쪽지(talk_dm.rs)
+import { wireTalkDm } from "./talk-dm";
+import { talkIdle, unreadPill, wireTalkDesk } from "./talk-desk"; // 11-12 카톡 PC·텔레그램 손버릇(찾기·Esc·말풍선 메뉴·새 메시지 N개) // 11-12 카톡 PC 처럼 — 친구·채팅·광장 + 이 창 안 쪽지(talk_dm.rs)
 import { homeSafety } from "./home-summary";
 import { paintCards, type CardsInput, type CardOpen } from "./ravi-cards";
 import { wireChainInfoLazy } from "./chain-info-lazy";
@@ -5290,6 +5291,7 @@ function syncFeedNav(id: string) {
 }
 /** 「광장」 — 이야기의 공개 방(tkRoom="")을 X 식 글 목록(feedmode)으로 연다(증서 자랑하기 등). */
 function openFeed() {
+  talkIdle(false);
   const 쪽지였나 = !!tkDmUi?.active();
   tkDmUi?.close(false);
   if (tkRoom !== "" || 쪽지였나) {
@@ -5298,9 +5300,10 @@ function openFeed() {
     $("tk-new-messages").hidden = true;
     setCopyText($("tk-title"), () => t(SQUARE));
     $("rv-person-name").textContent = t(SQUARE);
-    const avatar = $("rv-person-avatar");
-    avatar.dataset.initial = ($("rv-person-name").textContent || "광").slice(0, 1);
-    avatar.style.setProperty("--h", String(tkHue("raven")));
+    for (const avatar of [$("rv-person-avatar"), $("tk-headav")]) {
+      avatar.dataset.initial = ($("rv-person-name").textContent || "광").slice(0, 1);
+      avatar.style.setProperty("--h", String(tkHue("raven")));
+    }
     $("rv-person-key").textContent = "";
     $("rv-person-badges").hidden = true;
     $("tk-gate-head").innerHTML = "";
@@ -5862,6 +5865,8 @@ function dropJob(): DropJob {
       if (dropPublish && $("page-creator").dataset.mode !== "wizard") return dropPublish.overlayCopy();
       return { title: t("여기서는 받지 않습니다"), why: t("「끌어놓기 화면으로」를 누른 뒤 놓아 주세요."), ok: false };
     case "talk":
+      // 쪽지에는 아직 사진을 못 싣는다(폰의 암호 사진 kind 15 는 다음 차례) — 붙는 척하지 않는다.
+      if (tkDmUi?.active()) return { title: t("쪽지에는 아직 사진을 보낼 수 없어요"), why: t("방이나 광장에 놓으면 글에 붙습니다."), ok: false };
       return {
         title: t("사진을 글에 붙입니다"),
         // 🔴 놓자마자 나가지 않는다. 입력칸 위에서 기다렸다가 「보내기」를
@@ -6783,6 +6788,7 @@ function tkPaintRoomList(rooms: any[]) {
   box.querySelectorAll("[data-room]").forEach((b) => {
     (b as HTMLElement).onclick = () => {
       tkDmUi?.close(false); // 쪽지를 보고 있었으면 닫고 이 방으로
+      talkIdle(false);
       tkRoom = String((b as HTMLElement).dataset.room || "");
       tkDmUi?.roomOpened(tkRoom);
       delete $("tk-list").dataset.loaded;
@@ -6796,9 +6802,10 @@ function tkPaintRoomList(rooms: any[]) {
       void talkPaintRooms();
       void talkPaint();
       $("rv-person-name").textContent = tkRoom ? tkRoomNames.get(tkRoom) || t("방") : t(SQUARE);
-      const avatar = $("rv-person-avatar");
-      avatar.dataset.initial = ($("rv-person-name").textContent || "광").slice(0, 1);
-      avatar.style.setProperty("--h", String(tkHue(tkRoom || "raven")));
+      for (const avatar of [$("rv-person-avatar"), $("tk-headav")]) {
+        avatar.dataset.initial = ($("rv-person-name").textContent || "광").slice(0, 1);
+        avatar.style.setProperty("--h", String(tkHue(tkRoom || "raven")));
+      }
       $("rv-person-key").textContent = tkRoom;
       $("rv-person-badges").hidden = true;
       $("tk-gate-head").innerHTML = gateChipHtml(gateOfRoom(tkRoom));
@@ -7463,7 +7470,7 @@ async function talkPaint(opts: { cached?: boolean; list?: any[] } = {}) {
         return (
           day +
           head +
-          `<div class="line${mine ? " me" : ""}">
+          `<div class="line${mine ? " me" : ""}${이어짐 ? " cont" : ""}">
              <div class="bub${mine ? " me" : ""}${!인용 && !pic && noteStickerOnly(본문) ? " stk" : ""}" data-say="${id}" data-author="${escapeHtml(who)}">${인용}${noteBodyHtml(본문)}${pic ? tkPicHtml(pic) : ""}</div>
              ${clock}
            </div>` +
@@ -7517,8 +7524,10 @@ async function talkPaint(opts: { cached?: boolean; list?: any[] } = {}) {
       }
     } else {
       nm.style.top = "";
-      if (wasAtBottom) { box.scrollTop = box.scrollHeight; nm.hidden = true; }
-      else { box.scrollTop = previousTop; if (box.scrollHeight > box.clientHeight) nm.hidden = false; }
+      if (wasAtBottom) box.scrollTop = box.scrollHeight;
+      else box.scrollTop = previousTop;
+      unreadPill(box, asc.map((e) => String(e.id || "")), wasAtBottom, `room:${읽은방}`); // 「새 메시지 N개 ↓」 — 새로 온 것이 있을 때만
+
     }
     // 🔴 사진은 그려 놓고 **지켜봐야** 한다. 안 지켜보면 「받는 중…」에서
     //    영영 멈춰 있고, 그건 못 받았다는 말을 안 하는 것과 같다.
@@ -20362,7 +20371,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   // 11-08 글쓴이 이름 → 오른쪽 칸에 「기여 표시」(talk-badges.ts).
   $("tk-list").addEventListener("click", (ev) => {
     const who = (ev.target as HTMLElement | null)?.closest<HTMLElement>(".who[data-person], .fname[data-person]");
-    if (who?.dataset.person) void tkShowPerson(who.dataset.person);
+    if (who?.dataset.person) { void tkShowPerson(who.dataset.person); $("page-talk").classList.add("infoon"); } // 이름을 누르면 오른쪽 정보 칸(텔레그램처럼)
   });
   tkAdmin = wireTalkRoomsAdmin({
     call: (cmd, args) => rawInvoke(cmd, args), // 잠김 안내는 시트 안에서 — 페이지 맨 아래 경고 상자를 붙이지 않는다
@@ -20396,6 +20405,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     repaint: () => openFeed(),
   });
   tkDmUi.watch();
+  wireTalkDesk({ dm: tkDmUi, room: () => tkRoom, openFeed });
   $("tk-nmake").addEventListener("click", () => void talkMakeRoomGo());
   $("tk-ncancel").addEventListener("click", () => {
     $("tk-newbox").hidden = true;
