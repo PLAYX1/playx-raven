@@ -183,6 +183,7 @@ mod talk_notify;
 mod arcade;
 // 11-13 「게임 올리기」 — 고른 폴더만 살펴보고 붙잡는다(화면이 경로를 못 준다).
 mod arcade_upload;
+mod arcade_keep;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -347,6 +348,12 @@ pub fn run() {
             arcade::arcade_entry_reachable,
             arcade::arcade_pay,
             arcade::arcade_ack,
+            arcade_keep::arcade_mine_round,
+            arcade_keep::arcade_mine_state,
+            arcade_keep::arcade_share_get,
+            arcade_keep::arcade_share_set,
+            arcade_keep::arcade_share_sources,
+            arcade_keep::arcade_share_apply,
             arcade_upload::arcade_pick_folder,
             arcade_upload::arcade_pin_folder,
             upload::ipfs_add_file,
@@ -929,6 +936,7 @@ pub fn run() {
             map::start();
             node_keeper::start();
             relay_share::start();
+            arcade_keep::start();
             // 11-12 이야기를 카톡처럼: 켜자마자 기본 릴레이에 미리 붙어 둔다(relay_pool.rs). 안 쓰면 2분 뒤 저절로 닫힌다.
             tauri::async_runtime::spawn(async { nostrpub::warm_all() });
             // 11-12 알림 지킴이(기본 꺼짐 · 켠 컴퓨터만): 바깥 릴레이의 새 쪽지·방 글을 알림 서버에 곧바로 넘긴다.

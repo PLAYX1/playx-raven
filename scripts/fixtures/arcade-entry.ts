@@ -11,3 +11,4 @@ export * from "../../core/creator/arcade-credit";
 export { attachArcadeSignature, arcadeSigningMessage, verifyArcadeProduct } from "../../core/creator/arcade-product";
 export { buildArcadeCatalog } from "../../core/creator/arcade-catalog";
 export { signMessageWithKeyForTest } from "../../core/signer/test-key";
+export * from "../../src/arcade-keep-core";

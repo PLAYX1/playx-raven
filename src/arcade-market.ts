@@ -17,8 +17,8 @@ import { fmtRvn } from "./amount-ui";
 import type { ArcadeGenre } from "../core/creator/arcade-product";
 import { creditGate, creditMessage, denyMessage, newPlayId, parseGameMessage } from "../core/creator/arcade-credit";
 import {
-  ArcadeDocError, atomsToRvn, filterByGenre, filterProducts, gameUrl, genreLabel, genresPresent, playsWithoutPay, prepareArcadePay,
-  productsFromSources, sortProducts, type ArcadeProduct,
+  ArcadeDocError, atomsToRvn, filterByGenre, filterProducts, gameUrl, genreLabel, genresPresent, isResting, noteReach, playsWithoutPay, prepareArcadePay,
+  productsFromSources, sortProducts, type ArcadeProduct, type ReachLog,
 } from "./arcade-model";
 
 type Invoke = <T = any>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
@@ -29,6 +29,12 @@ export interface ArcadeDeps {
   /** 판매자 기능이 켜졌나 — 켜졌을 때만 「게임 올리기」 단추. */
   canSell?: () => boolean;
 }
+
+/** 판매자 컴퓨터가 꺼져 있어 지금 못 하는 게임 — 이 문구 하나로 말한다(목록·페이지·결제 전 확인). */
+export const RESTING_TEXT = "판매자 컴퓨터가 꺼져 있어서 지금은 할 수 없어요";
+const reach: ReachLog = new Map();
+const restingNow = (p: Pick<ArcadeProduct, "docCid">) => isResting(reach, p.docCid, Date.now());
+const restBadge = `<span class="ar-rest">${copyHtml("지금 쉬는 중")}</span>`;
 
 /** 첫 화면 줄에 보이는 카드 수(그 너머는 「더 보기」). */
 export const ROW_MAX = 6;
@@ -53,7 +59,7 @@ const sellerLine = (p: ArcadeProduct) => p.verified
   : `<span class="ar-unv">${ICON_WARN}<span>${copyHtml("판매자 미확인")}</span></span>`;
 const cardLabel = (p: ArcadeProduct) => [p.title, priceText(p), t(p.verified ? "확인 판매자" : "판매자 미확인"), tf("{0} · 한 판", p.sellerName)].join(" · ");
 
-export function cardHtml(p: ArcadeProduct): string {
+export function cardHtml(p: ArcadeProduct, resting = false): string {
   return `<li><button type="button" class="ar-card" data-ar-open="${esc(p.id)}" aria-label="${esc(cardLabel(p))}">` +
     `<span class="ar-cover ar-tone${toneOf(p.id)}">${ICON_PAD}</span>` +
     `<span class="ar-cbody">` +
@@ -61,6 +67,7 @@ export function cardHtml(p: ArcadeProduct): string {
     `<span class="ar-title" translate="no">${esc(p.title)}</span>` +
     `<span class="ar-shop"><span translate="no">${esc(p.sellerName)}</span> · ${copyHtml(genreLabel(p.genre))}</span>` +
     `<span class="ar-who">${sellerLine(p)}</span>` +
+    (resting ? restBadge : "") +
     `</span></button></li>`;
 }
 
@@ -133,7 +140,7 @@ export function mountArcade(page: HTMLElement, host: HTMLElement, deps: ArcadeDe
     if (!list.length) { host.innerHTML = head(false) + emptyHtml(); wire(); return; }
     const shown = filterByGenre(list, genresPresent(list).includes(genre as ArcadeGenre) ? genre : "all");
     host.innerHTML = head(true) + chipsHtml(list) +
-      `<ul class="ar-row">${shown.slice(0, ROW_MAX).map(cardHtml).join("")}</ul>` +
+      `<ul class="ar-row">${shown.slice(0, ROW_MAX).map((p) => cardHtml(p, restingNow(p))).join("")}</ul>` +
       (shown.length > ROW_MAX ? `<p class="meta">${esc(tf("{0}개 더 있어요", shown.length - ROW_MAX))}</p>` : "");
     wire();
   }
@@ -147,8 +154,8 @@ export function mountArcade(page: HTMLElement, host: HTMLElement, deps: ArcadeDe
     const ok = shown.filter((p) => p.verified), fresh = shown.filter((p) => !p.verified);
     box.innerHTML = !list.length ? emptyHtml()
       : !shown.length ? `<p class="meta" role="status">${copyHtml("찾는 게임이 없어요.")}</p>`
-      : (ok.length ? `<h4>${copyHtml("레이븐볼트 확인 판매자")}</h4><ul class="ar-grid">${ok.map(cardHtml).join("")}</ul>` : "") +
-        (fresh.length ? `<h4>${copyHtml("새로 올라온 게임")}</h4><ul class="ar-grid">${fresh.map(cardHtml).join("")}</ul>` : "");
+      : (ok.length ? `<h4>${copyHtml("레이븐볼트 확인 판매자")}</h4><ul class="ar-grid">${ok.map((p) => cardHtml(p, restingNow(p))).join("")}</ul>` : "") +
+        (fresh.length ? `<h4>${copyHtml("새로 올라온 게임")}</h4><ul class="ar-grid">${fresh.map((p) => cardHtml(p, restingNow(p))).join("")}</ul>` : "");
     box.querySelectorAll<HTMLElement>("[data-ar-open]").forEach((b) => {
       b.onclick = () => { const p = items?.find((x) => x.id === b.dataset.arOpen); if (p) { current = p; cameFromAll = true; view = "game"; paint(); host.scrollIntoView({ block: "start" }); } };
     });
@@ -183,6 +190,7 @@ export function mountArcade(page: HTMLElement, host: HTMLElement, deps: ArcadeDe
       `<div class="ar-big">${esc(priceText(p))}${free ? "" : ` <span class="ar-per">${copyHtml("한 판")}</span>`}</div>` +
       `<h3 translate="no">${esc(p.title)}</h3>` +
       `<p class="ar-who">${sellerLine(p)}</p>` +
+      (restingNow(p) ? `<p class="ar-note">${restBadge} ${copyHtml(RESTING_TEXT)}</p>` : "") +
       `<p class="meta"><span translate="no">${esc(p.sellerName)}</span>${p.assetName ? ` · <code translate="no">${esc(p.assetName)}</code>` : ""}</p>` +
       `<p class="meta">${esc(tf("{0} · 혼자 하기 · 약 {1}분", t(genreLabel(p.genre)), p.minutes))}</p>` +
       (p.description ? `<p class="ar-desc" translate="no">${esc(p.description)}</p>` : "") +
@@ -194,6 +202,14 @@ export function mountArcade(page: HTMLElement, host: HTMLElement, deps: ArcadeDe
       `<div class="ar-stage" data-ar-stage="1" hidden></div>`;
     wire();
     host.querySelector<HTMLElement>("[data-ar-play]")?.addEventListener("click", (e) => void openGame(p, e.currentTarget as HTMLButtonElement));
+  }
+
+  /** 지금 할 수 있나 — 결과를 기억해 목록에 「지금 쉬는 중」을 붙인다. 오류 = 못 함. */
+  async function reachNow(p: ArcadeProduct): Promise<boolean> {
+    let ok = false;
+    try { ok = await deps.invoke<boolean>("arcade_entry_reachable", { docCid: p.docCid, entry: p.entry }) === true; } catch { ok = false; }
+    noteReach(reach, p.docCid, ok, Date.now());
+    return ok;
   }
 
   /** 지금 열린 게임 판(한 화면에 하나). 닫으면 듣기도 끝난다. */
@@ -215,17 +231,17 @@ export function mountArcade(page: HTMLElement, host: HTMLElement, deps: ArcadeDe
         step.innerHTML = `<p class="danger">${copyHtml("상품 문서를 다시 확인하지 못해 결제를 준비하지 않았어요.")} <span class="meta">${esc(e instanceof ArcadeDocError ? e.code : "")}</span></p>`;
         return;
       }
-      if (btn) btn.disabled = true;
-      setCopyText(step, () => t("게임 파일을 받을 수 있는지 확인하는 중…"));
-      let reachable = false;
-      try { reachable = await deps.invoke<boolean>("arcade_entry_reachable", { docCid: plan.docCid, entry: p.entry }) === true; } catch { reachable = false; }
-      if (btn) btn.disabled = false;
-      if (!reachable) {
-        step.innerHTML = `<p class="danger">${copyHtml("지금은 게임 파일을 받을 수 없어 결제를 준비하지 않았어요. 돈을 내고 못 하는 일이 없게 막았어요. 나중에 다시 눌러 주세요.")}</p>`;
-        return;
-      }
-      step.innerHTML = "";
     }
+    // 게임은 판매자 컴퓨터에 산다 — 문서와 시작 파일을 게임 판이 쓰는 그 길로 짧게 받아 본다(무료·유료 같음).
+    if (btn) btn.disabled = true;
+    setCopyText(step, () => t("게임 파일을 받을 수 있는지 확인하는 중…"));
+    const reachable = await reachNow(p);
+    if (btn) btn.disabled = false;
+    if (!reachable) {
+      step.innerHTML = `<p class="danger">${copyHtml(RESTING_TEXT)}</p><p class="meta">${copyHtml("돈은 받지 않았어요. 나중에 다시 눌러 주세요.")}</p>`;
+      return;
+    }
+    step.innerHTML = "";
     session?.close();
     stage.hidden = false;
     stage.innerHTML = `<div class="ar-stage-bar"><b translate="no">${esc(p.title)}</b><button type="button" class="ghost" data-ar-close="1">${copyHtml("게임 닫기")}</button></div>` +
@@ -251,7 +267,17 @@ export function mountArcade(page: HTMLElement, host: HTMLElement, deps: ArcadeDe
       const ok = gate.ask(Date.now());
       if (ok !== "ok") { reply(denyMessage(ok)); return; }
       if (free) { gate.settle(); grant(); return; }
-      askCoin(p, plan!, coin, (paid) => { gate.settle(); if (paid) grant(); else reply(denyMessage("declined")); }, () => { gate.settle(); reply(denyMessage("failed")); });
+      // 🔴 확인 칸을 띄우기 전에 한 번 더 — 게임을 연 사이 판매자 컴퓨터가 꺼졌으면 돈을 받지 않는다.
+      coin.hidden = false;
+      setCopyText(coin, () => t("게임 파일을 받을 수 있는지 확인하는 중…"));
+      void reachNow(p).then((ok) => {
+        if (session !== me) { gate.settle(); return; }
+        if (!ok) {
+          coin.innerHTML = `<p class="danger">${copyHtml(RESTING_TEXT)}</p><p class="meta">${copyHtml("돈은 받지 않았어요. 나중에 다시 눌러 주세요.")}</p>`;
+          gate.settle(); reply(denyMessage("failed")); return;
+        }
+        askCoin(p, plan!, coin, (paid) => { gate.settle(); if (paid) grant(); else reply(denyMessage("declined")); }, () => { gate.settle(); reply(denyMessage("failed")); });
+      });
     };
     window.addEventListener("message", onMessage);
     const close = () => { window.removeEventListener("message", onMessage); stage.innerHTML = ""; stage.hidden = true; if (session === me) session = null; };

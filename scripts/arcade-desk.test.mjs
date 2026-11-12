@@ -109,3 +109,61 @@ test('문구 표: 화면의 한국어 열쇠마다 영·일·중이 있다 · �
   for (const m of copy.matchAll(/^\s*"[^"]+": \[("[^"]*"), ("[^"]*"), ("[^"]*")\]/gm)) for (const v of m.slice(1)) assert.doesNotMatch(v, /[가-힣]/);
   assert.match(readFileSync('src/arcade-market.css', 'utf8'), /\.ar button \{ white-space: nowrap; flex-shrink: 0; \}/);
 });
+
+// ── 11-13 게임은 판매자 컴퓨터에 산다 · 돕기 보관은 기본 꺼짐 · 못 받는 게임은 돈을 받지 않는다 ──
+test('돕기 보관 후보 = 구매 화면과 같은 확인을 통과한 체인 게임만(서명·assetName)', () => {
+  const other = A.secp256k1.utils.randomPrivateKey();
+  const raw = {
+    assets: [
+      { name: 'RVLT/PLAYX#STAR_RUN', ipfsHash: cidOf(1) },
+      { name: 'RVLT/PLAYX#FAKE', ipfsHash: cidOf(2) },      // 다른 키로 서명
+      { name: 'RVLT/OTHER#STAR_RUN', ipfsHash: cidOf(3) },  // 남의 문서를 내 자산에
+    ],
+    docs: { [cidOf(1)]: docB64(), [cidOf(2)]: docB64({ assetName: 'RVLT/PLAYX#FAKE', id: 'fake' }, other), [cidOf(3)]: docB64() },
+  };
+  assert.deepEqual(A.shareCandidates(raw), [{ docCid: cidOf(1), verified: true }]);
+  assert.deepEqual(A.shareCandidates(null), []);
+});
+
+test('보관 상태 글: 가게별 「PLAYX 게임 7개 보관 중 · 0.4 MB」 재료 · 크기 글자', () => {
+  assert.deepEqual(A.shareRows({ shops: [{ shop: 'PLAYX', games: 7, bytes: 419430 }, { shop: '', games: 1, bytes: 1 }, { shop: 'X', games: 0, bytes: 0 }] }), [['PLAYX', 7, '0.4 MB']]);
+  assert.equal(A.mbText(0), '0.0 MB');
+  assert.equal(A.mbText(1), '0.1 MB', '0 이 아니면 0.0 이라 하지 않는다');
+  assert.equal(A.mbText(5 * 1048576), '5.0 MB');
+  assert.deepEqual(A.shareRows(undefined), []);
+  const ui = readFileSync('src/arcade-keep.ts', 'utf8');
+  assert.match(ui, /\{0\} 게임 \{1\}개 보관 중 · \{2\}/);
+  assert.match(ui, /내 컴퓨터가 꺼져 있으면 손님이 게임을 못 해요/);
+});
+
+test('「지금 쉬는 중」: 최근 실패만 · 오래되면 잊는다 · 확인한 적 없으면 쉬는 중이라 하지 않는다', () => {
+  const log = new Map();
+  assert.equal(A.isResting(log, 'Q', 1000), false);
+  A.noteReach(log, 'Q', false, 1000);
+  assert.equal(A.isResting(log, 'Q', 1000 + A.REST_MS - 1), true);
+  assert.equal(A.isResting(log, 'Q', 1000 + A.REST_MS), false);
+  A.noteReach(log, 'Q', true, 2000);
+  assert.equal(A.isResting(log, 'Q', 2001), false);
+});
+
+test('🔴 결제 확인 칸 전에 늘 다시 확인 · 못 받으면 「판매자 컴퓨터가 꺼져 있어서…」 · 돈 받는 길 없음', () => {
+  const src = readFileSync('src/arcade-market.ts', 'utf8');
+  assert.match(src, /판매자 컴퓨터가 꺼져 있어서 지금은 할 수 없어요/);
+  const ask = src.indexOf('askCoin(p, plan!');
+  const check = src.lastIndexOf('reachNow(p)', ask);
+  assert.ok(check > 0 && ask - check < 600, '확인 칸(askCoin) 바로 앞에 reachNow');
+  assert.match(src.slice(check, ask), /if \(!ok\)[\s\S]*denyMessage\("failed"\)/);
+  const rs = readFileSync('src-tauri/src/arcade.rs', 'utf8');
+  assert.match(rs, /\/g\/\{doc_cid\}\/doc/, '문서도 본다');
+  assert.match(rs, /REACH_SECS: u64 = 5/, '짧게 기다린다');
+});
+
+test('🔴 플랫폼은 남의 게임 창고가 아니다: 특정 컴퓨터 주소·모드로 켜는 코드 없음 · 돕기는 기본 꺼짐', () => {
+  const files = ['src/arcade-keep.ts', 'src/arcade-keep-core.ts', 'src-tauri/src/arcade_keep.rs'];
+  for (const f of files) {
+    const s = readFileSync(f, 'utf8').split('#[cfg(test)]')[0];
+    assert.doesNotMatch(s, /taile277f6|N100|n100/, f);
+  }
+  const rs = readFileSync('src-tauri/src/arcade_keep.rs', 'utf8');
+  assert.match(rs, /Share \{ mode: Mode::Off/);
+});
