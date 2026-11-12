@@ -15,6 +15,7 @@ import "./arcade-market.css";
 import { t, tf, copyHtml, setCopyText } from "./i18n";
 import { fmtRvn } from "./amount-ui";
 import type { ArcadeGenre } from "../core/creator/arcade-product";
+import { creditGate, creditMessage, denyMessage, newPlayId, parseGameMessage } from "../core/creator/arcade-credit";
 import {
   ArcadeDocError, atomsToRvn, filterByGenre, filterProducts, gameUrl, genreLabel, genresPresent, playsWithoutPay, prepareArcadePay,
   productsFromSources, sortProducts, type ArcadeProduct,
@@ -25,6 +26,8 @@ export interface ArcadeDeps {
   invoke: Invoke;
   ensureUnlocked: (why: string) => Promise<boolean>;
   errText: (e: unknown) => string;
+  /** 판매자 기능이 켜졌나 — 켜졌을 때만 「게임 올리기」 단추. */
+  canSell?: () => boolean;
 }
 
 /** 첫 화면 줄에 보이는 카드 수(그 너머는 「더 보기」). */
@@ -62,7 +65,7 @@ export function cardHtml(p: ArcadeProduct): string {
 }
 
 export function mountArcade(page: HTMLElement, host: HTMLElement, deps: ArcadeDeps) {
-  let view: "row" | "all" | "game" = "row";
+  let view: "row" | "all" | "game" | "upload" = "row";
   let items: ArcadeProduct[] | null = null;
   let loadedAt = 0;
   let failed = "";
@@ -110,6 +113,7 @@ export function mountArcade(page: HTMLElement, host: HTMLElement, deps: ArcadeDe
       b.onclick = () => { const p = items?.find((x) => x.id === b.dataset.arOpen); if (p) { current = p; view = "game"; paint(); host.scrollIntoView({ block: "start" }); } };
     });
     host.querySelectorAll<HTMLElement>("[data-ar-reload]").forEach((b) => { b.onclick = () => { setCopyText(b, () => t("가져오는 중…")); void load(true).then(paint); }; });
+    host.querySelector<HTMLElement>("[data-ar-upload]")?.addEventListener("click", () => { view = "upload"; paint(); host.scrollIntoView({ block: "start" }); });
     host.querySelector<HTMLElement>("[data-ar-more]")?.addEventListener("click", () => { view = "all"; paint(); host.scrollIntoView({ block: "start" }); });
     host.querySelector<HTMLElement>("[data-ar-back]")?.addEventListener("click", () => { view = view === "game" && cameFromAll ? "all" : "row"; current = null; paint(); });
     const search = host.querySelector<HTMLInputElement>("[data-ar-search]");
@@ -121,11 +125,12 @@ export function mountArcade(page: HTMLElement, host: HTMLElement, deps: ArcadeDe
     focus(false);
     cameFromAll = false;
     const head = (more: boolean) => `<div class="ar-head"><h3>${copyHtml("바로 해 보는 게임")}</h3>` +
+      (deps.canSell?.() ? `<button type="button" class="ghost ar-more" data-ar-upload="1">${copyHtml("게임 올리기")}</button>` : "") +
       (more ? `<button type="button" class="ghost ar-more" data-ar-more="1">${copyHtml("더 보기")}</button>` : "") + `</div>`;
-    if (items === null && !failed) { host.innerHTML = head(false) + `<p class="meta" role="status">${copyHtml("게임 가져오는 중…")}</p>`; return; }
+    if (items === null && !failed) { host.innerHTML = head(false) + `<p class="meta" role="status">${copyHtml("게임 가져오는 중…")}</p>`; wire(); return; }
     if (failed) { host.innerHTML = head(false) + failHtml(); wire(); return; }
     const list = items ?? [];
-    if (!list.length) { host.innerHTML = head(false) + emptyHtml(); return; }
+    if (!list.length) { host.innerHTML = head(false) + emptyHtml(); wire(); return; }
     const shown = filterByGenre(list, genresPresent(list).includes(genre as ArcadeGenre) ? genre : "all");
     host.innerHTML = head(true) + chipsHtml(list) +
       `<ul class="ar-row">${shown.slice(0, ROW_MAX).map(cardHtml).join("")}</ul>` +
@@ -169,8 +174,7 @@ export function mountArcade(page: HTMLElement, host: HTMLElement, deps: ArcadeDe
     const url = gameUrl(p);
     const action = !url
       ? `<p class="ar-note">${copyHtml("이 게임은 아직 열 수 없어요(잠긴 게임이거나 게임 주소를 확인하지 못했어요). 돈을 내는 단추도 두지 않아요.")}</p>`
-      : free ? `<div class="row ar-acts"><button type="button" data-ar-play="1">${copyHtml("바로 하기")}</button></div>`
-      : `<div class="row ar-acts"><button type="button" data-ar-buy="1">${esc(tf("한 판 하기 · {0}", priceText(p)))}</button></div>`;
+      : `<div class="row ar-acts"><button type="button" data-ar-play="1">${copyHtml(free ? "바로 하기" : "게임 열기")}</button></div>`;
     host.innerHTML =
       `<div class="ar-head"><button type="button" class="ghost ar-back" data-ar-back="1">${copyHtml(cameFromAll ? "목록으로" : "장터로")}</button></div>` +
       `<article class="ar-page">` +
@@ -183,23 +187,49 @@ export function mountArcade(page: HTMLElement, host: HTMLElement, deps: ArcadeDe
       `<p class="meta">${esc(tf("{0} · 혼자 하기 · 약 {1}분", t(genreLabel(p.genre)), p.minutes))}</p>` +
       (p.description ? `<p class="ar-desc" translate="no">${esc(p.description)}</p>` : "") +
       (!p.verified ? `<p class="ar-note">${copyHtml("레이븐볼트가 이 판매자를 확인하지 않았어요. 서명은 맞지만, 체인의 가게 자산이 이 게임을 가리키지 않아요.")}</p>` : "") +
-      `<p class="meta">${copyHtml("한 판마다 내는 게임이에요. 지난 결제로 다음 판이 열리지 않아요.")}</p>` +
+      `<p class="meta">${copyHtml(free ? "무료 게임이에요. 한 판마다 바로 시작해요." : "오락실처럼 한 판마다 넣는 게임이에요. 게임이 「한 판 넣기」를 물으면 그때마다 내가 확인해요. 미리 넣어 두는 돈은 없어요.")}</p>` +
       action +
       `<div data-ar-step="1"></div>` +
       `</div></article>` +
       `<div class="ar-stage" data-ar-stage="1" hidden></div>`;
     wire();
-    host.querySelector<HTMLElement>("[data-ar-play]")?.addEventListener("click", () => openGame(p));
-    host.querySelector<HTMLElement>("[data-ar-buy]")?.addEventListener("click", (e) => void prepare(p, e.currentTarget as HTMLButtonElement));
+    host.querySelector<HTMLElement>("[data-ar-play]")?.addEventListener("click", (e) => void openGame(p, e.currentTarget as HTMLButtonElement));
   }
 
-  /** 앱 창 안에서 연다. 결제가 받아들여진 뒤(또는 무료)만 불린다. */
-  function openGame(p: ArcadeProduct) {
+  /** 지금 열린 게임 판(한 화면에 하나). 닫으면 듣기도 끝난다. */
+  let session: { close(): void } | null = null;
+
+  /**
+   * 앱 창 안에서 게임을 연다(무료·유료 같음). 돈은 게임이 「한 판 넣기」를 물을 때마다 그 자리에서 사람이 확인한다(arcade-credit v1).
+   * 유료는 먼저 문서를 다시 확인하고 시작 파일이 닿는지 본다 — 못 받는 게임은 열지 않는다(돈을 내고 못 하는 일이 없게).
+   */
+  async function openGame(p: ArcadeProduct, btn?: HTMLButtonElement) {
     const stage = host.querySelector<HTMLElement>("[data-ar-stage]");
+    const step = host.querySelector<HTMLElement>("[data-ar-step]");
     const url = gameUrl(p);
-    if (!stage || !url) return;
+    if (!stage || !step || !url) return;
+    const free = playsWithoutPay(p);
+    let plan: ReturnType<typeof prepareArcadePay> | null = null;
+    if (!free) {
+      try { plan = prepareArcadePay(p); } catch (e) {
+        step.innerHTML = `<p class="danger">${copyHtml("상품 문서를 다시 확인하지 못해 결제를 준비하지 않았어요.")} <span class="meta">${esc(e instanceof ArcadeDocError ? e.code : "")}</span></p>`;
+        return;
+      }
+      if (btn) btn.disabled = true;
+      setCopyText(step, () => t("게임 파일을 받을 수 있는지 확인하는 중…"));
+      let reachable = false;
+      try { reachable = await deps.invoke<boolean>("arcade_entry_reachable", { docCid: plan.docCid, entry: p.entry }) === true; } catch { reachable = false; }
+      if (btn) btn.disabled = false;
+      if (!reachable) {
+        step.innerHTML = `<p class="danger">${copyHtml("지금은 게임 파일을 받을 수 없어 결제를 준비하지 않았어요. 돈을 내고 못 하는 일이 없게 막았어요. 나중에 다시 눌러 주세요.")}</p>`;
+        return;
+      }
+      step.innerHTML = "";
+    }
+    session?.close();
     stage.hidden = false;
-    stage.innerHTML = `<div class="ar-stage-bar"><b translate="no">${esc(p.title)}</b><button type="button" class="ghost" data-ar-close="1">${copyHtml("게임 닫기")}</button></div>`;
+    stage.innerHTML = `<div class="ar-stage-bar"><b translate="no">${esc(p.title)}</b><button type="button" class="ghost" data-ar-close="1">${copyHtml("게임 닫기")}</button></div>` +
+      `<div class="ar-coin" data-ar-coin="1" hidden></div>`;
     const frame = document.createElement("iframe");
     frame.title = p.title;
     frame.setAttribute("sandbox", "allow-scripts");
@@ -208,50 +238,53 @@ export function mountArcade(page: HTMLElement, host: HTMLElement, deps: ArcadeDe
     frame.className = "ar-frame";
     frame.src = url;
     stage.appendChild(frame);
-    stage.querySelector<HTMLElement>("[data-ar-close]")!.onclick = () => { stage.innerHTML = ""; stage.hidden = true; };
+    const coin = stage.querySelector<HTMLElement>("[data-ar-coin]")!;
+    const gate = creditGate();
+    const reply = (m: unknown) => { try { frame.contentWindow?.postMessage(m, "*"); } catch { /* 닫힌 판 */ } };
+    const grant = () => { const id = newPlayId((n) => crypto.getRandomValues(new Uint8Array(n))); gate.grant(id); reply(creditMessage(id)); };
+    const onMessage = (e: MessageEvent) => {
+      // 🔴 이 게임 iframe 이 보낸 것만(sandbox 라 origin 은 'null'). 다른 창·다른 모양은 조용히 무시.
+      if (e.source !== frame.contentWindow || e.origin !== "null") return;
+      const m = parseGameMessage(e.data);
+      if (!m) return;
+      if (m.kind === "over") { gate.over(m.playId); return; }
+      const ok = gate.ask(Date.now());
+      if (ok !== "ok") { reply(denyMessage(ok)); return; }
+      if (free) { gate.settle(); grant(); return; }
+      askCoin(p, plan!, coin, (paid) => { gate.settle(); if (paid) grant(); else reply(denyMessage("declined")); }, () => { gate.settle(); reply(denyMessage("failed")); });
+    };
+    window.addEventListener("message", onMessage);
+    const close = () => { window.removeEventListener("message", onMessage); stage.innerHTML = ""; stage.hidden = true; if (session === me) session = null; };
+    const me = { close };
+    session = me;
+    stage.querySelector<HTMLElement>("[data-ar-close]")!.onclick = close;
     stage.scrollIntoView({ block: "start" });
   }
 
-  /** 결제 준비 → 확인 칸. 여기서는 아무것도 보내지 않는다. */
-  async function prepare(p: ArcadeProduct, btn: HTMLButtonElement) {
-    const step = host.querySelector<HTMLElement>("[data-ar-step]")!;
-    let plan;
-    try { plan = prepareArcadePay(p); } catch (e) {
-      step.innerHTML = `<p class="danger">${copyHtml("상품 문서를 다시 확인하지 못해 결제를 준비하지 않았어요.")} <span class="meta">${esc(e instanceof ArcadeDocError ? e.code : "")}</span></p>`;
-      return;
-    }
-    btn.disabled = true;
-    setCopyText(step, () => t("게임 파일을 받을 수 있는지 확인하는 중…"));
-    let reachable = false;
-    try { reachable = await deps.invoke<boolean>("arcade_entry_reachable", { docCid: plan.docCid, entry: p.entry }) === true; } catch { reachable = false; }
-    if (!reachable) {
-      btn.disabled = false;
-      step.innerHTML = `<p class="danger">${copyHtml("지금은 게임 파일을 받을 수 없어 결제를 준비하지 않았어요. 돈을 내고 못 하는 일이 없게 막았어요. 나중에 다시 눌러 주세요.")}</p>`;
-      return;
-    }
+  /**
+   * 「한 판 X RVN 넣기」 — 작은 확인 칸. 사람이 누를 때만 보낸다(자동 결제·미리 넣기 없음). 지갑이 잠겨 있으면 지갑 암호를 묻는다.
+   * 결과: done(true) = 거래가 받아들여짐(그 판 시작) · done(false) = 그만둠 · failed() = 보내지 못함/모름.
+   */
+  function askCoin(p: ArcadeProduct, plan: ReturnType<typeof prepareArcadePay>, coin: HTMLElement, done: (paid: boolean) => void, failed: () => void) {
     const row = (label: string, v: string, strong = false) => `<div class="kv"><b>${copyHtml(label)}</b><span>${strong ? `<b>${v}</b>` : v}</span></div>`;
-    step.innerHTML =
-      `<div class="ar-confirm" role="group">` +
-      `<h4>${copyHtml("내기 전에 확인해 주세요")}</h4>` +
-      row("게임값", esc(fmtRvn(atomsToRvn(plan.priceAtoms))), true) +
+    coin.hidden = false;
+    coin.innerHTML =
+      `<div class="ar-confirm" role="alertdialog" aria-label="${esc(t("한 판 넣기"))}">` +
+      `<h4>${esc(tf("한 판 {0} 넣기", priceText(p)))}</h4>` +
       row("판매자에게 (99%)", esc(fmtRvn(atomsToRvn(plan.sellerAtoms)))) +
       row("레이븐볼트 수수료 (1%)", esc(fmtRvn(atomsToRvn(plan.feeAtoms)))) +
       row("받는 주소", `<code translate="no" class="ar-addr">${esc(plan.payTo)}</code>`) +
-      `<p class="meta">${copyHtml("공개 장부 수수료는 노드가 정해 따로 조금 붙어요. 판매자 몫과 수수료는 한 거래 안에서 각자에게 바로 가요 — 레이븐볼트가 맡아 두지 않아요.")}</p>` +
-      `<p class="ar-warn">${copyHtml("아직 돈은 나가지 않았어요. 「정말 내기」를 눌러야 보내요. 보낸 뒤에는 되돌릴 수 없어요.")}</p>` +
-      `<label class="ar-agree"><input type="checkbox" data-ar-agree="1" /> <span>${copyHtml("레이븐볼트는 거래 당사자가 아닙니다. 게임에 대한 책임은 판매자에게 있습니다. 보낸 RVN은 돌려받을 수 없습니다.")} <b>${copyHtml("읽었어요")}</b></span></label>` +
-      `<div class="row"><button type="button" data-ar-go="1" disabled>${copyHtml("정말 내기")}</button>` +
+      `<p class="meta">${copyHtml("공개 장부 수수료는 노드가 정해 따로 조금 붙어요. 레이븐볼트는 거래 당사자가 아니고, 보낸 RVN은 돌려받을 수 없어요.")}</p>` +
+      `<div class="row"><button type="button" data-ar-go="1">${esc(tf("한 판 {0} 넣기", priceText(p)))}</button>` +
       `<button type="button" class="ghost" data-ar-stop="1">${copyHtml("그만두기")}</button></div>` +
       `<p class="meta" data-ar-say="1" role="status"></p></div>`;
-    const go = step.querySelector<HTMLButtonElement>("[data-ar-go]")!;
-    const stop = step.querySelector<HTMLButtonElement>("[data-ar-stop]")!;
-    const say = step.querySelector<HTMLElement>("[data-ar-say]")!;
-    const agree = step.querySelector<HTMLInputElement>("[data-ar-agree]")!;
-    agree.onchange = () => { go.disabled = !agree.checked; };
-    stop.onclick = () => { step.innerHTML = ""; btn.disabled = false; };
+    const go = coin.querySelector<HTMLButtonElement>("[data-ar-go]")!;
+    const stop = coin.querySelector<HTMLButtonElement>("[data-ar-stop]")!;
+    const say = coin.querySelector<HTMLElement>("[data-ar-say]")!;
+    const finish = () => { coin.hidden = true; coin.innerHTML = ""; };
+    stop.onclick = () => { finish(); done(false); };
     const requestId = crypto.randomUUID();
     go.onclick = async () => {
-      if (!agree.checked) return;
       go.disabled = true; stop.disabled = true;
       if (!(await deps.ensureUnlocked(t("게임값을 보내려면 지갑을 열어야 합니다.")))) { go.disabled = false; stop.disabled = false; return; }
       setCopyText(say, () => t("보내는 중…"));
@@ -261,26 +294,45 @@ export function mountArcade(page: HTMLElement, host: HTMLElement, deps: ArcadeDe
         });
         const txid = String(r?.txid ?? "");
         if (!/^[0-9a-f]{64}$/i.test(txid)) {
-          step.innerHTML = `<p class="danger">${copyHtml("보냈는지 확인하지 못했어요. 다시 내지 말고, 지갑의 거래 내역에서 먼저 확인해 주세요.")}</p>`;
+          coin.innerHTML = `<p class="danger">${copyHtml("보냈는지 확인하지 못했어요. 다시 내지 말고, 지갑의 거래 내역에서 먼저 확인해 주세요.")}</p>`;
+          failed();
           return;
         }
         void deps.invoke("arcade_ack", { requestId }).catch(() => {});
-        step.innerHTML = `<p class="ok">${copyHtml("보냈어요. 게임을 열어요.")}</p><p class="meta ar-txid">${copyHtml("거래 번호")} <code translate="no">${esc(txid)}</code></p>`;
-        openGame(p);
+        const step = host.querySelector<HTMLElement>("[data-ar-step]");
+        if (step) step.innerHTML = `<p class="ok">${copyHtml("넣었어요. 한 판 시작해요.")}</p><p class="meta ar-txid">${copyHtml("거래 번호")} <code translate="no">${esc(txid)}</code></p>`;
+        finish();
+        done(true);
       } catch (e) {
         if (isSentUnknown(e)) {
-          step.innerHTML = `<p class="danger">${copyHtml("보냈는지 확인하지 못했어요. 다시 내지 말고, 지갑의 거래 내역에서 먼저 확인해 주세요.")}</p>`;
+          coin.innerHTML = `<p class="danger">${copyHtml("보냈는지 확인하지 못했어요. 다시 내지 말고, 지갑의 거래 내역에서 먼저 확인해 주세요.")}</p>`;
+          failed();
           return;
         }
         go.disabled = false; stop.disabled = false;
         say.innerHTML = `<span class="danger">${esc(deps.errText(e))}</span>`;
       }
     };
+    go.focus();
+  }
+
+  function paintUploadView() {
+    focus(true);
+    void import("./arcade-upload").then(({ paintUpload }) => {
+      if (view !== "upload") return;
+      paintUpload(host, deps, {
+        existing: items ?? [],
+        onBack: () => { view = "row"; paint(); },
+        onPublished: () => { loadedAt = 0; },
+      });
+    });
   }
 
   function paint() {
+    if (view !== "game") session?.close();
     if (view === "game") paintGame();
     else if (view === "all") paintAll();
+    else if (view === "upload") paintUploadView();
     else paintRow();
   }
 
@@ -289,5 +341,7 @@ export function mountArcade(page: HTMLElement, host: HTMLElement, deps: ArcadeDe
     enter() { view = "row"; current = null; paint(); void load().then(() => { if (view === "row") paint(); }); },
     /** 「새로 읽기」 — 목록을 처음부터. */
     refresh() { void load(true).then(paint); },
+    /** 「게임 올리기」(판매자) 화면으로 — 「바로 팔기」 안내에서도 연다. */
+    upload() { view = "upload"; current = null; paint(); },
   };
 }

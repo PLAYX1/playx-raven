@@ -42,7 +42,14 @@ const FULL = {
     [cidOf(3)]: doc('tap-tap', 'Tap Tap', '0', 'casual', 'RVLT/TESTARCADE#TAP_TAP'),
   },
 };
-const GAME_HTML = '<!doctype html><meta charset="utf-8"><body style="margin:0;display:grid;place-items:center;height:100vh;font:24px system-ui;background:#223;color:#fff">TEST GAME (sandboxed iframe)</body>';
+// 시험 게임: 「한 판 넣기 v1」을 말한다 — 열리면 ask, credit 오면 PLAYING + playId, 「끝」을 누르면 over.
+const GAME_HTML = `<!doctype html><meta charset="utf-8"><body style="margin:0;display:grid;place-items:center;height:100vh;font:22px system-ui;background:#223;color:#fff">
+<div><p id="s">TEST GAME · INSERT COIN</p><button id="end">end</button></div><script>
+let play=null;const ask=()=>parent.postMessage({type:'rv-arcade',v:1,ask:'credit'},'*');
+addEventListener('message',e=>{const m=e.data;if(m&&m.type==='rv-arcade'&&m.credit===true){play=m.playId;document.getElementById('s').textContent='PLAYING '+play.slice(0,8);}
+else if(m&&m.type==='rv-arcade'&&m.credit===false){document.getElementById('s').textContent='NO CREDIT '+m.reason;}});
+document.getElementById('end').onclick=()=>{if(play){parent.postMessage({type:'rv-arcade',v:1,event:'over',playId:play,score:42},'*');play=null;document.getElementById('s').textContent='GAME OVER';setTimeout(ask,1600);}};
+setTimeout(ask,300);</script></body>`;
 
 let work, dist, browser, server, origin, shotDir;
 before(async () => {
@@ -66,7 +73,13 @@ before(async () => {
 });
 after(async () => { await browser?.close(); server?.close(); if (work && !process.env.RV_KEEP_WORK) rmSync(work, { recursive: true, force: true }); });
 
-async function openMarket({ width, theme = 'light', sources }) {
+const UP_KEY = A.secp256k1.utils.randomPrivateKey();
+const UP_SELLER = A.addressOfPublicKey(A.secp256k1.getPublicKey(UP_KEY, true));
+const UP_SCAN = { folder: 'star-run', files: [{ path: 'index.html', sha256: A.sha256Hex(A.utf8('i')), size: 812 }, { path: 'js/game.js', sha256: A.sha256Hex(A.utf8('g')), size: 20480 }],
+  skipped: ['.DS_Store'], badNames: [], htmlTexts: { 'index.html': '<!doctype html><canvas></canvas><script src="js/game.js"></script>' } };
+const UP_BAD = { ...UP_SCAN, folder: 'cdn-game', htmlTexts: { 'index.html': '<script src="https://cdn.example.com/phaser.js"></script><script>start()</script>' } };
+
+async function openMarket({ width, theme = 'light', sources, scan = UP_SCAN }) {
   const page = await browser.newPage();
   page.on('pageerror', e => { page.__errors = [...(page.__errors ?? []), e.message]; });
   await page.setViewport({ width, height: 900 });
@@ -80,10 +93,20 @@ async function openMarket({ width, theme = 'light', sources }) {
     return r.abort();
   });
   await page.evaluateOnNewDocument(installFixture, { theme, sales: true, seller: true });
-  await page.evaluateOnNewDocument(src => {
+  await page.exposeFunction('__signTest', message => A.signMessageWithKeyForTest(message, UP_KEY));
+  await page.evaluateOnNewDocument((src, scan, upSeller) => {
     const inner = window.__TAURI_INTERNALS__.invoke;
     const pays = window.__arcadePays = [];
+    const up = window.__upCalls = [];
     const extra = async (command, args) => {
+      // 「게임 올리기」 — 가짜만(실제 IPFS·서명·발행 없음).
+      if (command === 'owner_tokens') return ['RVLT/TESTARCADE!', 'RVLT!'];
+      if (command === 'arcade_pick_folder') { up.push([command]); return structuredClone(scan); }
+      if (command === 'new_address') { up.push([command]); return upSeller; }
+      if (command === 'arcade_pin_folder') { up.push([command, args.expect.length]); return { cid: 'Qm' + '3'.repeat(44), files: args.expect.length }; }
+      if (command === 'sign_message') { up.push([command, args.address]); return { address: args.address, message: args.message, signature: await window.__signTest(args.message) }; }
+      if (command === 'ipfs_add_file') { up.push([command, args.file.name]); return { cid: 'Qm' + '4'.repeat(44), name: args.file.name, size: args.file.bytes.length }; }
+      if (command === 'issue_asset') { up.push([command, args]); return { txid: 'cd'.repeat(32) }; }
       if (command === 'arcade_catalog_sources') return structuredClone(src);
       if (command === 'arcade_entry_reachable') return true;
       if (command === 'market_browse') return [];
@@ -93,7 +116,7 @@ async function openMarket({ width, theme = 'light', sources }) {
     };
     window.__TAURI_INTERNALS__.invoke = extra;
     window.__TAURI__.core.invoke = extra;
-  }, sources);
+  }, sources, scan, UP_SELLER);
   await page.goto(origin + '/', { waitUntil: 'networkidle0' });
   await page.waitForFunction(() => document.querySelector('#page-home.on') && !document.documentElement.hasAttribute('data-ravi-arriving'), { timeout: 20000 });
   await page.evaluate(() => { document.querySelector('nav')?.classList.add('more-open'); document.querySelector('nav a[data-page="trade"]').click(); });
@@ -146,34 +169,95 @@ for (const width of [1120, 1440]) {
       await shot(page, `arcade-all-${width}.png`);
 
       await page.click('#ar-host [data-ar-open$="/star-run"]');
-      await page.waitForSelector('#ar-host [data-ar-buy]');
+      await page.waitForSelector('#ar-host [data-ar-play]');
       // 게임 페이지에서도 값이 가장 큰 글(제목보다 크다)
       const [big, h] = await page.$eval('#ar-host .ar-page', e => [parseFloat(getComputedStyle(e.querySelector('.ar-big')).fontSize), parseFloat(getComputedStyle(e.querySelector('h3')).fontSize)]);
       assert.ok(big >= 28 && big > h, `값 ${big}px · 제목 ${h}px`);
       assert.deepEqual(await noWrapButtons(page), []);
-      await page.click('#ar-host [data-ar-buy]');
-      await page.waitForSelector('#ar-host [data-ar-go]');
-      assert.equal(await page.$eval('#ar-host [data-ar-go]', b => b.disabled), true, '「읽었어요」 전에는 잠김');
-      const confirm = await page.$eval('#ar-host .ar-confirm', e => e.textContent);
-      assert.match(confirm, /0\.99/); assert.match(confirm, /0\.01/); assert.ok(confirm.includes(seller));
-      assert.deepEqual(await page.evaluate(() => window.__arcadePays), [], '확인 칸만 열고 보내지 않았다');
-      await shot(page, `arcade-confirm-${width}.png`);
-      await page.click('#ar-host [data-ar-agree]');
-      await page.click('#ar-host [data-ar-go]');
+      await shot(page, `arcade-game-${width}.png`);
+      await page.click('#ar-host [data-ar-play]');
       await page.waitForSelector('#ar-host iframe.ar-frame');
-      const pays = await page.evaluate(() => window.__arcadePays);
-      assert.equal(pays.length, 1);
-      assert.deepEqual([pays[0].payTo, pays[0].sellerAtoms, pays[0].feeAtoms, pays[0].priceAtoms], [seller, 99_000_000, 1_000_000, 100_000_000]);
       const frame = await page.$eval('#ar-host iframe.ar-frame', f => ({ sandbox: f.getAttribute('sandbox'), src: f.src, ref: f.getAttribute('referrerpolicy') }));
       assert.equal(frame.sandbox, 'allow-scripts'); assert.equal(frame.ref, 'no-referrer');
       assert.ok(frame.src.startsWith(A.ARCADE_LINK_BASE + cidOf(1) + '/'));
-      await new Promise(r => setTimeout(r, 400));
-      await page.$eval('#ar-host .ar-page', e => e.scrollIntoView());
-      await shot(page, `arcade-game-${width}.png`);
+      // 게임이 「한 판 넣기」를 묻는다 → 작은 확인 칸(아직 보내지 않음)
+      await page.waitForSelector('#ar-host [data-ar-coin]:not([hidden]) [data-ar-go]', { timeout: 8000 });
+      const coin = await page.$eval('#ar-host [data-ar-coin]', e => e.textContent);
+      assert.match(coin, /한 판 1\sRVN 넣기/); assert.match(coin, /0\.99/); assert.match(coin, /0\.01/); assert.ok(coin.includes(seller));
+      assert.deepEqual(await page.evaluate(() => window.__arcadePays), [], '묻기만 하고 보내지 않았다');
+      // 창 자신(게임 iframe 아님)이 보낸 ask 는 무시된다
+      await page.evaluate(() => window.postMessage({ type: 'rv-arcade', v: 1, ask: 'credit' }, '*'));
+      assert.deepEqual(await noWrapButtons(page), []);
+      await page.$eval('#ar-host [data-ar-stage]', e => e.scrollIntoView());
+      await shot(page, `arcade-coin-${width}.png`);
+      await page.click('#ar-host [data-ar-coin] [data-ar-go]');
+      const gameFrame = await (await page.$('#ar-host iframe.ar-frame')).contentFrame();
+      await gameFrame.waitForFunction(() => /^PLAYING /.test(document.getElementById('s').textContent), { timeout: 8000 });
+      let pays = await page.evaluate(() => window.__arcadePays);
+      assert.equal(pays.length, 1);
+      assert.deepEqual([pays[0].payTo, pays[0].sellerAtoms, pays[0].feeAtoms, pays[0].priceAtoms], [seller, 99_000_000, 1_000_000, 100_000_000]);
       await page.$eval('#ar-host [data-ar-stage]', e => e.scrollIntoView());
       await shot(page, `arcade-playing-${width}.png`);
+      // 한 판 끝 → 「한 판 더」 ask → 다시 사람에게 묻는다(자동 결제 없음). 그만두면 게임에 declined.
+      await gameFrame.click('#end');
+      await page.waitForSelector('#ar-host [data-ar-coin]:not([hidden]) [data-ar-stop]', { timeout: 8000 });
+      assert.equal((await page.evaluate(() => window.__arcadePays)).length, 1, '두 번째 판은 아직 안 보냈다');
+      await page.click('#ar-host [data-ar-coin] [data-ar-stop]');
+      await gameFrame.waitForFunction(() => /NO CREDIT declined/.test(document.getElementById('s').textContent), { timeout: 5000 });
+      assert.equal((await page.evaluate(() => window.__arcadePays)).length, 1);
       assert.deepEqual(page.__errors ?? [], []);
       await page.close();
     }
+  });
+}
+
+for (const width of [1120, 1440]) {
+  test(`게임 올리기 ${width}: 폴더 → 검사 → 확인 칸(소각 5 RVN) → 「올리기」 뒤에만 붙잡기·서명·발행`, async () => {
+    const page = await openMarket({ width, sources: { assets: [], docs: {} } });
+    await page.click('#ar-host [data-ar-upload]');
+    await page.waitForSelector('#ar-host [data-up-pick]');
+    await page.click('#ar-host [data-up-pick]');
+    await page.waitForSelector('#ar-host [data-up-review]');
+    assert.match(await page.$eval('#ar-host [data-up-check]', e => e.textContent), /폴더 검사를 통과했어요/);
+    await page.type('#ar-host [data-up-title]', 'Star Run');
+    assert.equal(await page.$eval('#ar-host [data-up-tag]', e => e.value), 'STAR_RUN');
+    await page.type('#ar-host [data-up-price]', '0.5');
+    assert.deepEqual(await noWrapButtons(page), []);
+    assert.ok(await overflowX(page) <= 1);
+    await shot(page, `upload/upload-form-${width}.png`);
+    await page.click('#ar-host [data-up-review]');
+    await page.waitForSelector('#ar-host [data-up-go]');
+    const box = await page.$eval('#ar-host .ar-confirm', e => e.textContent);
+    assert.match(box, /RVLT\/TESTARCADE#STAR_RUN/); assert.match(box, /5 RVN/);
+    assert.equal(await page.$eval('#ar-host [data-up-go]', b => b.disabled), true);
+    assert.deepEqual(await page.evaluate(() => window.__upCalls.map(c => c[0])), ['arcade_pick_folder'], '확인 전에는 고르기만');
+    await page.$eval('#ar-host .ar-confirm', e => e.scrollIntoView());
+    await shot(page, `upload/upload-confirm-${width}.png`);
+    await page.click('#ar-host [data-up-agree]');
+    await page.click('#ar-host [data-up-go]');
+    await page.waitForFunction(() => /올렸어요/.test(document.querySelector('#ar-host [data-up-step]').textContent), { timeout: 8000 });
+    const calls = await page.evaluate(() => window.__upCalls);
+    assert.deepEqual(calls.map(c => c[0]), ['arcade_pick_folder', 'new_address', 'arcade_pin_folder', 'sign_message', 'ipfs_add_file', 'issue_asset']);
+    const issue = calls.at(-1)[1];
+    assert.deepEqual(issue, { name: 'RVLT/TESTARCADE#STAR_RUN', qty: 1, units: 0, reissuable: false, ipfsHash: 'Qm' + '4'.repeat(44), toAddress: null });
+    await page.$eval('#ar-host [data-up-step]', e => e.scrollIntoView());
+    await shot(page, `upload/upload-done-${width}.png`);
+    assert.deepEqual(page.__errors ?? [], []);
+    await page.close();
+  });
+
+  test(`게임 올리기 ${width}: 공유 사이트에서 막힐 폴더는 올리지 않는다 · 어둡게`, async () => {
+    const page = await openMarket({ width, theme: 'dark', sources: { assets: [], docs: {} }, scan: UP_BAD });
+    await page.click('#ar-host [data-ar-upload]');
+    await page.waitForSelector('#ar-host [data-up-pick]');
+    await page.click('#ar-host [data-up-pick]');
+    await page.waitForSelector('#ar-host [data-up-review]');
+    const t = await page.$eval('#ar-host [data-up-check]', e => e.textContent);
+    assert.match(t, /이대로는 올릴 수 없어요/); assert.match(t, /cdn\.example\.com/);
+    await page.type('#ar-host [data-up-title]', 'Cdn Game');
+    await page.click('#ar-host [data-up-review]');
+    assert.equal(await page.$('#ar-host [data-up-go]'), null, '확인 칸이 열리지 않는다');
+    await shot(page, `upload/upload-blocked-${width}-dark.png`);
+    await page.close();
   });
 }

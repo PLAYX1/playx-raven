@@ -70,3 +70,21 @@
 @media (max-width: 860px) { .ar-page { grid-template-columns: 1fr; } .ar-hero { height: 160px; } }
 /* 값은 div(main p 의 16px !important 규칙 밖) — 게임 페이지에서 가장 큰 글. */
 .ar-per { font-size: 16px; font-weight: 600; color: var(--muted); }
+/* 11-13 「한 판 넣기」 확인 칸 — 게임 바로 위, 작게. */
+.ar-coin { margin: 0 0 10px; }
+.ar-coin[hidden] { display: none; }
+.ar-coin .ar-confirm { margin-top: 0; }
+/* 11-13 「게임 올리기」 */
+.ar-up { display: flex; flex-direction: column; gap: 10px; max-width: 860px; }
+.ar-up-folder { padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); overflow-wrap: anywhere; }
+.ar-up-form { display: flex; flex-direction: column; gap: 10px; }
+.ar-up-form label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; min-width: 0; }
+.ar-up-form label[hidden] { display: none; }
+.ar-up-form input, .ar-up-form textarea, .ar-up-form select { width: 100%; box-sizing: border-box; min-height: 44px; padding: 8px 12px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--text); font: inherit; font-weight: 400; }
+.ar-up-two { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.ar-up-list { margin: 4px 0 0; padding-left: 20px; font-size: 14px; }
+.ar-up-list li { overflow-wrap: anywhere; }
+.ar-up-list.bad li { color: var(--danger); } .ar-up-list.warn li { color: var(--warn); }
+#sell-arcade { white-space: nowrap; flex-shrink: 0; margin-left: 6px; }
+@media (max-width: 860px) { .ar-up-two { grid-template-columns: 1fr; } }

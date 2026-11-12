@@ -6,3 +6,8 @@ export { ARCADE_FEE_BPS, encodeArcadeProduct, signArcadeProductForTest } from ".
 export { addressOfPublicKey, MARKET_FEE_ADDRESS } from "../../core/creator/trade-primitives";
 export { sha256Hex, utf8 } from "../../core/creator/bytes";
 export { splitPrice } from "../../core/game-registry/platform-fee";
+export * from "../../src/arcade-upload-rules";
+export * from "../../core/creator/arcade-credit";
+export { attachArcadeSignature, arcadeSigningMessage, verifyArcadeProduct } from "../../core/creator/arcade-product";
+export { buildArcadeCatalog } from "../../core/creator/arcade-catalog";
+export { signMessageWithKeyForTest } from "../../core/signer/test-key";

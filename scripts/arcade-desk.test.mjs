@@ -82,16 +82,21 @@ test('잠긴 게임·틀린 경로는 열지 않는다 · iframe 길은 CSP fram
   assert.ok(csp.split(' ').includes(A.ARCADE_LINK_BASE), 'CSP frame-src 에 게임 길이 있어야 iframe 이 열린다');
   const ui = readFileSync('src/arcade-market.ts', 'utf8');
   assert.match(ui, /setAttribute\("sandbox", "allow-scripts"\)/);
-  assert.doesNotMatch(ui, /allow-same-origin|allow-popups|allow-top-navigation|addEventListener\("message"/);
+  assert.doesNotMatch(ui, /allow-same-origin|allow-popups|allow-top-navigation/);
+  // 게임 메시지는 이 iframe 의 contentWindow(불투명 출처 'null')에서 온 것만, 정해진 모양만(arcade-credit parseGameMessage).
+  assert.match(ui, /if \(e\.source !== frame\.contentWindow \|\| e\.origin !== "null"\) return;/);
+  assert.match(ui, /const m = parseGameMessage\(e\.data\);\n\s+if \(!m\) return;/);
 });
 
-test('보내기는 사람이 「읽었어요」+「정말 내기」를 누른 뒤에만 · 다시 내기 막기', () => {
+test('한 판 넣기: 게임이 물을 때마다 사람이 「한 판 X 넣기」를 눌러야 보낸다 · 미리 넣은 돈 없음 · 다시 내기 막기', () => {
   const ui = readFileSync('src/arcade-market.ts', 'utf8');
   const calls = [...ui.matchAll(/invoke<[^>]*>\("arcade_pay"|invoke\("arcade_pay"/g)];
   assert.equal(calls.length, 1, 'arcade_pay 부름은 한 곳');
-  const goAt = ui.indexOf('go.onclick'), payAt = ui.indexOf('"arcade_pay"');
-  assert.ok(goAt > 0 && payAt > goAt, 'arcade_pay 는 「정말 내기」 누름 안에서만');
-  assert.match(ui, /data-ar-go="1" disabled/); assert.match(ui, /agree\.onchange = \(\) => \{ go\.disabled = !agree\.checked; \}/);
+  const askAt = ui.indexOf('function askCoin'), goAt = ui.indexOf('go.onclick', askAt), payAt = ui.indexOf('"arcade_pay"');
+  assert.ok(askAt > 0 && goAt > askAt && payAt > goAt, 'arcade_pay 는 askCoin 의 「넣기」 누름 안에서만');
+  assert.match(ui, /askCoin\(p, plan!, coin/, '유료 ask 는 확인 칸으로');
+  assert.match(ui, /if \(free\) \{ gate\.settle\(\); grant\(\); return; \}/, '무료는 묻지 않고 크레딧');
+  assert.doesNotMatch(ui, /localStorage[^\n]*(credit|balance|prepaid)/i, '크레딧·잔액을 저장하지 않는다');
   assert.match(ui, /isSentUnknown\(e\)/);
 });
 
