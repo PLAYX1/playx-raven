@@ -157,9 +157,13 @@ export function createRaviAgentUI(api: { invoke: Invoke; keyed(): string | null;
       const natural = document.createElement("p"); natural.setAttribute("aria-live", "polite");
       let timer = 0, closed = false;
       const dismiss = () => { if (closed) return; closed = true; clearTimeout(timer); document.removeEventListener("keydown", onEscape); overlay.classList.add("docking"); window.setTimeout(() => { opening.destroy(); overlay.remove(); }, 360); };
-      // The landed bubble covers home controls for up to 18s; Escape and a close button release them without opening the chat.
+      // The landed bubble covers home controls for up to 8s; Escape and a close button release them without opening the chat.
       // 돈 확인 창(holdBeforeDoing)이 뜨면 인사는 비킨다 — 덮개가 확인 창을 가리면 안 된다(11-07).
       window.addEventListener("rv-confirm-open", () => dismiss(), { once: true });
+      // 대표 11-14 「화면이 깨진다」: 인사가 메뉴를 옮겨도 18초 동안 카드·단추를 덮고 있었다(페이블 검진).
+      // 덮개 밖 어디든 누르거나 메뉴를 옮기면 바로 비킨다.
+      const onOutside = (event: PointerEvent) => { if (!overlay.contains(event.target as Node)) { document.removeEventListener("pointerdown", onOutside, true); dismiss(); } };
+      document.addEventListener("pointerdown", onOutside, true);
       const onEscape = (event: KeyboardEvent) => { if (event.key !== "Escape" || event.defaultPrevented || !landed) return; event.preventDefault(); dismiss(); };
       const dock = () => {
         const run = () => { if (closed) return; dismiss(); api.dock(); };
@@ -173,7 +177,7 @@ export function createRaviAgentUI(api: { invoke: Invoke; keyed(): string | null;
       const land = () => {
         if (landed) return;
         landed = true; skip.hidden = true; bird.setAttribute("aria-label", t("라비와 이야기하기")); bubble.hidden = false; api.landed?.();
-        timer = window.setTimeout(dismiss, 18000);
+        timer = window.setTimeout(dismiss, 8000);
         document.addEventListener("keydown", onEscape);
       };
       const opening = mountRaviOpening(bird, land);
@@ -182,7 +186,7 @@ export function createRaviAgentUI(api: { invoke: Invoke; keyed(): string | null;
         await settingsReady;
         if (closed) return;
         summary.textContent = todayLines(data).join("\n"); key.hidden = !!api.keyed();
-        if (landed) { clearTimeout(timer); timer = window.setTimeout(dismiss, 18000); }
+        if (landed) { clearTimeout(timer); timer = window.setTimeout(dismiss, 8000); }
         // No consent means no automatic provider call, even when a key exists.
         if (api.keyed() && consent.reviewed) {
           try { const line = await api.invoke<string>("ravi_greeting", { provider: api.keyed(), tz: api.tz() }); if (!closed && !containsRaviSecret(line)) natural.textContent = line; } catch { /* Fixed greeting and local numbers stay visible. */ }

@@ -2981,7 +2981,7 @@ function rpWhat() {
     // 판 번호는 화면에 이미 있다(사이드바 로고 옆). 없는 이름을 새로
     // 만들면 두 곳이 어긋난다.
     `${rpErrors.length ? `${rpErrors.length}${t("건의 오류")}` : t("오류 없음")} · ` +
-    `${copyHtml("판")} ${document.querySelector(".brand span")?.textContent || "?"} · ` +
+    `${copyHtml("판")} ${(document.querySelector("#appver")?.textContent || document.querySelector(".brand span")?.textContent || "?").trim()} · ` +
     `${withLog ? t("노드 기록 마지막 부분(가린 것)") : t("노드 기록은 보내지 않음")}<br />` +
     `${t("지갑 12단어·열쇠·주소·잔액은 보내지 않습니다.")}`;
 }
@@ -4923,7 +4923,7 @@ function applySellerMode() {
   });
   const box = document.getElementById("seller-mode") as HTMLInputElement | null;
   if (box) box.checked = on;
-  if (!on && (currentPage === "sales" || currentPage === "creator" || currentPage === "market" || currentPage === "devices" || currentPage === "bulk")) showPage("settings");
+  if (!on && (currentPage === "sales" || currentPage === "creator" || currentPage === "market" || currentPage === "devices" || currentPage === "bulk" || currentPage === "games")) showPage("settings");
 }
 let lastReceivedHomeTx: string | null = null;
 
@@ -5488,7 +5488,8 @@ async function loadWallet() {
     $("w-confirmed").textContent = "—";
     // 11-12 — 노드가 켜지는 중이면 「안 열린다」가 아니라 언제 열리는지와 지금 단계를 말한다.
     const wait = await walletWaitLine(e);
-    $("w-unconfirmed").textContent = wait || errText(e);
+    // 11-14 페이블 검진: 노드가 빈 답을 주면 영어 「TypeError: …」가 잔액 칸에 그대로 보였다 → 사람 말로.
+    $("w-unconfirmed").textContent = wait || (e instanceof TypeError ? t("잔액을 아직 못 읽었어요. 노드가 준비되면 바로 보여 드려요.") : errText(e));
     $("w-incoming-note").hidden = true;
   } })();
 
@@ -20028,7 +20029,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     try { await invoke("start_phone_server"); await invoke("open_share", { url: "http://127.0.0.1:8790/shops" }); }
     catch { say(t("열지 못했습니다"), t("노드 연결을 확인하고 다시 시도해 주세요.")); }
   };
-  $("rv-home-games").onclick = () => showPage("games");
+  $("rv-home-games").onclick = () => showPage("trade"); // 11-14 게임 입구는 장터 한 곳
   chainInfo = wireChainInfoLazy({ invoke, showPage });
   $("rv-home-sales").onclick = () => showPage("sales");
   // Collapse only secondary entrances in a small window. Native details keeps

@@ -25,3 +25,32 @@ body { padding-top:40px; }
 html body > nav a > svg, html .rv-talk-layout nav a > svg, html body > nav #navmore-btn > svg:not(.chev) { width:22px; height:22px; stroke-width:1.8; }
 html body > nav a > svg :is(path, rect, circle, line, polyline)[stroke-width] { stroke-width:1.8; }
 html body > nav a > span:not(.ordbadge):not(.ravi-face), html .rv-talk-layout nav a > span:not(.ordbadge):not(.ravi-face), html body > nav #navmore-t { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; -webkit-line-clamp:unset; flex-shrink:0; }
+
+/* ④ 11-14 대표 「문제 알리기가 이상하다·아래가 비좁다·화면이 깨진다」 — 페이블 검진 반영.
+   · 「더 보기」를 펼치면 레일이 800px 창을 넘어 문제 알리기가 반쯤 잘렸다 → 아래 칸을 레일 바닥에 붙인다.
+   · 단추는 메뉴 글자와 같은 13px · 한 줄, 아래 상태 줄과 사이를 띄운다.
+   · 동기화 막대 왼쪽 15px 은 172px 사이드바 시절 값 → 0. */
+:is(body > nav, .rv-talk-layout nav) .navfoot { position:sticky; bottom:0; z-index:2; background:#15161D; padding:8px 0 10px; }
+:is(body > nav, .rv-talk-layout nav) .reportlink { min-height:40px; height:40px; font-size:13px; margin:0 0 10px; }
+:is(body > nav, .rv-talk-layout nav) .reportlink::before { font-size:15px; }
+:is(body > nav, .rv-talk-layout nav) .dotsum #d-sum-t, :is(body > nav, .rv-talk-layout nav) .dotrow:not(.dotsum) span:last-child { white-space:normal; font-size:12px !important; line-height:1.25; max-width:88px; }
+:is(body > nav, .rv-talk-layout nav) .syncbar { margin:4px 8px 0; }
+
+/* 문제 알리기 창: 전역 `.askbox input { width:100% }` 가 체크박스까지 한 줄로 늘려 가운데 띄웠다. */
+.askbox input[type="checkbox"] { width:20px; height:20px; margin:0; padding:0; flex:none; }
+.askbox .msg { padding:0; }
+#rp-log + span { flex:1; min-width:0; }
+
+/* 라비 대화창 단추 줄: 가로 스크롤은 어르신이 모른다(「도움말」이 잘려 보였다) → 줄바꿈. */
+#ravi-panel .rv-quick { flex-wrap:wrap !important; overflow-x:visible !important; }
+
+/* 장터 맨 앞 「라비 스토리」 — 서명 목록과 같은 카드 결, 한 줄 폭. */
+#page-trade .ar-house { display:flex; flex-direction:column; align-items:flex-start; gap:4px; width:100%; max-width:520px; margin:8px 0 12px; text-align:left; }
+#page-trade .ar-house strong { font-size:17px; }
+
+/* 11-14 페이블 검진: 어르신용 `main button { min-height:64px !important }` 와 알약(999px) 모서리가 만나
+   두세 글자 단추가 동그라미가 됐다(장터 탭·종류, 가게 결제 방법). 높이는 그대로, 모서리만 둥근 네모로. */
+main :is(.lm-tabs, .lm-chips, .ar-chips, .mk-tabs) button, #pos-pay-card .pp-chip { border-radius:16px; padding-left:18px; padding-right:18px; }
+
+/* 「글씨 잘 보이세요?」 카드가 라비 대화창(440px) 위에 겹쳤다 → 대화창이 열려 있으면 그 왼쪽에 둔다. */
+body:has(#ravi-panel:not([hidden])) .rv-ravi-card { right:472px; }
