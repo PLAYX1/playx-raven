@@ -87,7 +87,10 @@ jobs:
             label: windows
           # ⚠️ 옛 리눅스 호환을 위해 22.04 로 고정했었는데, 그 라벨이
           # 은퇴 중이라 잡히지를 않는다. 도는 것이 먼저다.
-          - os: ubuntu-latest
+          # 🔴 11-16 ubuntu-latest 가 26.04 로 바뀌자(0.9.40 첫 실행 43746564475) AppImage 에
+          #    ICU 78·glycin·jxl 이 딸려 와 97.4MB → 101.4MB, 99MB 한도에 걸려 게시가 멈췄다.
+          #    26.04 glibc 로 만들면 24.04 사용자는 켜지지도 않는다. 24.04 로 못 박는다(ARM 도 24.04).
+          - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             label: linux
           # 라즈베리파이 4·5 (64비트 ARM, 라즈베리파이 OS bookworm·trixie). 0.9.15 부터 정식.
