@@ -182,6 +182,7 @@ mod text_zoom;
 mod talk_notify;
 // 11-12 장터 「바로 해 보는 게임」(오락실) — 목록 바이트·시작 파일 확인·한 판 결제(sendmany 한 거래).
 mod arcade;
+mod maju;
 // 11-13 「게임 올리기」 — 고른 폴더만 살펴보고 붙잡는다(화면이 경로를 못 준다).
 mod arcade_upload;
 mod arcade_listing;
@@ -351,6 +352,9 @@ pub fn run() {
             arcade::arcade_entry_reachable,
             arcade::arcade_pay,
             arcade::arcade_ack,
+            maju::maju_call,
+            maju::maju_pay,
+            maju::maju_ack,
             arcade_listing::arcade_listing_pubkey,
             arcade_phone::arcade_phone_jobs,
             arcade_phone::arcade_phone_take,

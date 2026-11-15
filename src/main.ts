@@ -5284,6 +5284,7 @@ let listingMarket: { enter(open?: "browse" | "mine"): void } | undefined;
 let arcadeMarket: { enter(): void; refresh(): void; upload(p?: import("./arcade-upload").PhonePreset): void } | undefined;
 /** 다음에 장터를 열 때 「게임 올리기」부터(「바로 팔기」 안내에서). */
 let arcadeUploadNext = false;
+let majuMarket: { enter(): void; reload(): void; leave(): void } | undefined;
 let arcadePhonePreset: import("./arcade-upload").PhonePreset | undefined;
 let tradeOpen: "browse" | "mine" | undefined;
 function openTrade(open?: "browse" | "mine") {
@@ -5322,6 +5323,7 @@ function showPage(id: string) {
   // 판매자 기능이 꺼져 있으면 판매 화면은 열리지 않는다(메뉴가 숨겨진 것만으로는 부족하다).
   if ((id === "sales" || id === "creator" || id === "market" || id === "devices" || id === "bulk") && !sellerModeOn()) return;
   if (id !== currentPage) salesAccount?.hide();
+  if (id !== "trade") majuMarket?.leave();
   // 🔴 화면을 떠나면 그 화면 때문에 도는 타이머를 끈다.
   //
   //    「부품」 화면을 한 번 열었다가 지갑으로 나가면, **앱을 끌 때까지**
@@ -5364,6 +5366,11 @@ function showPage(id: string) {
     if (currentPage === "trade") { if (arcadeUploadNext) arcadeMarket.upload(arcadePhonePreset); else arcadeMarket.enter(); }
     arcadeUploadNext = false; arcadePhonePreset = undefined;
   }).catch((e) => paintLoadFail($("ar-host"), () => showPage("trade"), "arcade-market", e));
+  // 11-16 장터 「이번 주 공동구매 · 마주가 고른 상품」(src/maju-market.ts) — 판매 중 상품이 있을 때만 칸이 보인다.
+  if (id === "trade") void import("./maju-market").then(({ mountMaju }) => {
+    majuMarket ??= mountMaju($("page-trade"), $("mj-host"), { ...listingDeps(), openUrl: (url) => openUrl(url) });
+    if (currentPage === "trade") majuMarket.enter();
+  }).catch(() => { /* 마주 칸은 없어도 장터는 돈다 */ });
   if (id === "chain") chainInfo?.enter();
   paintPageTiles(id);
   document.querySelectorAll(".page").forEach((p) => p.classList.toggle("on", p.id === `page-${id}`));
@@ -20417,6 +20424,13 @@ window.addEventListener("DOMContentLoaded", async () => {
     applySellerMode();
   };
   applySellerMode();
+  // 11-16 설정 「마주 시험 상품」(폰과 같은 뜻·같은 저장 이름 ravenvault.maju.test.v1).
+  const majuTestBox = $("maju-test") as HTMLInputElement;
+  try { majuTestBox.checked = localStorage.getItem("ravenvault.maju.test.v1") === "true"; } catch { majuTestBox.checked = false; }
+  majuTestBox.onchange = () => {
+    try { localStorage.setItem("ravenvault.maju.test.v1", majuTestBox.checked ? "true" : "false"); } catch { majuTestBox.checked = false; }
+    majuMarket?.reload();
+  };
   $("ravi-story-open").onclick = () => { void openRaviStory({ openExternal: openUrl }).catch(() => {
     $("game-notice").textContent = "기본 브라우저를 열지 못했어요. 잠시 후 다시 눌러 주세요.";
   }); };

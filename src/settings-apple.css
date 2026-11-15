@@ -55,8 +55,8 @@
   background: var(--rv-track) radial-gradient(circle, #fff 12px, transparent 13px) no-repeat 2px 50% / 27px 27px;
   transition: background-color .2s ease, background-position .2s ease; }
 #page-settings input.sx-sw:checked, #snd-on:checked, #tk-snd-on:checked, #seller-mode:checked { background-color: var(--rv-navy); background-position: 22px 50%; }
-#snd-card label.check, #tksnd-card label.check, #seller-mode-card label.check { justify-content: space-between; gap: 16px; min-height: var(--rv-row); font-size: var(--rv-fs-body); }
-#snd-card label.check input, #tksnd-card label.check input, #seller-mode-card label.check input { width: 51px; height: 31px; order: 2; }
+#snd-card label.check, #tksnd-card label.check, #seller-mode-card label.check, #maju-test-card label.check { justify-content: space-between; gap: 16px; min-height: var(--rv-row); font-size: var(--rv-fs-body); }
+#snd-card label.check input, #tksnd-card label.check input, #seller-mode-card label.check input, #maju-test-card label.check input { width: 51px; height: 31px; order: 2; }
 @media (prefers-reduced-motion: reduce) { #page-settings input.sx-sw, #snd-on, #tk-snd-on, #seller-mode { transition: none; } }
 
 /* 접기 칸(처음 한 번·고급)·경고 상자 */

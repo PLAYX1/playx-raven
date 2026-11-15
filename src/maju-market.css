@@ -1,0 +1,81 @@
+/* 11-16 장터 「이번 주 공동구매 · 마주가 고른 상품」 (src/maju-market.ts). 색은 앱 토큰만(어둡게 자동). 노인 기준 큰 글씨. */
+.mj { margin: 6px 0 18px; font-size: 17px; }
+.mj[hidden] { display: none; }
+/* 🔴 버튼 글자 두 줄 금지(11-12) — 줄지 않고, 꺾이지 않는다. */
+.mj button { white-space: nowrap; flex-shrink: 0; min-height: 44px; font-size: 16px; }
+.mj .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.mj-head { display: flex; align-items: center; gap: 10px; margin: 4px 0 8px; }
+.mj-sec-head { display: flex; align-items: center; gap: 10px; margin: 4px 0 0; min-width: 0; }
+.mj-sec-head h3 { margin: 0; font-size: 20px; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mj h3 { font-size: 20px; margin: 4px 0 6px; }
+.mj .meta { font-size: 15px; margin: 4px 0; }
+.mj-link { padding: 6px 14px; }
+.mj-grid { list-style: none; margin: 8px 0 4px; padding: 0; display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+.mj-grid li { min-width: 0; }
+.mj-card { position: relative; display: flex; flex-direction: column; width: 100%; height: 100%; margin: 0; padding: 0; text-align: left; overflow: hidden;
+  border-radius: 14px; border: 1px solid var(--line); background: var(--panel); color: var(--text); white-space: normal !important; cursor: pointer; }
+.mj-card:hover { border-color: var(--brand); }
+.mj-card:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+.mj-photo { display: flex; align-items: center; justify-content: center; width: 100%; aspect-ratio: 1; overflow: hidden;
+  background: color-mix(in srgb, var(--brand) 8%, var(--panel)); color: var(--muted); }
+.mj-photo.big { aspect-ratio: 4 / 3; border-radius: 14px; }
+.mj-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mj-photo svg { width: 46px; height: 46px; }
+.mj-tag { position: absolute; left: 8px; top: 8px; padding: 2px 10px; border-radius: 8px; font-size: 14px; font-weight: 700; color: var(--warn); background: var(--panel); white-space: nowrap; }
+.mj-cbody { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px 12px; min-width: 0; }
+.mj-ctitle { font-size: 17px; font-weight: 700; margin: 0; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.mj-price { font-size: 19px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.mj-left { font-size: 15px; color: var(--muted); }
+.mj-left.out { color: var(--danger, #c0392b); }
+.mj-page { display: grid; grid-template-columns: minmax(220px, 360px) 1fr; gap: 20px; align-items: start; }
+.mj-info { min-width: 0; }
+.mj-seller { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: 15px; font-weight: 700; color: var(--ok); }
+.mj-seller svg, .mj-mark svg { width: 18px; height: 18px; }
+.mj-test { margin: 4px 0; font-size: 15px; font-weight: 700; color: var(--warn); }
+.mj-big { font-size: 26px; font-weight: 800; margin: 6px 0 10px; font-variant-numeric: tabular-nums; }
+.mj-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 6px 0; }
+.mj-facts div { border: 1px solid var(--line); border-radius: 12px; padding: 10px; background: var(--panel); display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mj-facts span { font-size: 14px; color: var(--muted); }
+.mj-facts b { font-size: 17px; }
+.mj-stepper { display: flex; align-items: center; gap: 18px; margin: 10px 0; }
+.mj-stepper button { min-width: 48px; font-size: 22px; border-radius: 999px; }
+.mj-stepper b { min-width: 72px; text-align: center; font-size: 20px; font-variant-numeric: tabular-nums; }
+.mj-acts { margin: 12px 0 6px; }
+.mj-acts button { min-height: 50px; padding: 8px 22px; font-size: 17px; }
+.mj-form { max-width: 640px; }
+.mj-box { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin: 10px 0; background: var(--panel); display: flex; flex-direction: column; gap: 6px; }
+.mj-box .kv { display: flex; justify-content: space-between; gap: 12px; font-size: 16px; }
+.mj-box .kv span { text-align: right; min-width: 0; overflow-wrap: anywhere; }
+.mj-field { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; font-size: 15px; }
+.mj-field input, .mj-field textarea, .mj-search input, .mj-box textarea, .mj-box input { font-size: 17px; min-height: 44px; padding: 8px 10px; width: 100%; box-sizing: border-box; }
+.mj-fhead { margin: 10px 0 0; font-weight: 700; }
+.mj-search { display: flex; gap: 8px; align-items: center; }
+.mj-search input { flex: 1 1 auto; min-width: 0; }
+.mj-hits { list-style: none; margin: 6px 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.mj-hits button { width: 100%; text-align: left; white-space: normal !important; display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+.mj-found { flex-direction: row; gap: 10px; }
+.mj-agree { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; }
+.mj-agree input { width: 22px; height: 22px; flex: none; }
+.mj-done { text-align: left; }
+.mj-mark { display: inline-flex; width: 48px; height: 48px; border-radius: 999px; align-items: center; justify-content: center; color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, var(--panel)); }
+.mj-mark svg { width: 28px; height: 28px; }
+.mj-orders { display: flex; flex-direction: column; gap: 12px; margin: 10px 0; }
+.mj-order { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--panel); }
+.mj-ohead { display: flex; justify-content: space-between; gap: 10px; }
+.mj-steps { list-style: none; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 8px 0; padding: 0; }
+.mj-steps li { border-top: 5px solid var(--line); padding-top: 4px; font-size: 14px; color: var(--muted); white-space: nowrap; }
+.mj-steps li.on { border-top-color: var(--brand); }
+.mj-steps li.now { color: var(--text); font-weight: 700; }
+.mj-track { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mj-small button { min-height: 40px; padding: 6px 14px; }
+.mj-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.mj-chips button { border-radius: 999px; }
+.mj-chips button[aria-pressed="true"], .mj-chips button[aria-checked="true"] { border: 2px solid var(--brand); font-weight: 700; }
+.mj-thread { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+.mj-bubble { max-width: 80%; padding: 8px 12px; border-radius: 12px; display: flex; flex-direction: column; gap: 2px; background: color-mix(in srgb, var(--brand) 8%, var(--panel)); }
+.mj-bubble.me { align-self: flex-end; background: color-mix(in srgb, var(--brand) 16%, var(--panel)); }
+.mj-bubble small { color: var(--muted); }
+/* 상품을 보는 동안은 장터 다른 줄을 접는다(오락실 ar-focus 와 같은 틀). */
+#page-trade.mj-focus > :not(h2):not(#mj-host) { display: none !important; }
+@media (max-width: 860px) { .mj-page { grid-template-columns: 1fr; } .mj-facts { grid-template-columns: 1fr; } }
+#page-trade.ar-focus > #mj-host { display: none; }

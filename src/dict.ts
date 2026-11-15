@@ -45,6 +45,7 @@ import { LISTING_MARKET_COPY } from "./listing-market-copy";
 import { TALK_SOCIAL_COPY } from "./talk-social-copy";
 import { TALK_DESK_COPY } from "./talk-desk-copy";
 import { ARCADE_COPY } from "./arcade-copy";
+import { MAJU_COPY } from "./maju-copy";
 
 const ARTIST_PHOTO_COPY: Record<string, [string, string, string]> = {
   "사진 읽는 중…": ["Reading photo…", "写真を読み込み中…", "正在读取照片…"],
@@ -5726,6 +5727,10 @@ for (const [source, values] of Object.entries(WALLET_LINK_COPY)) {
 }
 // 11-12 장터 「바로 해 보는 게임」(src/arcade-market.ts). 이미 있는 번역은 덮지 않는다.
 for (const [source, values] of Object.entries(ARCADE_COPY)) {
+  (["en", "ja", "zh"] as const).forEach((language, index) => { DICT[language][source] ??= values[index]; });
+}
+// 11-16 장터 마주 공동구매(src/maju-market.ts) — 폰 번역 그대로. 이미 있는 번역은 덮지 않는다.
+for (const [source, values] of Object.entries(MAJU_COPY)) {
   (["en", "ja", "zh"] as const).forEach((language, index) => { DICT[language][source] ??= values[index]; });
 }
 // 0.9.17 「피드」 메뉴·「내 글」·맞교환 장터(src/listing-market.ts). 이미 있는 번역은 덮지 않는다.
