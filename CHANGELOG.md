@@ -1,5 +1,21 @@
 # 변경 기록
 
+## 0.9.40
+
+### 한국어
+
+- **장터에서 마주 공동구매 상품을 살 수 있습니다:** 「라비 스토리」 다음에 「이번 주 공동구매 · 마주가 고른 상품」 칸이 생겼습니다. 판매 중인 상품이 있을 때만 보입니다.
+- **RVN 으로 바로 결제:** 받는 곳을 적고 확인하면 판매 대금과 레이븐볼트 수수료 1% 가 한 거래로 갑니다. 같은 주문으로 두 번 보내지지 않습니다.
+- **내 주문:** 진행 단계와 배송 조회, 만든 분께 묻기·잘 받았어요·문제가 있어요·칭찬을 데스크탑에서도 할 수 있습니다.
+- **한국 안에서만 받을 수 있어요:** 해외 배송은 아직 안 됩니다. 상품과 받는 곳 화면에 적어 두었습니다.
+
+### English
+
+- **Buy Maju group-buy items in the Market:** A new “This week’s group buy · picked by Maju” section appears after Ravi Story when items are on sale.
+- **Pay with RVN in one step:** After you enter the delivery address and confirm, the seller amount and the 1% RavenVault fee go out in a single transaction. The same order is never paid twice.
+- **My orders:** See progress and tracking, ask the maker, mark “Got it”, report a problem or leave praise — now on desktop too.
+- **Delivery within Korea only:** Overseas shipping isn’t available yet; this is shown on the item and delivery screens.
+
 ## 0.9.39
 
 ### 한국어
