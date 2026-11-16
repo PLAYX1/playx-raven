@@ -49,6 +49,8 @@ mod tests {
         for (name, src) in [
             ("talk.rs", include_str!("talk.rs")),
             ("issue2.rs", include_str!("issue2.rs")),
+            // 11-17 단순화 2판 첫 화면(내 돈 「약 ○원」·새 자산 만들기 금액·내 것) — 자산을 다루는 새 문구.
+            ("desk-v2.ts", include_str!("../../src/desk-v2.ts")),
         ] {
             // 시험 글은 뺀다 — 여기에 낱말을 적어 놨으니 자기를 센다.
             let end = src.find("#[cfg(test)]").unwrap_or(src.len());
@@ -84,7 +86,9 @@ mod 화면검사 {
     /// 사람이 실제로 읽는 것은 러스트 소스가 아니라 그 글자다.
     /// `<!-- -->` 와 `/* */` 를 통째로 지운다.
     fn 주석없이(src: &str) -> String {
-        let mut out = String::with_capacity(src.len());
+        // 🔴 11-17: 바이트를 `as char` 로 붙이면 한글이 깨진 글자(Latin-1)가 되어 「배당」 같은 낱말이
+        //    **한 번도 걸리지 않았다.** 바이트로 모은 뒤 UTF-8 로 되돌린다(주석 표시는 모두 ASCII 라 경계가 안 깨진다).
+        let mut out: Vec<u8> = Vec::with_capacity(src.len());
         let b = src.as_bytes();
         let (mut i, mut html, mut css) = (0usize, false, false);
         while i < b.len() {
@@ -102,12 +106,20 @@ mod 화면검사 {
                 i += 2;
             } else {
                 if !html && !css {
-                    out.push(b[i] as char);
+                    out.push(b[i]);
                 }
                 i += 1;
             }
         }
-        out
+        String::from_utf8(out).expect("주석만 지웠으니 UTF-8 그대로다")
+    }
+
+    /// 주석 지우기가 한글을 깨뜨리지 않는지 — 깨지면 위 검사가 아무것도 못 잡는다.
+    #[test]
+    fn 주석을_지워도_한글이_남는다() {
+        let t = 주석없이("<p>배당</p><!-- 수익률 --> /* 떡상 */ 끝");
+        assert!(t.contains("배당"));
+        assert!(!t.contains("수익률") && !t.contains("떡상"));
     }
 
     #[test]
