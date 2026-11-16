@@ -38,7 +38,7 @@ import { wireTalkDm } from "./talk-dm";
 import { talkIdle, unreadPill, wireTalkDesk } from "./talk-desk";
 import { openReport as openTalkReport } from "./talk-report"; // 11-12 말풍선 「신고」 — 「문제 알리기」와 같은 길(report_send) // 11-12 카톡 PC·텔레그램 손버릇(찾기·Esc·말풍선 메뉴·새 메시지 N개) // 11-12 카톡 PC 처럼 — 친구·채팅·광장 + 이 창 안 쪽지(talk_dm.rs)
 import { homeSafety } from "./home-summary";
-import { wireDeskV2, paintV2Node, paintV2Krw, paintV2Mine, V2_COPY } from "./desk-v2"; // 11-17 단순화 2판 첫 화면(시안 9-데스크탑)
+import { wireDeskV2, paintV2Node, paintV2Krw, paintV2Mine, rememberTitles, V2_COPY } from "./desk-v2"; // 11-17 단순화 2판 첫 화면(시안 9-데스크탑)
 import "./desk-v2.css";
 import { paintCards, type CardsInput, type CardOpen } from "./ravi-cards";
 import { wireChainInfoLazy } from "./chain-info-lazy";
@@ -555,6 +555,7 @@ function renderList() {
   );
   const mineCount = rows.filter((a) => a.mine).length;
   paintV2Mine(rows, fmtQty);
+  if (!v2TitlesAsked) { v2TitlesAsked = true; void invoke<unknown>("create_history_list").then((l) => { rememberTitles(l); paintV2Mine([...assets.values()], fmtQty); }).catch(() => {}); }
   document.querySelectorAll<HTMLElement>("[data-afilter]").forEach((b) => {
     b.classList.toggle("on", b.dataset.afilter === assetFilter);
     const k = b.dataset.afilter!;
@@ -5200,6 +5201,10 @@ async function paintHomeTxs(): Promise<void> {
   } catch { $("rv-home-txs").textContent = t("거래 내역을 읽지 못했습니다"); }
 }
 
+/** 11-17 첫 화면 「새 자산 만들기」 카드가 고른 종류 — showPage("create") 가 enter 대신 start(kind) 한 번만 부른다(두 번 겹치면 지난 결과 화면이 적기 칸을 덮었다). */
+let createStartKind: "work" | "ticket" | undefined;
+/** 첫 화면 「내 것」 카드 제목(만든 기록)을 한 번 읽었나. */
+let v2TitlesAsked = false;
 /** 「만들기」 화면 들어가기 — 화면이 준비되면 채운다. */
 let createApi: CreateApi | undefined;
 let chainInfo: ReturnType<typeof wireChainInfoLazy> | undefined;
@@ -5404,7 +5409,7 @@ function showPage(id: string) {
     void idLoad();
   }
   if (id === "reward") void loadReward();
-  if (id === "create") createApi?.enter();
+  if (id === "create") { const k = createStartKind; createStartKind = undefined; if (k) void createApi?.start(k); else createApi?.enter(); }
   // 판매자 화면 둘 — 처음 열 때 따로 내려받아 그린다(시작 번들에 넣지 않는다). 다시 열면 새로 읽는다.
   if (id === "devices") void import("./device-connect").then(({ mountDeviceScreen, pairingQr, tauriStoreKey, tauriDisconnect, tauriLanPair }) => { if (!deviceScreen) deviceScreen = mountDeviceScreen($("page-devices"), { qr: pairingQr((cmd, args) => invoke(cmd, args)), storeKey: tauriStoreKey((cmd, args) => invoke(cmd, args), storeDocId), disconnect: tauriDisconnect((cmd, args) => invoke(cmd, args)), lanPair: tauriLanPair((cmd, args) => invoke(cmd, args)),
     confirm: (title, message, okLabel) => sure(title, message, okLabel ?? t("끊기")) }); else deviceScreen.enter(); }).catch((e) => paintLoadFail($("page-devices"), () => showPage("devices"), "device-connect", e));
@@ -19605,7 +19610,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   wireDeskV2({
     showPage,
     openRavi: () => raviHome?.open(),
-    startCreate: (kind) => { showPage("create"); void createApi?.start(kind); },
+    startCreate: (kind) => { createStartKind = kind; showPage("create"); },
     openBrandWizard: () => void openWizard(),
     openNode: () => toggleDot("node"),
     openReport: () => openReport(),
@@ -20999,7 +21004,7 @@ async function applyMode(): Promise<void> {
   const wallet = m.mode === "wallet";
   const show = (page: string, on: boolean) => {
     const a = document.querySelector<HTMLElement>(`nav a[data-page="${page}"]`);
-    if (a) a.style.display = on ? "" : "none";
+    if (a) { a.style.display = on ? "" : "none"; a.hidden = !on; } // 11-17: 단순화 2판 메뉴 CSS(!important)가 인라인 숨김을 이겨서 hidden 도 같이 둔다
   };
   show("helping", help);
   // 🔴 채굴 칸 둘은 **돕는 사람의 것**이다. 계산대 컴퓨터로 캐면 컴퓨터가

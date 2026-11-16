@@ -50,7 +50,8 @@ test('글씨 질문은 한 번만 · 고른 사람·인사 끈 사람은 안 묻
   const src = read('src/text-size-ask.ts');
   assert.match(src, /store\.setItem\(TEXT_ASK_KEY, "1"\);[^\n]*\n\s*showRaviCard/, '띄우는 순간 기억 — 건너뛰어도 다시 안 묻는다');
   assert.match(src, /label: "나중에"/);
-  assert.match(read('src/main.ts'), /afterRaviLanding\(\(\) => askTextSizeOnce\(t\)\)/, '라비가 내려앉은 뒤에만');
+  // 11-17 단순화 2판(대표 승인): 첫 화면에 팝업 없음 — 저절로 묻지 않는다(「언어 · 화면」·설정·라비 「글자 크게」).
+  assert.doesNotMatch(read('src/main.ts'), /afterRaviLanding\(\(\) => askTextSizeOnce\(t\)\)/, '첫 화면에 글씨 질문 카드가 저절로 뜨지 않는다');
 });
 
 test('한눈에 많이: 저장 값은 small 그대로 · 보통·크게는 속성 없음', () => {

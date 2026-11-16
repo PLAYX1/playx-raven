@@ -94,7 +94,7 @@ for (const [label, chainAsset, other] of [['옛 가게 SHOP.PLAYX', 'SHOP.PLAYX'
   test(`팔로우 토큰 — ${label} 는 자기 토큰 수량을 본다(섞여 있어도)`, async () => {
     // 지갑에 옛 것과 새 것이 둘 다 있어도 「이 가게의 토큰」 하나만 센다.
     const page = await openApp({ chainAsset, held: [[chainAsset, 20999999990], [other, 5]], detect: null });
-    await page.click('nav a[data-page="artist"]');
+    await page.$eval('nav a[data-page=\"artist\"]', (a) => a.click()) /* 11-17: 메뉴 칸에서 빠졌다(첫 화면 「아티스트 이름표」) — 화면은 그대로 */;
     await page.waitForFunction(() => document.querySelector('#page-artist.on'));
     await page.waitForFunction(c => document.querySelector('#ar-shopqty').textContent.startsWith(c), { timeout: 8000 }, chainAsset);
     const q = await text(page, '#ar-shopqty');
@@ -107,11 +107,11 @@ for (const [label, chainAsset, other] of [['옛 가게 SHOP.PLAYX', 'SHOP.PLAYX'
 
 test('팔로우 토큰 — shop.json 이 비었으면 지갑 주인 표 하나로 찾고, 없으면 가게 등록으로 안내', async () => {
   const found = await openApp({ chainAsset: '', held: [['RV.S.KIMBAP', 7]], detect: 'RV.S.KIMBAP' });
-  await found.click('nav a[data-page="artist"]');
+  await found.$eval('nav a[data-page=\"artist\"]', (a) => a.click()) /* 11-17: 메뉴 칸에서 빠졌다(첫 화면 「아티스트 이름표」) — 화면은 그대로 */;
   await found.waitForFunction(() => /^RV\.S\.KIMBAP\s+7개 남음/.test(document.querySelector('#ar-shopqty').textContent), { timeout: 8000 });
   await found.close();
   const none = await openApp({ chainAsset: '', held: [['SHOP.PLAYX', 3]], detect: null });
-  await none.click('nav a[data-page="artist"]');
+  await none.$eval('nav a[data-page=\"artist\"]', (a) => a.click()) /* 11-17: 메뉴 칸에서 빠졌다(첫 화면 「아티스트 이름표」) — 화면은 그대로 */;
   await none.waitForFunction(() => /아직 공개 장부에 올린 가게가 없습니다/.test(document.querySelector('#ar-shopqty').textContent), { timeout: 8000 });
   assert.doesNotMatch(await text(none, '#ar-shopqty'), /SHOP\.PLAYX/, '남의(또는 고르지 못한) 가게 토큰을 지어내지 않는다');
   await none.click('#ar-give');
@@ -121,7 +121,7 @@ test('팔로우 토큰 — shop.json 이 비었으면 지갑 주인 표 하나�
 
 test('영어 화면 — 자리표시자에 가게 토큰 이름이 들어간다', async () => {
   const page = await openApp({ chainAsset: 'RV.S.KIMBAP', held: [['RV.S.KIMBAP', 12]], detect: null }, 'en');
-  await page.click('nav a[data-page="artist"]');
+  await page.$eval('nav a[data-page=\"artist\"]', (a) => a.click()) /* 11-17: 메뉴 칸에서 빠졌다(첫 화면 「아티스트 이름표」) — 화면은 그대로 */;
   await page.waitForFunction(() => /^RV\.S\.KIMBAP\s+12 left$/.test(document.querySelector('#ar-shopqty').textContent.trim()), { timeout: 8000 });
   await page.click('nav a[data-page="shop"]');
   await page.waitForFunction(() => /RV\.S\.SHOPNAME/.test(document.querySelector('#sh-assetrule').textContent), { timeout: 5000 });

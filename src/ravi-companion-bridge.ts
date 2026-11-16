@@ -63,7 +63,8 @@ export async function mountCompanionBridge(){
       if(!s.notice_seen)afterRaviLanding(()=>{
         const note=document.createElement('aside');note.id='companion-first-notice';note.setAttribute('role','status');note.setAttribute('translate','no');note.textContent=c('intro');
         const close=document.createElement('button');close.type='button';close.textContent='×';close.setAttribute('aria-label',c('close'));close.onclick=()=>note.remove();note.append(close);
-        const home=document.getElementById('page-home');
+        // 11-17 단순화 2판: 첫 화면에 팝업·띠 없음 — 안내는 설정 화면 맨 위에.
+        const home=document.getElementById('page-settings');
         if(home){home.prepend(note);void invoke<{settings:Record<string,unknown>}>('companion_settings').then(v=>invoke('companion_save',{value:{...v.settings,notice_seen:true}})).catch(()=>{});}
       });
     };

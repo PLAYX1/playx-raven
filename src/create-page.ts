@@ -202,6 +202,11 @@ export function wireCreate(deps: CreateDeps): CreateApi {
     status = s;
     return status;
   }
+  /** 11-17: 새기기(create_issue)는 어느 길(처음·이어하기·묶음·이름 등록)이든 장부를 다 받은 뒤에만. */
+  async function issueAfterLedger(args: Record<string, unknown>): Promise<unknown> {
+    await waitForLedger();
+    return invoke<unknown>("create_issue", args);
+  }
   /** 11-17 단순화 2판: 공개 장부를 다 받기 전에는 새기지 않는다. 상태를 못 읽으면 막지 않는다(create_status 가 이미 답했다). */
   async function waitForLedger(): Promise<void> {
     const n = await invoke<{ progress?: number } | null>("node_status").catch(() => null);
@@ -650,7 +655,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
       tell(() => t(SENDING_NOTE));
       if (r.needsBrand) {
         // 0.4.6 부터 `{ txid, owner_pinned, … }` — 이름 등록은 새 주인 표를 만드는 발행이다.
-        const txid = issuedOf(await invoke<unknown>("create_issue", { step: "brand", brand: r.brand, names: [], quantity: 0, ipfsHash: null, passphrase, historyId })).txid;
+        const txid = issuedOf(await issueAfterLedger( { step: "brand", brand: r.brand, names: [], quantity: 0, ipfsHash: null, passphrase, historyId })).txid;
         quiet();
         saveDraft({ version: 1, kind: r.kind, title: r.title, count: r.count, brand: r.brand, stage: "brand-sent", txid, fingerprint: r.fingerprint || undefined, updatedAt: Date.now(), historyId });
         paintWait();
@@ -684,7 +689,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
     const step = k === "ticket" ? "ticket" : "uniques";
     // 티켓·작품은 브랜드 주인 표(BRAND!)를 쓰고 돌려받는다. 러스트가 표가 지금 있는 주소를
     // 거스름 자리에 넣는다(0.4.6) — 못 넣었으면 발행은 나갔고, 한 줄로 알린다.
-    const issued = issuedOf(await invoke<unknown>("create_issue", { step, brand, names, quantity: k === "ticket" ? count : 0, ipfsHash: fp || null, passphrase, historyId: historyId ?? null }));
+    const issued = issuedOf(await issueAfterLedger( { step, brand, names, quantity: k === "ticket" ? count : 0, ipfsHash: fp || null, passphrase, historyId: historyId ?? null }));
     const txid = issued.txid;
     quiet();
     const draft: CreateDraft = { version: 1, kind: k, title, count, brand, stage: "done", txid: txid || "", fingerprint: fp || undefined, names, updatedAt: Date.now(), historyId };
@@ -741,7 +746,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
         );
         b.usedRuns.add(run);
         c.names = names;
-        const issued = issuedOf(await invoke<unknown>("create_issue", { step: "uniques", brand: b.brand, names, quantity: 0, ipfsHash: b.fingerprint || null, passphrase, historyId: historyId ?? null }));
+        const issued = issuedOf(await issueAfterLedger( { step: "uniques", brand: b.brand, names, quantity: 0, ipfsHash: b.fingerprint || null, passphrase, historyId: historyId ?? null }));
         c.txid = issued.txid; c.state = "done"; c.why = undefined;
       } catch (e) {
         if (sentUnknown(e)) {
@@ -1418,7 +1423,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
   /** 11-17 첫 화면·자산 화면의 「새 자산 만들기」 카드 — 고르기 화면을 건너뛰고 그 종류의 적기 칸을 연다. */
   async function start(next: CreateKind) {
     await enter();
-    if (!kinds.hidden || !form.hidden) await openForm(next);
+    if (!kinds.hidden || !form.hidden || !doneBox.hidden) await openForm(next);
   }
   return {
     enter, startWithDocument, start,

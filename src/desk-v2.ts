@@ -37,6 +37,7 @@ export const V2_COPY = {
   made: "만든 것",
   got: "받은 것 · 산 것",
   syncBlock: "공개 장부를 다 받으면 새길 수 있어요. 적은 내용은 그대로 남아 있어요.",
+  noMic: "이 컴퓨터에서는 말로 하기가 아직 꺼져 있어요. 라비 창에 글로 적어 주세요.",
 } as const;
 
 /** 영어·일본어·중국어(같은 한국어가 사전에 이미 있으면 그것이 이긴다). */
@@ -59,6 +60,7 @@ const COPY: Record<string, [string, string, string]> = {
   [V2_COPY.mineEmpty]: ["Nothing here yet. Start with “New asset” above or the market.", "まだ持っているものがありません。上の「新しいアセット」かマーケットから始めましょう。", "还没有物品。从上面的“新建资产”或市场开始吧。"],
   [V2_COPY.made]: ["Made", "作ったもの", "我做的"],
   [V2_COPY.got]: ["Received · bought", "受け取った・買ったもの", "收到的 · 买的"],
+  [V2_COPY.noMic]: ["Speaking is off on this computer for now. Please type in Ravi's window.", "このコンピューターでは音声入力がまだオフです。ラビの窓に文字で書いてください。", "这台电脑暂时没有开启语音。请在拉比窗口里打字。"],
   [V2_COPY.syncBlock]: ["You can record it once the public ledger is fully received. What you wrote stays here.", "公開台帳をすべて受信すると刻めます。書いた内容はそのまま残ります。", "公开账本全部接收后即可写入。已填写的内容会保留。"],
   "내 것": ["My things", "自分のもの", "我的"],
   "내 돈": ["My money", "自分のお金", "我的钱"],
@@ -133,8 +135,9 @@ export function paintV2Node(n: V2Node): void {
       : t(V2_COPY.nodeUnknown));
     btn.dataset.tone = n.node === "ok" ? "ok" : n.node === "down" ? "bad" : n.node === "unknown" ? "off" : "warn";
   }
-  const waiting = n.node !== "ok";
-  document.querySelectorAll<HTMLElement>("#v2-create-wait, [data-v2-wait]").forEach((el) => { el.hidden = !waiting || n.node === "unknown"; });
+  // 꺼짐은 노드 한 줄이 「눌러서 켜기」로 말한다 — 「장부 다 받으면」은 받는 중·여는 중에만.
+  const waiting = n.node === "sync" || n.node === "warm";
+  document.querySelectorAll<HTMLElement>("#v2-create-wait, [data-v2-wait]").forEach((el) => { el.hidden = !waiting; });
   const note = document.getElementById("v2-create-note");
   if (note) note.hidden = !(n.node === "sync" || n.node === "warm");
 }
@@ -160,6 +163,15 @@ export function paintV2Krw(confirmed: number | null, invoke: <T>(cmd: string, ar
 
 /* ── 내 것 N개 ──────────────────────────────────────────────────── */
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
+/** 만든 기록(create_history_list)의 사람이 적은 제목 — 체인 이름(BOMSAGWA#GEURIM1) 대신 「봄 사과 그림」. 못 읽으면 체인 이름 그대로. */
+const titles = new Map<string, string>();
+export function rememberTitles(list: unknown): void {
+  if (!Array.isArray(list)) return;
+  for (const e of list as { title?: string; display_title?: string; names?: string[] }[]) {
+    const title = String(e?.display_title || e?.title || "").trim();
+    if (title) for (const n of e?.names ?? []) titles.set(String(n), title);
+  }
+}
 export function paintV2Mine(rows: readonly V2Asset[], fmtQty: (n: number) => string): void {
   const title = document.getElementById("v2-mine-title"), list = document.getElementById("v2-mine-list");
   if (!title || !list) return;
@@ -169,7 +181,8 @@ export function paintV2Mine(rows: readonly V2Asset[], fmtQty: (n: number) => str
   for (const a of rows) { if (pick.length >= 4) break; if (!pick.includes(a)) pick.push(a); }
   list.innerHTML = pick.map((a) =>
     `<button type="button" class="v2-thing" data-v2-asset="${esc(a.name)}"><small>${esc(t(a.mine ? V2_COPY.made : V2_COPY.got))}</small>` +
-    `<b translate="no">${esc(a.name)}</b><span>${esc(fmtQty(a.amount))}</span></button>`).join("");
+    (titles.get(a.name) ? `<b>${esc(titles.get(a.name)!)}</b><span translate="no">${esc(a.name)} · ${esc(fmtQty(a.amount))}</span></button>`
+      : `<b translate="no">${esc(a.name)}</b><span>${esc(fmtQty(a.amount))}</span></button>`)).join("");
 }
 
 /* ── 연결 ───────────────────────────────────────────────────────── */
@@ -192,7 +205,14 @@ export function wireDeskV2(d: V2Deps): void {
   if (mic) mic.onclick = () => {
     d.openRavi();
     // 라비 대화창이 열리면 그 안의 마이크(있을 때만 — 말 입력을 못 쓰는 창이면 숨겨져 있다)를 누른다.
-    window.setTimeout(() => { const v = document.getElementById("rv-voice") as HTMLButtonElement | null; if (v && !v.hidden && v.offsetParent) v.click(); }, 120);
+    window.setTimeout(() => {
+      const v = document.getElementById("rv-voice") as HTMLButtonElement | null;
+      if (v && !v.hidden && v.offsetParent) { v.click(); return; }
+      // 말 입력을 못 쓰는 창이면 조용히 넘어가지 않는다 — 어르신은 「안 되네」로 끝난다. 글로 하시라고 한 줄.
+      const say = document.getElementById("v2-ravi-t");
+      if (say) setCopyText(say, () => t(V2_COPY.noMic));
+      (document.getElementById("chat-q") as HTMLTextAreaElement | null)?.focus();
+    }, 400);
   };
   const node = $("v2-node"); if (node) node.onclick = () => d.openNode();
   const phone = $("v2-phone"); if (phone) phone.onclick = () => d.phone();
