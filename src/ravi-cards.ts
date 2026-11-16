@@ -23,7 +23,8 @@ export type CardSource = "node" | "shop" | "phone" | "device" | "chain" | "talk"
 export type Card = { id: string; kind: CardKind; text: string; values: readonly (string | number)[]; source: CardSource; at: number | null; action: { label: string; opens: CardOpen } };
 
 export const CARD_COPY = {
-  money: "{0} 들어오는 중이에요. 블록에 들어가면 잔액에 더해져요.",
+  // 11-17 단순화 2판: 한 줄 카드(폰과 같은 말). 블록에 들어가기 전은 「확인 중」 — 잔액에는 아직 안 더한다.
+  money: "{0} 들어오는 중 · 확인 중",
   order: "새 주문 {0}건",
   prepared: "폰에서 온 요청 {0}건 · 여기서 확인해 주세요",
   backup: "백업을 확인해 주세요",
@@ -84,7 +85,7 @@ const hhmm = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: "2-digi
 
 /** 영어·일본어·중국어(같은 한국어가 이미 사전에 있으면 그것이 이긴다). */
 const COPY: Record<string, [string, string, string]> = {
-  [CARD_COPY.money]: ["{0} is on its way. It joins your balance once it is in a block.", "{0} が入金中です。ブロックに入ると残高に加わります。", "{0} 正在到账。进入区块后会计入余额。"],
+  [CARD_COPY.money]: ["{0} coming in · confirming", "{0} 入金中 · 確認中", "{0} 正在到账 · 确认中"],
   [CARD_COPY.order]: ["{0} new orders", "新しい注文 {0}件", "新订单 {0} 个"],
   [CARD_COPY.prepared]: ["{0} requests from your phone · please check them here", "スマホからの要求 {0}件 · ここで確認してください", "来自手机的请求 {0} 个 · 请在这里确认"],
   [CARD_COPY.backup]: ["Please check your backup", "バックアップを確認してください", "请检查备份"],

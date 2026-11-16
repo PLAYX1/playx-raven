@@ -1,0 +1,152 @@
+/* 11-17 레이븐볼트 단순화 2판 — 데스크탑 왼쪽 메뉴·첫 화면 「내 것」(시안 debate/shots2/9-데스크탑.png · 대표 「다 진행하자」).
+ * 이 파일은 맨 뒤에 실린다(main.ts import). 옛 100px 어두운 레일·「더 보기」 접기 규칙을 덮는다 — 그래서 선택자가 길고 !important 가 있다.
+ * 보라 두 톤 + 주황 한 점(아이콘 체계 그대로). 버튼 글자는 한 줄(nowrap). 어르신 기준 글자 15px 이상. */
+:root {
+  --v2-purple: #4B2A8C; --v2-purple-2: #6A4BB0; --v2-lilac: #EFE9F8; --v2-lilac-2: #F6F2FC;
+  --v2-card: #FFFFFF; --v2-ink: #1E1830; --v2-soft: #5D5670; --v2-dot: var(--ravi, #e7731f);
+  --v2-side: #FFFFFF; --v2-page: #F7F4FB; --v2-good: #1F6B43; --v2-price: #8A4A0C;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --v2-purple: #8B6FD6; --v2-purple-2: #A58CE6; --v2-lilac: #2A2340; --v2-lilac-2: #221C34;
+    --v2-card: #1B1728; --v2-ink: #ECE8F6; --v2-soft: #B4ACC8; --v2-side: #15121F; --v2-page: #100D18; --v2-good: #7FD3A2; --v2-price: #F0B070;
+  }
+}
+:root[data-theme="dark"] {
+  --v2-purple: #8B6FD6; --v2-purple-2: #A58CE6; --v2-lilac: #2A2340; --v2-lilac-2: #221C34;
+  --v2-card: #1B1728; --v2-ink: #ECE8F6; --v2-soft: #B4ACC8; --v2-side: #15121F; --v2-page: #100D18; --v2-good: #7FD3A2; --v2-price: #F0B070;
+}
+
+/* ── 왼쪽 메뉴: 내 것 · 장터 · 이야기 · 내 가게 / 아래 노드 지킴이·채굴 · 설정·문제 알리기 ── */
+html body > nav { width:232px !important; min-width:232px !important; background:var(--v2-side) !important; border-right:1px solid var(--v2-lilac) !important; padding:12px 14px 14px !important; box-sizing:border-box; display:flex; flex-direction:column; }
+html body > nav .brand { display:block !important; width:auto !important; text-align:left !important; padding:6px 10px 18px !important; margin:0 !important; }
+html body > nav .brand .v2-brand { display:block; font-size:22px; font-weight:800; letter-spacing:-0.02em; color:var(--v2-purple); margin:0 0 6px; }
+html body > nav .brand > div { display:flex; gap:6px; align-items:center; }
+html body > nav .brand #appver { width:auto !important; margin:0 !important; padding:2px 0 !important; font-size:13px !important; color:var(--v2-soft) !important; text-align:left !important; }
+html body > nav .brand #upnag { width:auto !important; margin:0 !important; padding:2px 10px !important; min-height:26px !important; font-size:13px !important; color:var(--v2-soft) !important; border-color:var(--v2-lilac) !important; white-space:nowrap !important; }
+html body > nav .brand #upnag.new { color:#fff !important; background:var(--v2-dot) !important; border-color:var(--v2-dot) !important; }
+/* 메뉴 줄: 그림(작게) + 이름(한 줄). */
+html body > nav > a[data-page] { width:auto !important; align-self:stretch !important; min-height:52px !important; height:auto !important; flex-direction:row !important; justify-content:flex-start !important; align-items:center !important; gap:12px !important; padding:0 14px !important; margin:0 0 4px !important; border-radius:14px !important; border-left:0 !important; color:var(--v2-ink) !important; background:transparent; }
+html body > nav > a[data-page] > svg { width:22px !important; height:22px !important; opacity:.85; color:var(--v2-purple); flex:none; }
+html body > nav > a[data-page] > span:not(.ordbadge):not(.ravi-face) { display:block !important; font-size:17px !important; font-weight:600 !important; color:var(--v2-ink) !important; text-align:left !important; white-space:nowrap !important; overflow:hidden; text-overflow:ellipsis; -webkit-line-clamp:unset !important; }
+html body > nav > a[data-page]:hover { background:var(--v2-lilac-2) !important; }
+html body > nav > a[data-page].on { background:var(--v2-lilac) !important; }
+html body > nav > a[data-page].on > span:not(.ordbadge):not(.ravi-face) { color:var(--v2-purple) !important; font-weight:750 !important; }
+html body > nav > a[data-page] .ordbadge { position:static !important; margin-left:auto; background:var(--v2-dot); color:#fff; }
+/* 위 넷의 자리 — 폰 아래 탭(내 것 · 장터 · 이야기)과 같은 순서 + 내 가게. 「더 보기」에 접혀 있던 장터·내 가게도 늘 보인다. */
+html body > nav > a[data-page][data-page="home"] { order:1 !important; display:flex !important; }
+html body > nav > a.navmore[data-page="trade"], html body > nav > a[data-page][data-page="trade"] { order:2 !important; display:flex !important; }
+html body > nav > a[data-page][data-page="talk"] { order:3 !important; display:flex !important; }
+html body > nav > a.navmore[data-page="shop"], html body > nav > a[data-page][data-page="shop"] { order:4 !important; display:flex !important; }
+html body > nav > a.v2-navlow[data-page] { order:8 !important; display:flex !important; min-height:44px !important; }
+html body > nav > a.v2-navlow[data-page="parts"] { margin-top:auto !important; }
+html body > nav > a.v2-navlow[data-page] > span:not(.ordbadge) { font-size:15px !important; font-weight:500 !important; color:var(--v2-soft) !important; }
+html body > nav > a.v2-navlow[data-page] > svg { width:20px !important; height:20px !important; color:var(--v2-soft); }
+/* 메뉴 칸에서 빠진 화면 — 지우지 않았다. 첫 화면·장터·설정 안의 새 자리에서 연다(라비=라비 한 줄, 지갑=「기록 ›」, 자산=「모두 보기 ›」, 게임=장터). */
+html body > nav > a[data-page][data-page="ravi"],
+html body > nav > a[data-page][data-page="profile"],
+html body > nav > a[data-page][data-page="games"],
+html body > nav > a[data-page][data-page="sales"],
+html body > nav > a[data-page][data-page="assets"],
+html body > nav > a[data-page][data-page="artist"],
+html body > nav:not(.wallet-first) > a[data-page][data-page="wallet"],
+html body > nav:not(.help-first) > a[data-page][data-page="helping"],
+html body > nav > #navmore-btn { display:none !important; }
+html body > nav.wallet-first > a[data-page="wallet"], html body > nav.help-first > a[data-page="helping"] { order:0 !important; }
+/* 아래 상태 줄: 노드 상태는 첫 화면 위 한 줄로 옮겼다. 폰 승인 대기(돈)만 여기 늘 보인다. 문제 알리기는 설정 안. */
+html body > nav .navfoot { order:9 !important; position:static !important; background:transparent !important; padding:0 !important; }
+html body > nav .navfoot > :not(#d-link-row) { display:none !important; }
+html body > nav .navfoot #d-link-row:not([hidden]) { width:100% !important; flex-direction:row !important; justify-content:flex-start; gap:8px; padding:8px 12px !important; border-radius:12px; background:var(--ravi-tint, #fdf1e7); }
+
+/* ── 첫 화면 「내 것」 ── */
+main #page-home.on { background:var(--v2-page); margin:-0px; }
+#page-home { --v2-gap:18px; max-width:1180px; }
+#page-home .v2-head { display:flex; align-items:center; gap:16px; margin:10px 0 18px; }
+#page-home .v2-head > h1 { margin:0 !important; font-size:34px !important; font-weight:800; letter-spacing:-0.02em; color:var(--v2-ink); }
+#page-home .v2-node { margin-left:auto; display:inline-flex; align-items:center; gap:10px; min-height:44px !important; padding:0 18px !important; border-radius:999px !important; border:0 !important; background:var(--v2-card) !important; color:var(--v2-ink) !important; font-size:15px !important; font-weight:500; white-space:nowrap; box-shadow:0 1px 0 rgba(30,24,48,.04); cursor:pointer; }
+#page-home .v2-node .v2-dot { width:10px; height:10px; border-radius:50%; background:#9a93ad; flex:none; }
+#page-home .v2-node[data-tone="ok"] .v2-dot { background:var(--v2-good); }
+#page-home .v2-node[data-tone="warn"] .v2-dot { background:var(--v2-dot); }
+#page-home .v2-node[data-tone="bad"] .v2-dot { background:var(--danger, #B32B22); }
+/* 라비 한 줄 — 얼굴 하나 · 말풍선 · 마이크. */
+#page-home .v2-ravi { display:flex; align-items:center; gap:16px; margin:0 0 18px; }
+#page-home .v2-ravi-face { width:60px; height:60px; flex:none; display:grid; place-items:center; }
+#page-home .v2-ravi-face > * { width:56px !important; height:56px !important; }
+#page-home .v2-ravi-say { flex:1; min-width:0; min-height:52px !important; padding:0 22px !important; border-radius:18px !important; border:0 !important; background:var(--v2-card) !important; color:var(--v2-ink) !important; font-size:17px !important; font-weight:650; text-align:left; justify-content:flex-start; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; }
+#page-home .v2-ravi-say > span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block; }
+#page-home .v2-mic { flex:none; width:56px; height:56px; min-height:56px !important; padding:0 !important; border-radius:50% !important; border:0 !important; background:var(--v2-purple) !important; color:#fff !important; display:grid; place-items:center; cursor:pointer; }
+#page-home .v2-mic svg { width:24px; height:24px; }
+#page-home .v2-mic:focus-visible, #page-home .v2-ravi-say:focus-visible, #page-home .v2-node:focus-visible { outline:3px solid var(--v2-dot); outline-offset:2px; }
+/* 오늘 카드 ≤3 — 한 줄에 셋. */
+#page-home #rv-home-cards { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:14px; margin:0 0 var(--v2-gap); }
+#page-home #rv-home-cards:has(.rv-cards-empty) { display:none; }
+#page-home #rv-home-cards .rv-card { display:flex; flex-direction:row; align-items:center; gap:10px; min-height:56px; margin:0; padding:10px 18px; border-radius:14px; border:0; background:var(--v2-card); box-shadow:none; }
+#page-home #rv-home-cards .rv-card > b { flex:1; min-width:0; font-size:15px; font-weight:550; color:var(--v2-ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#page-home #rv-home-cards .rv-card-foot { display:flex; align-items:center; gap:8px; margin:0; flex:none; }
+#page-home #rv-home-cards .rv-card-src { display:none; }
+#page-home #rv-home-cards .rv-card button { min-height:40px !important; padding:0 4px !important; border:0 !important; background:none !important; color:var(--v2-purple) !important; font-size:15px !important; font-weight:700; white-space:nowrap; }
+#page-home #rv-home-cards .rv-card[data-kind="order"] button { color:var(--v2-good) !important; }
+#page-home #rv-home-cards .rv-card[data-kind="prepared"] button, #page-home #rv-home-cards .rv-card[data-kind="problem"] button { color:var(--v2-price) !important; }
+/* 내 돈 + 새 자산 만들기 */
+#page-home .v2-row { display:grid; grid-template-columns:minmax(300px, 1fr) minmax(0, 2fr); gap:var(--v2-gap); margin:0 0 var(--v2-gap); }
+#page-home .v2-money .overview { height:100%; box-sizing:border-box; display:flex; flex-direction:column; gap:12px; padding:22px 24px; border-radius:22px; border:0; background:var(--v2-purple); color:#fff; box-shadow:none; }
+#page-home .v2-money-top { display:flex; align-items:center; justify-content:space-between; }
+#page-home .v2-money-top h2 { margin:0; font-size:16px; font-weight:500; color:rgba(255,255,255,.82); }
+#page-home .v2-money .v2-link { color:#fff !important; }
+#page-home .v2-money .overview-values { display:flex; align-items:baseline; flex-wrap:wrap; gap:4px 12px; margin:0; }
+#page-home .v2-money #overview-balance { font-size:40px; line-height:1.1; font-weight:800; letter-spacing:-0.02em; color:#fff; overflow-wrap:anywhere; }
+#page-home .v2-money #overview-balance.unknown { font-size:26px; }
+#page-home .v2-money .v2-krw { font-size:16px; color:rgba(255,255,255,.88); white-space:nowrap; }
+#page-home .v2-money #overview-incoming-row.v2-incoming { display:block; font-size:15px; line-height:1.4; color:rgba(255,255,255,.88); }
+#page-home .v2-money #overview-incoming-row.v2-incoming strong { color:#fff; font-weight:700; }
+#page-home .v2-money .v2-incoming[hidden] { display:none; }
+#page-home .v2-money .overview-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:auto; }
+#page-home .v2-money .overview-actions button { min-height:52px !important; min-width:0 !important; padding:0 20px !important; border-radius:14px !important; border:0 !important; background:#fff !important; color:var(--v2-purple) !important; font-size:17px !important; font-weight:700; white-space:nowrap; flex-shrink:0; order:0 !important; }
+#page-home .v2-money .overview-actions .v2-phone { background:var(--v2-dot) !important; color:#fff !important; }
+:root[data-theme="dark"] #page-home .v2-money .overview-actions button:not(.v2-phone) { color:#3A2470 !important; }
+/* 새 자산 만들기 — 첫 화면과 자산 화면이 같은 모양. */
+.v2-create { box-sizing:border-box; padding:22px 24px; border-radius:22px; background:var(--v2-card); }
+.v2-create-assets { margin:14px 0 18px; border:1px solid var(--v2-lilac); }
+.v2-create-top { display:flex; align-items:center; gap:12px; margin:0 0 14px; }
+.v2-create-top h2 { margin:0; font-size:21px; font-weight:800; color:var(--v2-ink); }
+.v2-wait { margin-left:auto; display:inline-flex; align-items:center; min-height:40px; padding:0 18px; border-radius:12px; background:var(--v2-lilac); color:var(--v2-purple); font-size:15px; font-weight:700; white-space:nowrap; }
+.v2-wait[hidden] { display:none; }
+.v2-kinds { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:12px; }
+main button.v2-kind { display:flex !important; flex-direction:column; align-items:flex-start; justify-content:flex-start; gap:6px; min-height:108px !important; padding:16px 16px !important; border-radius:16px !important; border:1px solid var(--v2-lilac) !important; background:var(--v2-card) !important; color:var(--v2-ink) !important; text-align:left; cursor:pointer; white-space:normal; }
+main button.v2-kind:hover { border-color:var(--v2-purple-2) !important; background:var(--v2-lilac-2) !important; }
+main button.v2-kind b { font-size:18px; font-weight:800; white-space:nowrap; }
+main button.v2-kind span { font-size:14px; color:var(--v2-soft); line-height:1.35; word-break:keep-all; }
+main button.v2-kind em { margin-top:auto; font-style:normal; font-size:17px; font-weight:800; color:var(--v2-price); white-space:nowrap; }
+.v2-create-note { margin:14px 0 0; font-size:15px; font-weight:600; color:var(--v2-good); }
+.v2-create-note[hidden] { display:none; }
+.v2-create-meta { margin:12px 0 0; }
+/* 내 것 N개 */
+#page-home .v2-mine { padding:22px 24px; border-radius:22px; background:var(--v2-card); }
+#page-home .v2-mine-top { display:flex; align-items:center; justify-content:space-between; margin:0 0 14px; }
+#page-home .v2-mine-top h2 { margin:0; font-size:21px; font-weight:800; color:var(--v2-ink); }
+#page-home .v2-mine-list { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:12px; }
+#page-home .v2-mine-list .v2-thing { display:flex !important; flex-direction:column; align-items:flex-start; gap:4px; min-height:92px !important; padding:14px 16px !important; border-radius:14px !important; border:0 !important; background:var(--v2-lilac) !important; color:var(--v2-ink) !important; text-align:left; cursor:pointer; min-width:0; }
+#page-home .v2-thing small { font-size:13px; color:var(--v2-soft); white-space:nowrap; }
+#page-home .v2-thing b { font-size:17px; font-weight:750; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#page-home .v2-thing span { font-size:14px; color:var(--v2-soft); }
+#page-home .v2-mine-empty { grid-column:1/-1; margin:0; font-size:16px; color:var(--v2-soft); }
+#page-home .v2-more { display:flex; flex-wrap:wrap; gap:4px 18px; margin:14px 0 0; }
+#page-home .v2-more [hidden] { display:none !important; }
+main button.v2-link { min-height:40px !important; padding:0 2px !important; border:0 !important; background:none !important; color:var(--v2-purple) !important; font-size:16px !important; font-weight:700; white-space:nowrap; flex-shrink:0; cursor:pointer; }
+#page-home .v2-old[hidden] { display:none !important; }
+/* 라비 얼굴은 한 화면에 하나 — 첫 화면은 라비 한 줄이 그 자리. 머리띠 라비는 늘 숨긴다(떠 있는 라비가 다른 화면의 하나). */
+body:has(#page-home.on) #ravi-launcher { display:none !important; }
+#rv-header-ravi { display:none !important; }
+@media (max-width:1100px) {
+  #page-home .v2-row { grid-template-columns:minmax(0,1fr); }
+  #page-home #rv-home-cards { grid-template-columns:minmax(0,1fr); }
+  #page-home .v2-mine-list { grid-template-columns:repeat(2, minmax(0,1fr)); }
+  html body > nav { width:200px !important; min-width:200px !important; }
+}
+/* 들어오는 돈은 오늘 카드(맨 위 첫 장)가 말한다 — 내 돈 카드에는 확정 잔액만(시안). */
+#page-home .v2-money #overview-incoming-row { display:none !important; }
+html body > nav .brand { align-self:stretch !important; }
+/* 「내 것」 아래 화면(지갑·자산·만들기·이름표·내 소개)에 있을 때도 왼쪽 「내 것」이 켜져 있다 — 지금 어디인지 잃지 않게. 게임은 장터 안. */
+body:has(#page-wallet.on, #page-assets.on, #page-create.on, #page-artist.on, #page-profile.on, #page-reward.on) > nav > a[data-page="home"] { background:var(--v2-lilac) !important; }
+body:has(#page-wallet.on, #page-assets.on, #page-create.on, #page-artist.on, #page-profile.on, #page-reward.on) > nav > a[data-page="home"] > span { color:var(--v2-purple) !important; font-weight:750 !important; }
+body:has(#page-games.on) > nav > a[data-page="trade"] { background:var(--v2-lilac) !important; }

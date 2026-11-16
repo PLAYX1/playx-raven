@@ -38,6 +38,8 @@ import { wireTalkDm } from "./talk-dm";
 import { talkIdle, unreadPill, wireTalkDesk } from "./talk-desk";
 import { openReport as openTalkReport } from "./talk-report"; // 11-12 말풍선 「신고」 — 「문제 알리기」와 같은 길(report_send) // 11-12 카톡 PC·텔레그램 손버릇(찾기·Esc·말풍선 메뉴·새 메시지 N개) // 11-12 카톡 PC 처럼 — 친구·채팅·광장 + 이 창 안 쪽지(talk_dm.rs)
 import { homeSafety } from "./home-summary";
+import { wireDeskV2, paintV2Node, paintV2Krw, paintV2Mine, V2_COPY } from "./desk-v2"; // 11-17 단순화 2판 첫 화면(시안 9-데스크탑)
+import "./desk-v2.css";
 import { paintCards, type CardsInput, type CardOpen } from "./ravi-cards";
 import { wireChainInfoLazy } from "./chain-info-lazy";
 import { installFirstRunBarrier, afterRaviLanding, deferUntilRaviLanding, finishRaviLanding } from "./firstrun";
@@ -552,6 +554,7 @@ function renderList() {
         : a.mine === (assetFilter === "mine")
   );
   const mineCount = rows.filter((a) => a.mine).length;
+  paintV2Mine(rows, fmtQty);
   document.querySelectorAll<HTMLElement>("[data-afilter]").forEach((b) => {
     b.classList.toggle("on", b.dataset.afilter === assetFilter);
     const k = b.dataset.afilter!;
@@ -2293,6 +2296,7 @@ function paintDotSum() {
   if (label) setCopyText(label, r.say);
   const row = document.getElementById("d-sum-row");
   if (row) { row.title = r.say(); row.setAttribute("aria-label", r.say()); row.dataset.tone = r.cls === "on" ? "ok" : r.cls; }
+  paintV2Node({ node: dotSum.node, pct: dotSum.pct });
 }
 
 /** 점을 누르면 다섯 줄을 펼치고 접는다. 이 사람이 펼쳐 둔 것은 기억한다(이 컴퓨터에만). */
@@ -2778,6 +2782,7 @@ async function refreshOverview() {
   const show = Number.isFinite(incoming) && incoming > 0;
   if (row) row.hidden = !show;
   if (show) setCopyText($("overview-incoming"), () => fmtRvn(incoming));
+  paintV2Krw(typeof confirmed === "number" && Number.isFinite(confirmed) && confirmed >= 0 ? confirmed : null, invoke);
   if (wallet.status === "fulfilled") setHomeCards({ incoming: Number.isFinite(incoming) ? incoming : null, confirmed: typeof confirmed === "number" && Number.isFinite(confirmed) ? confirmed : null, nodeAt: Date.now() });
 }
 
@@ -3502,10 +3507,7 @@ function pageTiles(page: string): PageTile[] {
     return [
       /* 🔴 쉬운 길을 맨 앞에. 이름 규칙·소각액을 몰라도 고르고 적기만 하면 된다.
          자유롭게 이름을 정하는 「새 자산 만들기」는 바로 옆에 그대로 둔다. */
-      { icon: I('<path d="M7 3.5h7l4 4V20a.5.5 0 01-.5.5h-10A.5.5 0 017 20z"/><path d="M14 3.5V8h4M10 13l1.6 1.6L15 11"/>'),
-        label: "만들기", sub: "증명서 · 티켓 · 작품", go: () => showPage("create") },
-      { icon: I('<path d="M12 5v14M5 12h14"/>'),
-        label: "새 자산 만들기", sub: "쿠폰 · 회원권 · 굿즈", go: () => $("new-asset")?.click() },
+      /* 11-17 단순화 2판: 「만들기」「새 자산 만들기」 두 칸은 아래 「새 자산 만들기」 카드 셋(index.html .v2-create-assets)으로 합쳤다 — 입구 하나. */
       { icon: I('<path d="M20 12a8 8 0 11-2.3-5.6"/><path d="M20 4v4h-4"/>'),
         label: "새로고침", sub: "다시 읽어오기", go: () => $("refresh")?.click() },
       /* 🔴 이 둘이 **눌러도 아무 일이 없었다.** 하나는 disabled, 하나는
@@ -9591,6 +9593,9 @@ async function doIssue() {
       return;
     }
 
+    // 11-17 단순화 2판: 공개 장부를 다 받기 전에는 새기지 않는다(「장부 다 받으면 켜져요」). 상태를 못 읽으면 막지 않는다 — 노드가 답하지 않으면 발행도 어차피 안 된다.
+    const syncNow = await invoke<any>("node_status").catch(() => null);
+    if (syncNow && typeof syncNow.progress === "number" && syncNow.progress < 0.9999) { warn(copyHtml(V2_COPY.syncBlock)); return; }
     // 발행은 500 RVN 을 태운다. 잠겨 있으면 여기서 멈추고 이유를 말한다.
     // 파일을 올려야 하면 올리는 동안 다시 잠기지 않게 넉넉히 연다 — 그리고 발행 직전에 또 본다.
     const usesFile = !["bulk", "qualifier"].includes(wizKind);
@@ -19597,6 +19602,17 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
   $("sw-go-market").addEventListener("click", () => openTrade("browse"));
   setupNavMore();
+  wireDeskV2({
+    showPage,
+    openRavi: () => raviHome?.open(),
+    startCreate: (kind) => { showPage("create"); void createApi?.start(kind); },
+    openBrandWizard: () => void openWizard(),
+    openNode: () => toggleDot("node"),
+    openReport: () => openReport(),
+    openAsset: () => showPage("assets"),
+    phone: () => $("rv-home-phone").click(),
+    face: () => raviFace("sleep", 56, { round: true }),
+  });
   document.getElementById("rv-home-shop")?.addEventListener("click", goHomeSales);
   document.getElementById("rv-home-today-body")?.addEventListener("click", (ev) => {
     const b = (ev.target as HTMLElement).closest<HTMLElement>("[data-pend]");
@@ -20949,7 +20965,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   // 0.4.9 — 되살리기가 중간에 멈춰 있으면(노드를 못 켜는 상태) 먼저 알리고, 「마감 뒤 찾기」 예약을 1분마다 본다.
   afterRaviLanding(() => wordsRestore.checkOnStart());
   // 11-12 첫 실행 — 라비가 한 번만 「글씨 잘 보이세요?」(text-size-ask.ts). 창이 아니라 라비 카드, 건너뛸 수 있음.
-  afterRaviLanding(() => askTextSizeOnce(t));
+  // 11-17 단순화 2판: 첫 화면에 팝업 없음 — 저절로 묻지 않는다. 글씨 크기는 「언어 · 화면」·설정, 라비에게 「글자 크게」.
+  void askTextSizeOnce;
   window.setInterval(() => wordsRestore.tick(), 60_000);
   // Status is cheap; the IPFS scan is not, and is deliberately not on a timer.
 });

@@ -3002,6 +3002,8 @@
 
     <nav>
       <div class="brand" data-tauri-drag-region>
+        <!-- 11-17 단순화 2판: 왼쪽 맨 위 이름 「레이븐볼트」(시안 9-데스크탑). 판 번호·새 버전 단추는 그 아래 작게. -->
+        <b class="v2-brand" translate="no">레이븐볼트</b>
         <div>
           <!-- 🔴 판 번호 **자체가 단추**다. 예전에는 새 버전이 있을 때만
                아래 알림이 나타나서, 없을 때는 확인할 길이 아예 없었다.
@@ -3028,7 +3030,7 @@
       <!-- 🔴 첫 자리는 라비다. 여태 첫 화면이 지갑이었는데, 켜자마자
            주소·잔액·보내기 같은 것부터 보였다. 사장이 아침에 하는 일은
            그게 아니다. 물어보고 시키는 것이 먼저다. -->
-      <a data-page="home" class="on" aria-label="홈"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 11l8-6.5 8 6.5V20H4z"/></svg><span>홈</span></a>
+      <a data-page="home" class="on" aria-label="내 것"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 11l8-6.5 8 6.5V20H4z"/></svg><span>내 것</span></a>
       <a data-page="ravi" aria-label="라비">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -3101,7 +3103,9 @@
         🔴 주문은 「내 가게 → 들어온 주문」 안쪽에 있다. 지갑 화면에 있는
            사장에게 두 칸 안쪽 소식을 전할 자리가 여기밖에 없다. -->
         <span class="ordbadge" id="nav-orderbadge" hidden aria-label="안 본 새 주문">0</span></a>
-      <a data-page="settings" class="navmore"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M8 20.5h8M12 16.5v4"/></svg><span>이 컴퓨터</span></a>
+      <!-- 11-17 단순화 2판(대표 승인): 아래 두 칸 — 「노드 지킴이 · 채굴」(부품 화면, 채굴 탭이 바로 옆) · 「설정 · 문제 알리기」. -->
+      <a data-page="parts" id="v2-nav-node" class="v2-navlow" href="#" role="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="6" rx="1.5"/><rect x="4" y="14" width="16" height="6" rx="1.5"/><path d="M8 7h.01M8 17h.01"/></svg><span>노드 지킴이 · 채굴</span></a>
+      <a data-page="settings" class="v2-navlow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M8 20.5h8M12 16.5v4"/></svg><span>설정 · 문제 알리기</span></a>
       <!-- 0.6.0 — 「더 보기」: 소식(새 주문·새 글)이 접힌 안에 있어도 놓치지 않게 여기에도 점을 띄운다. -->
       <button type="button" id="navmore-btn" aria-expanded="false"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></svg><span id="navmore-t">더 보기</span><span class="ordbadge" id="navmore-badge" hidden aria-label="안 본 소식">•</span><svg class="chev" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
       <div class="navfoot folded" id="navfoot">
@@ -3813,9 +3817,17 @@
              「나눠주기」를 숨겼다가 대표님이 두 번 못 찾으신 것과 같은 실수다. -->
 
 
-        <div class="bar">
-          <button id="new-asset">새 자산 만들기</button>
-          <span class="meta">새 이름을 공개 장부에 새깁니다. RVN이 소각됩니다.</span>
+        <!-- 11-17 단순화 2판: 「만들기」「새 자산 만들기」 카드·검정 단추 세 입구 → 입구 하나, 금액은 처음부터.
+             작품·티켓은 「만들기」 화면(easy-create 규칙: 고유 5·티켓 100), 내 이름표(브랜드 500)는 옛 발행 마법사(#new-asset).
+             증명서는 「만들기」 화면의 종류 고르기에 그대로 있다. -->
+        <div class="v2-create v2-create-assets" role="region" aria-labelledby="v2-create-title-a">
+          <div class="v2-create-top"><h2 id="v2-create-title-a">새 자산 만들기</h2><span class="v2-wait" data-v2-wait hidden>장부 다 받으면 켜져요</span></div>
+          <div class="v2-kinds">
+            <button type="button" class="v2-kind" data-v2-create="work"><b>작품 한 점</b><span>그림·음악 · 이름표 필요</span><em>5 RVN</em></button>
+            <button type="button" class="v2-kind" data-v2-create="ticket"><b>티켓</b><span>여러 장 · 더 찍기 가능</span><em>100 RVN</em></button>
+            <button type="button" class="v2-kind" id="new-asset"><b>내 이름표</b><span>브랜드 · 처음 한 번</span><em>500 RVN</em></button>
+          </div>
+          <p class="meta v2-create-meta">새긴 이름은 공개 장부에 남고, 적힌 RVN은 없어져요(소각). 증명서는 작품 한 점 안에서 고를 수 있어요.</p>
         </div>
 
         <!-- ── 맞교환 ────────────────────────────────────────────────
@@ -4024,17 +4036,54 @@
            아이콘을 누르면 그 말이 라비에게 그대로 간다 — 누르든 말하든
            같은 길이라 배울 것이 하나뿐이다. -->
       <section class="page on" id="page-home">
-        <h1>홈</h1>
-        <!-- 11-11 라비 카드(라비 중심 홈 2단계): 잔액 위 최대 3장 — src/ravi-cards.ts. 여는 단추만, 보내는 단추 없음. -->
+        <!-- 11-17 단순화 2판(대표 「다 진행하자」 · 시안 9-데스크탑): 내 것 · 라비 한 줄 · 오늘 카드 ≤3 · 내 돈 + 새 자산 만들기 · 내 것 N개.
+             팝업 없음. 라비 얼굴은 이 화면에 하나(라비 한 줄) — 떠 있는 라비·머리띠 라비는 이 화면에서 숨긴다(desk-v2.css).
+             옛 칸(알림·최근 거래·라비 대화·가게 매출·바로 가기)은 지우지 않고 아래 접힌 묶음(.v2-old)에 둔다 — 다른 코드가 같은 id 를 그린다. -->
+        <div class="v2-head">
+          <h1>내 것</h1>
+          <button id="v2-node" class="v2-node" type="button" data-tone="off" aria-live="polite"><i class="v2-dot" aria-hidden="true"></i><span id="v2-node-t">공개 장부 확인 중</span></button>
+        </div>
+        <div class="v2-ravi" role="region" aria-label="라비">
+          <span id="v2-ravi-face" class="v2-ravi-face" aria-hidden="true"></span>
+          <button id="v2-ravi-say" class="v2-ravi-say" type="button"><span id="v2-ravi-t">「이 폴더 음반으로 올려 줘」처럼 말해도 돼요</span></button>
+          <button id="v2-ravi-mic" class="v2-mic" type="button" aria-label="라비에게 말로 하기" title="라비에게 말로 하기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
+        </div>
+        <!-- 11-11 라비 카드(src/ravi-cards.ts): 최대 3장 · 돈 → 주문 → 준비된 것(폰과 같은 순서). 여는 단추만. -->
         <div id="rv-home-cards" class="rv-cards" role="region" aria-label="오늘 볼 것" aria-live="polite"></div>
+        <div class="v2-row">
+          <div class="v2-money">
+            <div class="overview" aria-labelledby="overview-title">
+              <div class="v2-money-top"><h2 id="overview-title">내 돈</h2><button id="rv-home-activity-all" class="v2-link" type="button">기록 ›</button></div>
+              <div class="overview-values"><strong id="overview-balance">확인 못 함</strong><span id="v2-krw" class="v2-krw">원화 환산 확인 중</span></div>
+              <span id="overview-incoming-row" class="v2-incoming" hidden>들어오는 중 <strong id="overview-incoming"></strong> · 확인 중</span>
+              <div class="overview-actions" role="group" aria-label="잔액 관련 작업"><button id="overview-receive" type="button">받기</button><button id="rv-home-send" type="button">보내기</button><button id="v2-phone" class="v2-phone" type="button">폰 연결</button></div>
+            </div>
+          </div>
+          <div class="v2-create" id="v2-create" role="region" aria-labelledby="v2-create-title">
+            <div class="v2-create-top"><h2 id="v2-create-title">새 자산 만들기</h2><span id="v2-create-wait" class="v2-wait" hidden>장부 다 받으면 켜져요</span></div>
+            <div class="v2-kinds">
+              <button type="button" class="v2-kind" data-v2-create="work"><b>작품 한 점</b><span>그림·음악 · 이름표 필요</span><em>5 RVN</em></button>
+              <button type="button" class="v2-kind" data-v2-create="ticket"><b>티켓</b><span>여러 장 · 더 찍기 가능</span><em>100 RVN</em></button>
+              <button type="button" class="v2-kind" data-v2-create="brand"><b>내 이름표</b><span>브랜드 · 처음 한 번</span><em>500 RVN</em></button>
+            </div>
+            <p id="v2-create-note" class="v2-create-note" hidden>기다리는 동안에도 0원 서명 올리기 · 폰에서 올린 것 확정은 돼요</p>
+          </div>
+        </div>
+        <div class="v2-mine" role="region" aria-labelledby="v2-mine-title">
+          <div class="v2-mine-top"><h2 id="v2-mine-title">내 것</h2><button id="v2-mine-all" class="v2-link" type="button">모두 보기 ›</button></div>
+          <div id="v2-mine-list" class="v2-mine-list"></div>
+          <div class="v2-more" role="group" aria-label="더 가기">
+            <button type="button" class="v2-link" data-v2-go="wallet">지갑</button>
+            <button type="button" class="v2-link" data-v2-go="artist">아티스트 이름표</button>
+            <button type="button" class="v2-link" data-v2-go="profile">내 소개</button>
+            <button type="button" class="v2-link" data-v2-go="sales" data-seller-only hidden inert>판매 대금 받기</button>
+          </div>
+        </div>
+        <div class="v2-old" hidden>
+        <button id="rv-home-more" class="ghost" type="button">지갑 열기</button>
         <!-- DOM/Tab and two-column reading order: balance → safety → transactions → Ravi → sales → extras. -->
         <div class="rv-home-grid">
           <div class="rv-home-balance">
-            <div class="overview" aria-labelledby="overview-title">
-              <h2 id="overview-title">완료 잔액</h2>
-              <div class="overview-values"><strong id="overview-balance">확인 못 함</strong><span id="overview-incoming-row" hidden>들어오는 중 <strong id="overview-incoming"></strong></span></div>
-              <div class="overview-actions" role="group" aria-label="잔액 관련 작업"><button id="rv-home-send" type="button">보내기</button><button id="overview-receive" type="button">받기</button><button id="rv-home-more" class="ghost" type="button">지갑 열기</button></div>
-            </div>
             <!-- 11-03 대표: 폰 연결 입구가 「알림 · 할 일」 안 작은 단추라 문제가 없을 땐 아예 안 보였다. 첫 화면 받기/보내기 바로 아래.
                  연결 전 = 큰 카드 「폰과 지갑 연결」 · 연결 뒤 = 한 줄 「연결된 폰 N대 · 요청 확인 중」(누르면 연결 카드). -->
             <button id="rv-home-phone" class="rv-home-phonelink" type="button" data-linked="0" aria-live="polite"><b id="rv-home-phone-t">폰과 지갑 연결</b><span id="rv-home-phone-d">폰에서 이 지갑 잔액을 보고, 돈은 여기서 승인해요</span></button>
@@ -4044,7 +4093,7 @@
             <div id="rv-home-safe" class="rv-home-signals" role="status"><span id="rv-home-backup-state" data-tone="warn">백업 확인 중</span><span id="rv-home-lock-state" data-tone="warn">잠금 확인 중</span><span id="rv-home-server-state" data-tone="warn">노드 <span id="overview-node">확인 못 함</span></span></div>
             <p class="rv-home-address-note">보내기 전 받는 주소를 다시 확인하세요.</p>
           </div>
-          <div class="rv-home-activity"><div class="rv-home-heading"><h2>최근 거래</h2><button id="rv-home-activity-all" class="ghost" type="button">모두 보기</button></div><div id="rv-home-txs"></div></div>
+          <div class="rv-home-activity"><div class="rv-home-heading"><h2>최근 거래</h2></div><div id="rv-home-txs"></div></div>
           <div id="ravi-home-slot" role="region" aria-label="라비"></div>
           <div class="rv-home-today" id="rv-home-today">
             <div class="rv-home-heading"><h2>가게 매출 · 오늘</h2><button id="rv-home-shop" class="ghost" type="button">매출 보기</button></div>
@@ -4058,6 +4107,7 @@
           </div>
         </div>
         <button id="rv-home-chain" type="button" aria-label="체인 정보 열기"><strong>체인 정보</strong><span></span></button>
+        </div>
       </section>
       <section class="page" id="page-chain"></section>
       <section class="page" id="page-sales">
@@ -5466,6 +5516,8 @@
             <p class="sx-none" role="status"><span id="sx-none" hidden>찾는 설정이 없어요</span></p>
             <button type="button" class="sx-easy" data-sx-go="general" data-sx-to="easy-setup"><span class="ravi-static-face"></span><span class="sx-easytxt"><b>쉬운 설정</b><span>라비가 이 컴퓨터를 보고 정해 드려요</span></span></button>
             <button type="button" class="sx-easy" data-sx-go="identity" data-sx-to="wl-card"><span class="sx-easyico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg></span><span class="sx-easytxt"><b>폰과 지갑 연결</b><span>폰에서 이 지갑 잔액을 보고, 돈은 여기서 승인해요</span></span></button>
+            <!-- 11-17 단순화 2판: 「문제 알리기」는 설정 안에(왼쪽 메뉴 「설정 · 문제 알리기」). 왼쪽 아래 옛 단추(#rp-open)와 같은 창을 연다. -->
+            <button type="button" class="sx-easy" id="sx-report"><span class="sx-easyico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9.5 17h-19z"/><path d="M12 10v4M12 17h.01"/></svg></span><span class="sx-easytxt"><b>문제 알리기</b><span>안 되는 것이 있으면 여기서 알려 주세요</span></span></button>
             <ul class="sx-topics">
               <li><button type="button" class="sx-it" data-sx-go="general" aria-current="false"><span class="sx-ic sx-ic-gray" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg></span><span class="sx-lab">일반</span></button></li>
               <li><button type="button" class="sx-it" data-sx-go="alerts" aria-current="false"><span class="sx-ic sx-ic-cta" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg></span><span class="sx-lab">알림</span></button></li>

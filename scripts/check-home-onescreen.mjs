@@ -71,8 +71,12 @@ assert.throws(()=>checkLayout(css.replace('--home-muted:#59637d','--home-muted:#
 // 홈 섹션만 — 다음 `<section class="page"` 앞까지(0.8.8 병합: 예전 끝 표시 page-ravi 사이에 만들기·판매 화면이 끼어 cw-drop 의 tabindex 를 홈 것으로 잘못 읽었다).
 const homeStart=html.indexOf('<section class="page on" id="page-home">');
 const homeHTML=html.slice(homeStart,html.indexOf('<section class="page"',homeStart+10));
-const order=['rv-home-balance','rv-home-safety','rv-home-activity','ravi-home-slot','rv-home-today','rv-home-extras'].map(id=>homeHTML.indexOf(id));
-assert.ok(order.every((x,i)=>x>=0 && (!i||x>order[i-1])),'DOM reading and keyboard order follows the grid');
+// 11-17 단순화 2판(시안 9-데스크탑): 읽는 순서 = 노드 한 줄 → 라비 한 줄 → 오늘 카드 → 내 돈 → 새 자산 만들기 → 내 것 → (접힌 옛 칸).
+const order=['id="v2-node"','id="v2-ravi-say"','id="v2-ravi-mic"','id="rv-home-cards"','id="overview-balance"','id="v2-create"','id="v2-mine-list"','class="v2-old"'].map(id=>homeHTML.indexOf(id));
+assert.ok(order.every((x,i)=>x>=0 && (!i||x>order[i-1])),'DOM reading and keyboard order follows the new home');
+const oldOrder=['rv-home-balance','rv-home-safety','rv-home-activity"','ravi-home-slot','rv-home-today','rv-home-extras'].map(id=>homeHTML.indexOf(id,homeHTML.indexOf('class="v2-old"')));
+assert.ok(oldOrder.every((x,i)=>x>=0 && (!i||x>oldOrder[i-1])),'folded old cards keep their order');
+assert.ok(!/class="v2-old"(?![^>]*hidden)/.test(homeHTML),'old cards stay folded on the first screen');
 assert.ok(!homeHTML.includes('tabindex='),'No artificial tab order');
 assert.ok(main.includes('$("rv-home-activity-all").onclick = () => { showPage("wallet"); jumpToEl("w-txs"); };'));
 const compile = source => ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
