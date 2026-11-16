@@ -71,6 +71,8 @@ export type CreateDeps = {
 };
 export type CreateApi = {
   enter: () => void;
+  /** 그 종류의 적기 칸으로 바로(첫 화면 「새 자산 만들기」 카드). 보내는 중·이어하기가 있으면 그 화면을 먼저 보인다. */
+  start: (kind: CreateKind) => Promise<void>;
   /** 창에 떨어뜨린 문서로 증명서 만들기를 연다. 파일은 올리지 않고 지문만. */
   startWithDocument: (doc: { fingerprint: string; name: string }) => void;
   /** 증명서 폼이 열려 있을 때 떨어뜨린 명단 표·사진. 받았으면 참. */
@@ -82,6 +84,8 @@ export type CreateApi = {
 };
 
 const DRAFT_KEY = "playx-raven-create-draft";
+const NODE_NOT_READY = "노드가 아직 준비되지 않았어요. 공개 장부를 다 받으면 새길 수 있어요. 적은 내용은 그대로 남아 있어요.";
+const LEDGER_WAIT = "공개 장부를 다 받으면 새길 수 있어요. 적은 내용은 그대로 남아 있어요.";
 /** 확인 표 한 번에 — cert-types 의 MAX_ROSTER_ROWS 와 같다. */
 const MAX_BATCH_ROWS = 500;
 const ISSUER_KEY = "playx-raven-create-issuer";
@@ -191,8 +195,17 @@ export function wireCreate(deps: CreateDeps): CreateApi {
     return actions;
   }
   async function loadStatus(): Promise<Status> {
-    status = await invoke<Status>("create_status");
+    // 🔴 11-17: 노드가 아직 답을 못 주면(장부 받는 중·막 켠 때) 빈 답이 와서 「Cannot read properties of null
+    //    (reading 'pending')」 영어 오류가 그대로 보였다(실측 app-j1-05). 모양을 먼저 보고 쉬운 말로 멈춘다.
+    const s = await invoke<Status | null>("create_status");
+    if (!s || typeof s !== "object" || !Array.isArray(s.brands)) throw new Error(t(NODE_NOT_READY));
+    status = s;
     return status;
+  }
+  /** 11-17 단순화 2판: 공개 장부를 다 받기 전에는 새기지 않는다. 상태를 못 읽으면 막지 않는다(create_status 가 이미 답했다). */
+  async function waitForLedger(): Promise<void> {
+    const n = await invoke<{ progress?: number } | null>("node_status").catch(() => null);
+    if (n && typeof n.progress === "number" && n.progress < 0.9999) throw new Error(t(LEDGER_WAIT));
   }
 
   /* ── 1. 고르기 · 2. 적기 ─────────────────────────────────────────── */
@@ -435,6 +448,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
       const max = roster ? MAX_BATCH_ROWS : kind === "ticket" ? MAX_TICKETS : MAX_COPIES;
       if (!Number.isInteger(count) || count < 1 || count > max) throw new Error(tf("1부터 {0}까지 적어 주세요.", fmtCount(max)));
       const s = await loadStatus();
+      await waitForLedger();
       const pending = s.pending ?? [];
       const wanted = s.brands.length || pending.length ? brandSel.value : brandFrom(makerIn.value);
       if (!validBrand(wanted)) throw new Error(t("만드는 사람 이름을 영문이나 한글로 3자 이상 적어 주세요."));
@@ -1401,8 +1415,13 @@ export function wireCreate(deps: CreateDeps): CreateApi {
     //    제목은 로마자로 바뀌어 체인 이름(영원히 공개)에 들어간다.
     void openForm("certificate").then(schedulePreview);
   }
+  /** 11-17 첫 화면·자산 화면의 「새 자산 만들기」 카드 — 고르기 화면을 건너뛰고 그 종류의 적기 칸을 연다. */
+  async function start(next: CreateKind) {
+    await enter();
+    if (!kinds.hidden || !form.hidden) await openForm(next);
+  }
   return {
-    enter, startWithDocument,
+    enter, startWithDocument, start,
     dropFiles: (paths) => bulk.dropPaths(paths),
     acceptsRoster: () => page.classList.contains("on") && !form.hidden && kind === "certificate" && !editing,
     rosterActive: () => bulk.active(),
