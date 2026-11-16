@@ -169,3 +169,19 @@ html body > nav > a.navmore[data-page="games"]:not([hidden]), html body > nav > 
 }
 /* 첫 화면은 위 노드 한 줄이 같은 말을 한다 — 왼쪽 아래 상태 줄은 다른 화면에서만. */
 body:has(#page-home.on) > nav .navfoot #d-sum-row { display:none !important; }
+/* 알림 종 — 노드 줄 옆. 안 본 수는 주황 한 점(아이콘 체계). */
+#page-home .v2-bell { position:relative; flex:none; width:48px; height:48px; min-height:48px !important; padding:0 !important; border-radius:50% !important; border:0 !important; background:var(--v2-card) !important; color:var(--v2-purple) !important; display:grid; place-items:center; cursor:pointer; }
+#page-home .v2-bell svg { width:24px; height:24px; }
+#page-home .v2-bell[aria-expanded="true"] { background:var(--v2-lilac) !important; }
+#page-home .v2-bell:focus-visible { outline:3px solid var(--v2-dot); outline-offset:2px; }
+#page-home .v2-bell-n { position:absolute; top:-2px; right:-2px; min-width:22px; height:22px; padding:0 6px; box-sizing:border-box; border-radius:11px; background:var(--v2-cta); color:#fff; font-size:13px; font-weight:800; line-height:22px; text-align:center; }
+#page-home .v2-bell-n[hidden] { display:none; }
+/* 종으로 펼친 묶음 안에도 라비 대화 칸은 다시 꺼내지 않는다(얼굴 하나). */
+#page-home .v2-old:not([hidden]) { display:block; margin-top:18px; }
+#page-home .v2-old #ravi-home-slot, #page-home .v2-old #rv-home-more { display:none !important; }
+/* :has 를 못 읽는 WebView 도 같게 — 첫 화면이면 왼쪽 아래 노드 줄·떠 있는 라비를 숨긴다. */
+body.v2-on-home > nav .navfoot #d-sum-row, body.v2-on-home #ravi-launcher { display:none !important; }
+#page-home .v2-bell { overflow:visible !important; }
+#page-home .v2-head { overflow:visible; padding-top:4px; }
+/* 펼친 묶음의 「폰과 지갑 연결」은 내 돈 카드의 「폰 연결」과 같은 단추 — 둘을 보이지 않는다. */
+#page-home .v2-old .rv-home-balance { display:none !important; }

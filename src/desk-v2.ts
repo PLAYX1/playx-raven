@@ -37,6 +37,8 @@ export const V2_COPY = {
   made: "만든 것",
   got: "받은 것 · 산 것",
   syncBlock: "공개 장부를 다 받으면 새길 수 있어요. 적은 내용은 그대로 남아 있어요.",
+  bell: "알림",
+  bellN: "알림 {0}개",
   noMic: "이 컴퓨터에서는 말로 하기가 아직 꺼져 있어요. 라비 창에 글로 적어 주세요.",
 } as const;
 
@@ -60,6 +62,8 @@ const COPY: Record<string, [string, string, string]> = {
   [V2_COPY.mineEmpty]: ["Nothing here yet. Start with “New asset” above or the market.", "まだ持っているものがありません。上の「新しいアセット」かマーケットから始めましょう。", "还没有物品。从上面的“新建资产”或市场开始吧。"],
   [V2_COPY.made]: ["Made", "作ったもの", "我做的"],
   [V2_COPY.got]: ["Received · bought", "受け取った・買ったもの", "收到的 · 买的"],
+  [V2_COPY.bell]: ["Notifications", "お知らせ", "通知"],
+  [V2_COPY.bellN]: ["{0} notifications", "お知らせ {0}件", "{0} 条通知"],
   [V2_COPY.noMic]: ["Speaking is off on this computer for now. Please type in Ravi's window.", "このコンピューターでは音声入力がまだオフです。ラビの窓に文字で書いてください。", "这台电脑暂时没有开启语音。请在拉比窗口里打字。"],
   [V2_COPY.syncBlock]: ["You can record it once the public ledger is fully received. What you wrote stays here.", "公開台帳をすべて受信すると刻めます。書いた内容はそのまま残ります。", "公开账本全部接收后即可写入。已填写的内容会保留。"],
   "내 것": ["My things", "自分のもの", "我的"],
@@ -186,6 +190,8 @@ export function paintV2Mine(rows: readonly V2Asset[], fmtQty: (n: number) => str
 }
 
 /* ── 연결 ───────────────────────────────────────────────────────── */
+/** 첫 화면이면 body.v2-on-home — 왼쪽 아래 노드 줄·떠 있는 라비를 숨기는 기준(:has 없는 WebView 대비). */
+export function markHome(on: boolean): void { document.body.classList.toggle("v2-on-home", on); }
 export type V2Deps = {
   showPage(id: string): void;
   openRavi(): void;
@@ -230,6 +236,28 @@ export function wireDeskV2(d: V2Deps): void {
   });
   const nav = $("v2-nav-node"); if (nav) nav.onclick = (e) => { e.preventDefault(); d.openNode(); };
   const rep = $("sx-report"); if (rep) rep.onclick = () => d.openReport();
+  // 알림 종: 안 본 이야기 글 수 + 백업·잠금 문제(빨강) 수. 누르면 옛 「알림 · 할 일 · 최근 거래 · 바로 가기」 묶음을 펼치고 접는다.
+  const bell = $("v2-bell"), bellN = $("v2-bell-n"), old = $("v2-old");
+  const countBell = () => {
+    if (!bell || !bellN) return;
+    const talk = document.getElementById("nav-talkbadge");
+    const talkN = talk && !talk.hidden ? Math.max(1, parseInt(talk.textContent || "0", 10) || 0) : 0;
+    const bad = document.querySelectorAll('#rv-home-safe [data-tone="bad"]').length;
+    const n = talkN + bad;
+    bellN.hidden = n === 0; bellN.textContent = n > 99 ? "99+" : String(n);
+    const label = n ? tf(V2_COPY.bellN, n) : t(V2_COPY.bell);
+    bell.setAttribute("aria-label", label); bell.title = label;
+  };
+  if (bell && old) bell.onclick = () => {
+    old.hidden = !old.hidden;
+    bell.setAttribute("aria-expanded", String(!old.hidden));
+    if (!old.hidden) old.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+  const watch = new MutationObserver(countBell);
+  for (const id of ["nav-talkbadge", "rv-home-safe"]) { const el = $(id); if (el) watch.observe(el, { attributes: true, childList: true, subtree: true, characterData: true }); }
+  countBell();
+  // 지금 첫 화면인가 — CSS :has() 를 못 읽는 옛 WebView 도 같은 결과가 나게 몸통 표시를 둔다(showPage 가 바꾼다).
+  markHome(!!document.querySelector("#page-home.on"));
   // 라비 말풍선: 오늘 카드 수를 센다(카드 칸이 바뀔 때마다).
   const cards = $("rv-home-cards"), say = $("v2-ravi-t");
   const count = () => {

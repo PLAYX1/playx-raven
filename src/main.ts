@@ -38,7 +38,7 @@ import { wireTalkDm } from "./talk-dm";
 import { talkIdle, unreadPill, wireTalkDesk } from "./talk-desk";
 import { openReport as openTalkReport } from "./talk-report"; // 11-12 말풍선 「신고」 — 「문제 알리기」와 같은 길(report_send) // 11-12 카톡 PC·텔레그램 손버릇(찾기·Esc·말풍선 메뉴·새 메시지 N개) // 11-12 카톡 PC 처럼 — 친구·채팅·광장 + 이 창 안 쪽지(talk_dm.rs)
 import { homeSafety } from "./home-summary";
-import { wireDeskV2, paintV2Node, paintV2Krw, paintV2Mine, rememberTitles, V2_COPY } from "./desk-v2"; // 11-17 단순화 2판 첫 화면(시안 9-데스크탑)
+import { wireDeskV2, paintV2Node, paintV2Krw, paintV2Mine, rememberTitles, markHome, V2_COPY } from "./desk-v2"; // 11-17 단순화 2판 첫 화면(시안 9-데스크탑)
 import "./desk-v2.css";
 import { paintCards, type CardsInput, type CardOpen } from "./ravi-cards";
 import { wireChainInfoLazy } from "./chain-info-lazy";
@@ -5357,6 +5357,7 @@ function showPage(id: string) {
   rememberCompanionPage(id);
   raviHome?.page(id);
   document.body.classList.toggle("rv-talk-layout", id === "talk");
+  markHome(id === "home");
   if (id === "ravi" || id === "home") paintRavi();
   if (id === "home") void paintHome();
   if (id === "profile") void paintProfile();

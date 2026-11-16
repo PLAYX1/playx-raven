@@ -4042,6 +4042,8 @@
         <div class="v2-head">
           <h1>내 것</h1>
           <button id="v2-node" class="v2-node" type="button" data-tone="off" aria-live="polite"><i class="v2-dot" aria-hidden="true"></i><span id="v2-node-t">공개 장부 확인 중</span></button>
+          <!-- 11-17 알림 종: 안 본 이야기 글 + 백업·잠금 문제 수. 누르면 아래 「알림 · 할 일 · 최근 거래」 묶음을 펼친다(받은 쪽지·백업 경고 입구가 첫 화면에서 사라지지 않게). -->
+          <button id="v2-bell" class="v2-bell" type="button" aria-expanded="false" aria-controls="v2-old" aria-label="알림" title="알림"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg><span id="v2-bell-n" class="v2-bell-n" hidden>0</span></button>
         </div>
         <div class="v2-ravi" role="region" aria-label="라비">
           <span id="v2-ravi-face" class="v2-ravi-face" aria-hidden="true"></span>
@@ -4079,7 +4081,7 @@
             <button type="button" class="v2-link" data-v2-go="sales" data-seller-only hidden inert>판매 대금 받기</button>
           </div>
         </div>
-        <div class="v2-old" hidden>
+        <div class="v2-old" id="v2-old" hidden>
         <button id="rv-home-more" class="ghost" type="button">지갑 열기</button>
         <!-- DOM/Tab and two-column reading order: balance → safety → transactions → Ravi → sales → extras. -->
         <div class="rv-home-grid">
