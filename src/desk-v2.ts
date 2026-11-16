@@ -86,6 +86,8 @@ const COPY: Record<string, [string, string, string]> = {
   "안 되는 것이 있으면 여기서 알려 주세요": ["Tell us here if something does not work", "うまくいかないことがあればここで知らせてください", "如果有问题请在这里告诉我们"],
   "새긴 이름은 공개 장부에 남고, 적힌 RVN은 없어져요(소각). 증명서는 작품 한 점 안에서 고를 수 있어요.": ["The name stays on the public ledger and the RVN shown is burned. Certificates are chosen inside One artwork.", "刻んだ名前は公開台帳に残り、表示のRVNは消えます(焼却)。証明書は「作品1点」の中で選べます。", "写入的名称会留在公开账本上，所示 RVN 会被销毁。证书可在“一件作品”里选择。"],
   "레이븐볼트": ["RavenVault", "レイブンボルト", "RavenVault"],
+  "알림 · 할 일 · 최근 거래": ["Alerts · to do · recent", "お知らせ · やること · 最近の取引", "通知 · 待办 · 最近交易"],
+  "접기 ↑": ["Close ↑", "閉じる ↑", "收起 ↑"],
   "노드가 아직 준비되지 않았어요. 공개 장부를 다 받으면 새길 수 있어요. 적은 내용은 그대로 남아 있어요.": ["The node is not ready yet. You can record it once the public ledger is fully received. What you wrote stays here.", "ノードの準備がまだです。公開台帳をすべて受信すると刻めます。書いた内容はそのまま残ります。", "节点尚未就绪。公开账本全部接收后即可写入。已填写的内容会保留。"],
 };
 for (const [source, values] of Object.entries(COPY)) (["en", "ja", "zh"] as const).forEach((lang, n) => { (DICT[lang] ??= {})[source] ??= values[n]; });
@@ -191,7 +193,12 @@ export function paintV2Mine(rows: readonly V2Asset[], fmtQty: (n: number) => str
 
 /* ── 연결 ───────────────────────────────────────────────────────── */
 /** 첫 화면이면 body.v2-on-home — 왼쪽 아래 노드 줄·떠 있는 라비를 숨기는 기준(:has 없는 WebView 대비). */
-export function markHome(on: boolean): void { document.body.classList.toggle("v2-on-home", on); }
+let closeOld: (() => void) | null = null;
+export function markHome(on: boolean): void {
+  document.body.classList.toggle("v2-on-home", on);
+  // 다른 화면에 갔다 오면 펼친 알림 묶음은 접혀 있다(첫 화면은 늘 같은 모양).
+  if (!on) closeOld?.();
+}
 export type V2Deps = {
   showPage(id: string): void;
   openRavi(): void;
@@ -236,23 +243,24 @@ export function wireDeskV2(d: V2Deps): void {
   });
   const nav = $("v2-nav-node"); if (nav) nav.onclick = (e) => { e.preventDefault(); d.openNode(); };
   const rep = $("sx-report"); if (rep) rep.onclick = () => d.openReport();
-  // 알림 종: 안 본 이야기 글 수 + 백업·잠금 문제(빨강) 수. 누르면 옛 「알림 · 할 일 · 최근 거래 · 바로 가기」 묶음을 펼치고 접는다.
+  // 알림 종: 백업 확인 필요(주의·문제)·잠금 문제 수 — 안 본 이야기 글은 왼쪽 「이야기」 배지, 노드는 노드 줄이 이미 말한다(같은 것을 두 번 세지 않는다). 누르면 옛 「알림 · 할 일 · 최근 거래 · 바로 가기」 묶음을 펼치고 접는다.
   const bell = $("v2-bell"), bellN = $("v2-bell-n"), old = $("v2-old");
   const countBell = () => {
     if (!bell || !bellN) return;
-    const talk = document.getElementById("nav-talkbadge");
-    const talkN = talk && !talk.hidden ? Math.max(1, parseInt(talk.textContent || "0", 10) || 0) : 0;
-    const bad = document.querySelectorAll('#rv-home-safe [data-tone="bad"]').length;
-    const n = talkN + bad;
+    const n = document.querySelectorAll('#rv-home-lock-state[data-tone="bad"], #rv-home-backup-state:is([data-tone="bad"],[data-tone="warn"])').length;
     bellN.hidden = n === 0; bellN.textContent = n > 99 ? "99+" : String(n);
     const label = n ? tf(V2_COPY.bellN, n) : t(V2_COPY.bell);
     bell.setAttribute("aria-label", label); bell.title = label;
   };
-  if (bell && old) bell.onclick = () => {
-    old.hidden = !old.hidden;
-    bell.setAttribute("aria-expanded", String(!old.hidden));
-    if (!old.hidden) old.scrollIntoView({ behavior: "smooth", block: "start" });
+  const setOld = (open: boolean) => {
+    if (!bell || !old) return;
+    old.hidden = !open; bell.setAttribute("aria-expanded", String(open));
+    if (open) old.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+  if (bell) bell.onclick = () => setOld(!!old?.hidden);
+  // 펼치면 종이 화면 위로 올라가 안 보인다 — 묶음 맨 위에 「접기」 단추(어르신이 되돌아갈 곳).
+  const close = $("v2-old-close"); if (close) close.onclick = () => { setOld(false); bell?.focus(); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  closeOld = () => setOld(false);
   const watch = new MutationObserver(countBell);
   for (const id of ["nav-talkbadge", "rv-home-safe"]) { const el = $(id); if (el) watch.observe(el, { attributes: true, childList: true, subtree: true, characterData: true }); }
   countBell();

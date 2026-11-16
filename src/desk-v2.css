@@ -185,3 +185,7 @@ body.v2-on-home > nav .navfoot #d-sum-row, body.v2-on-home #ravi-launcher { disp
 #page-home .v2-head { overflow:visible; padding-top:4px; }
 /* 펼친 묶음의 「폰과 지갑 연결」은 내 돈 카드의 「폰 연결」과 같은 단추 — 둘을 보이지 않는다. */
 #page-home .v2-old .rv-home-balance { display:none !important; }
+/* 펼친 묶음: 옛 두 칸 격자(bal·act…)는 돈 칸을 뺀 자리가 비어 왼쪽이 통째로 빈다 — 한 줄씩 쌓는다. */
+#page-home .v2-old .rv-home-grid { display:flex !important; flex-direction:column; gap:14px; }
+#page-home .v2-old-top { display:flex; align-items:center; justify-content:space-between; margin:0 0 12px; }
+#page-home .v2-old-top h2 { margin:0; font-size:21px; font-weight:800; color:var(--v2-ink); }
