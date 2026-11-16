@@ -1,9 +1,22 @@
-//! Receiving mining rewards. Not mining.
+//! Mining — the app starts and stops the owner's own miner, and receives the rewards.
 //!
-//! ## Why this app does not mine
+//! 🔴 이 앱은 채굴을 한다. 「채굴 안 함」이 아니다 (2026-11-17 대표 확인).
+//!    채굴기 실행 파일만 앱에 같이 넣지 않고(백신 오탐·라이선스), 사장이 설치한
+//!    kawpowminer·t-rex·nbminer·gminer 를 찾아 **앱 안에서 켜고 끈다**
+//!    (`miner_start`·`miner_stop`, 아래 「채굴기 켜고 끄기」). 자동으로 켜지 않는다.
+//!
+//! What lives here:
+//! - `miner_start` / `miner_stop` / `miner_running` — run the installed miner as a
+//!   child process; quitting the app stops it.
+//! - `detect_gpu`, `gpu_presets`, `power_curve` — pick settings for this machine.
+//! - `known_pools`, `miner_command`, `mac_miners` — pool presets and where to get a miner.
+//! - `mining_address`, `mining_income`, `mining_status` — where rewards land, what came in.
+//! - `mining_reality` — what one machine would actually earn, computed, not asserted.
+//!
+//! ## Honest numbers, shown before the button
 //!
 //! Ravencoin uses KAWPOW, a GPU algorithm. Against a live network of roughly
-//! 694 TH/s, a single card is a rounding error and a laptop is less than that.
+//! 694 TH/s, a single card is a small share and a laptop is less than that.
 //!
 //! Apple Silicon *can* mine it — Thinminerpro and MacMiner implement KAWPOW in
 //! Metal — but at 0.5–2 MH/s against 45 MH/s for a mid-range NVIDIA card. That
@@ -12,17 +25,10 @@
 //! precisely, because "Macs cannot mine" is wrong and "Macs can mine" without
 //! the number is misleading in the other direction.
 //!
-//! And the machine matters more than the maths: a counter PC that is mining is
-//! a counter PC with a saturated GPU, a loud fan, and an order screen that
-//! stutters. The node and IPFS are meant to sit quietly and run a shop. Mining
-//! takes the whole machine. They are opposite kinds of program.
-//!
-//! ## What this does instead
-//!
-//! If the owner already has a mining rig, the only thing they need from this
-//! app is an address and a line to paste into their miner. Pool software sends
-//! the reward wherever it is told; nothing here has to run, and nothing here
-//! can go wrong.
+//! A counter PC that is mining has a saturated GPU, a loud fan, and an order
+//! screen that may stutter, so mining is never switched on automatically and the
+//! screen shows the expected income (`mining_reality`) next to the switch.
+//! An owner with a separate rig can also just point it at `mining_address`.
 //!
 //! Solo mining against this node is possible in principle — `getblocktemplate`
 //! and `submitblock` exist — but it needs a stratum proxy between the miner and
