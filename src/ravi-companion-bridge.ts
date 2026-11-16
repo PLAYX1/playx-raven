@@ -14,7 +14,8 @@ export async function mountCompanionBridge(){
     if(!initial?.settings)return;
     if(!initial.saved && localStorage.getItem('rv-ravi-start-off')==='1'){
       await invoke('companion_save',{value:{...initial.settings,greeting:false}});
-    }else if(initial.saved)localStorage.setItem('rv-ravi-start-off',initial.settings.greeting?'0':'1');
+    // 11-17 단순화 2판: 저장된 기본값(greeting:true)만으로 첫 화면 인사를 다시 켜지 않는다 — 끄는 쪽만 따라간다. 켜기는 트레이·설정에서 직접 고를 때(아래 listen).
+    }else if(initial.saved&&!initial.settings.greeting)localStorage.setItem('rv-ravi-start-off','1');
     await listen<{greeting:boolean}>('companion-settings',e=>{
       localStorage.setItem('rv-ravi-start-off',e.payload.greeting?'0':'1');
       const checkbox=document.querySelector<HTMLInputElement>('#ravi-agent-settings > label input');if(checkbox)checkbox.checked=!e.payload.greeting;

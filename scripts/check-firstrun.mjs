@@ -10,7 +10,7 @@ const compile = p => ts.transpileModule(read(p).replace(/^import .*;\n/gm, ''), 
 const sources = ['firstrun', 'ravi-panel', 'ravi-agent', 'pairing-ui'];
 const compiled = Object.fromEntries(sources.map(n => [n, compile(`src/${n}.ts`)]));
 const flush = async () => { for (let i=0;i<30;i++) await Promise.resolve(); };
-function fixture({ keyed=false, restart=false, greetingOff=false, waiting=null }={}) {
+function fixture({ keyed=false, restart=false, greetingOff=false, greetingUnset=false, waiting=null }={}) {
   const nodes=new Map(), calls=[], timers=new Map(), listeners=new Map(); let now=0, serial=0;
   class Element {
     constructor(tag='div') { this.tagName=tag; this.children=[]; this.hidden=false; this.attributes={}; this.events=new Map(); this.style={}; this.value=''; this.textContent=''; this.scrollHeight=600; this.clientHeight=200; this.scrollTop=0; this.classes=new Set(); this.classList={add:n=>this.classes.add(n),remove:n=>this.classes.delete(n),contains:n=>this.classes.has(n),toggle:(n,on)=>on?this.classes.add(n):this.classes.delete(n)}; }
@@ -36,7 +36,8 @@ function fixture({ keyed=false, restart=false, greetingOff=false, waiting=null }
   const document={body:new Element('body'),documentElement:new Element('html'),activeElement:null,getElementById:id=>nodes.get(id)||null,createElement:tag=>new Element(tag),createTextNode:text=>({textContent:text}),addEventListener:(k,f)=>listen(k,[...(listeners.get(k)?.all||[]),f]),removeEventListener:(k,f)=>listen(k,(listeners.get(k)?.all||[]).filter(g=>g!==f)),querySelector:()=>null};
   for(const id of ['page-settings','page-wallet','ravi-tools','chat-log','ravi-panel','ravi-launcher','chat-q','ravi-new','ravi-chatwrap','ravi-expand','rv-header-ravi','ravi-open','ravi-menu-open','ravi-collapse','ravi-announcement'])document.body.append(el(id));
   const storage=new Map(restart?[['ravenvault-ravi-panel','{"open":true,"large":true}'],['rv-companion-page','ravi']]:[]);
-  if(greetingOff)storage.set('rv-ravi-start-off','1');
+  // 11-17 단순화 2판: 시작 인사는 설정에서 켠 사람에게만(기본 꺼짐). 이 비행 막 시험은 켠 사람(값 '0')으로 돈다 — 기본값은 아래 따로 본다.
+  if(greetingOff)storage.set('rv-ravi-start-off','1');else if(!greetingUnset)storage.set('rv-ravi-start-off','0');
   const session=new Map(), store=m=>({getItem:k=>m.get(k)??null,setItem:(k,v)=>m.set(k,v)});
   const schedule=(f,ms,interval=false)=>{const id=++serial;timers.set(id,{f,at:now+ms,ms,interval});return id;};
   const invoke=async(name,args)=>{
@@ -88,6 +89,12 @@ for(const waiting of [{requests:0,pending:true,guestqr:[]},{requests:1,pending:f
 {
   const f=fixture();await flush();const bird=f.walk(f.document.body).find(n=>n.className==='ravi-arrival-bird');
   f.panel.open();bird.onclick();assert.equal(f.document.documentElement.hasAttribute('data-ravi-arriving'),false);await flush();assert.equal(f.panel.visible(),true,'skip releases only after immediate landing');
+}
+{
+  // 11-17: 아무것도 안 고른 첫 실행 = 「짜잔!」 덮개가 아예 없다(첫 화면에 팝업 없음).
+  const f=fixture({greetingUnset:true});await f.advance(60000);
+  assert.equal(f.walk(f.document.body).some(n=>n.className==='ravi-arrival'),false,'default first run has no greeting overlay');
+  assert.equal(f.document.documentElement.hasAttribute('data-ravi-arriving'),false);
 }
 {
   const f=fixture({greetingOff:true,restart:true});await f.advance(60000);
@@ -184,7 +191,8 @@ if (process.argv.includes('--browser')) {
       assert.deepEqual(errors,[]);
       assert.equal(await page.evaluate(()=>window.__FIRST_CALLS.some(n=>['pairing_request_open','pairing_show_qr','send_rvn','send_asset'].includes(n))),false);
       await page.evaluate(()=>cancelAnimationFrame(window.__FIRST_FRAME));
-      await page.click('#ravi-launcher');
+      // 11-17: 첫 화면은 떠 있는 라비 대신 「라비 한 줄」 말풍선이 라비를 연다(얼굴 하나).
+      await page.evaluate(()=>{const say=document.getElementById('v2-ravi-say');(say&&say.getClientRects().length?say:document.getElementById('ravi-launcher')).click();});
       assert.equal(await page.$eval('#ravi-panel',el=>!!el.getClientRects().length),true);
       await context.close();
     }

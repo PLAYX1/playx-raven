@@ -21,9 +21,10 @@ const defaults = (): Consent => ({ reviewed: false, balance: false, transactions
 export function shouldGreet(local: Pick<Storage, "getItem">, session: Pick<Storage, "getItem" | "setItem">): boolean {
   if (greeted) return false;
   try {
-    if (local.getItem(GREETING_OFF) === "1" || session.getItem(GREETING_SESSION) === "1") return false;
+    // 11-17 단순화 2판(대표 승인): 첫 화면에 팝업 없음 — 「짜잔!」 인사는 설정에서 켠 사람(GREETING_OFF="0")에게만.
+    if (local.getItem(GREETING_OFF) !== "0" || session.getItem(GREETING_SESSION) === "1") return false;
     session.setItem(GREETING_SESSION, "1");
-  } catch { /* The in-memory guard still limits this process to once. */ }
+  } catch { greeted = true; return false; } // 저장소를 못 쓰면 켰는지 모른다 — 기본(꺼짐)으로 본다.
   greeted = true;
   return true;
 }
@@ -98,7 +99,7 @@ export function createRaviAgentUI(api: { invoke: Invoke; keyed(): string | null;
     try { consent = (await api.invoke<Consent | null>("ravi_consent")) ?? defaults(); } catch { consent = defaults(); } // 빈 답(옛 판·가짜 IPC)에도 죽지 않는다
     host.replaceChildren(privacyForm(consent, async value => { await api.invoke("ravi_consent_save", { consent: value }); consent = value; }));
     const off = document.createElement("label"), input = document.createElement("input"); input.type = "checkbox";
-    try { input.checked = localStorage.getItem(GREETING_OFF) === "1"; } catch { /* optional storage */ }
+    try { input.checked = localStorage.getItem(GREETING_OFF) !== "0"; } catch { /* optional storage */ }
     input.onchange = () => { try { localStorage.setItem(GREETING_OFF, input.checked ? "1" : "0"); } catch { input.checked = false; } };
     off.append(input, document.createTextNode("시작 인사 끄기")); host.append(off);
     const log = document.createElement("pre"); log.className = "ravi-audit"; log.setAttribute("aria-live", "polite");

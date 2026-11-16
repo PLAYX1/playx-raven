@@ -58,13 +58,16 @@ const button = (n,text) => walk(n).find(x=>x.tagName==='button'&&x.textContent==
 const textOf = n => walk(n).map(x=>x.textContent).join('\n');
 
 let f=fixture();
+// 11-17 단순화 2판: 첫 화면에 팝업 없음 — 아무것도 안 고르면 인사하지 않는다. 설정에서 켠 사람('0')에게만.
+assert.equal(f.exports.shouldGreet(f.local,f.session),false,'default: no greeting popup');
+f.local.setItem(f.exports.GREETING_OFF,'0');
 assert.equal(f.exports.shouldGreet(f.local,f.session),true);
 assert.equal(f.exports.shouldGreet(f.local,f.session),false);
 let fresh=fixture({session:f.session}); assert.equal(fresh.exports.shouldGreet(fresh.local,fresh.session),false,'session survives controller reload');
 f=fixture(); f.local.setItem(f.exports.GREETING_OFF,'1'); assert.equal(f.exports.shouldGreet(f.local,f.session),false);
 f.local.setItem(f.exports.GREETING_OFF,'0'); assert.equal(f.exports.shouldGreet(f.local,f.session),true);
 f=fixture();const unavailable={getItem(){throw Error('disabled');},setItem(){throw Error('disabled');}};
-assert.equal(f.exports.shouldGreet(unavailable,unavailable),true);assert.equal(f.exports.shouldGreet(unavailable,unavailable),false);
+assert.equal(f.exports.shouldGreet(unavailable,unavailable),false,'storage unavailable: no greeting');
 assert.equal(f.exports.todayLines({wallet:'locked',wallet_balance:{confirmed:123}}).length,1);
 assert.ok(!f.exports.todayLines({wallet:'locked',wallet_balance:{confirmed:123}}).join('').includes('123'));
 assert.match(f.exports.todayLines({}).join(''),/데이터 없음/);
@@ -72,7 +75,7 @@ assert.match(f.exports.todayLines({wallet:'open',wallet_balance:{status:'ok',con
 assert.ok(!f.exports.todayLines({wallet:'open'}).join('').includes('0 RVN'));
 console.log('PASS arrival once/session, opt-out, storage failure fallback, truthful and locked summaries');
 
-f=fixture();let ui=f.exports.createRaviAgentUI(f.api);await flush();ui.start();ui.start();await flush();
+f=fixture();f.local.setItem(f.exports.GREETING_OFF,'0');let ui=f.exports.createRaviAgentUI(f.api);await flush();ui.start();ui.start();await flush();
 assert.equal(f.body.children.length,1); assert.match(textOf(f.body),/짜잔! 오늘 어땠어요/);assert.match(textOf(f.body),/잠금을 풀면/);
 assert.ok(!f.calls.some(c=>c.name==='ravi_greeting'));
 const toolButtons=walk(f.nodes.get('ravi-tools')).filter(n=>n.tagName==='button');assert.equal(toolButtons.length,8);
