@@ -1,5 +1,23 @@
 # 변경 기록
 
+## 0.9.41
+
+### 한국어
+
+- **첫 화면이 단순해졌습니다:** 왼쪽 메뉴가 지갑 · 장터 · 이야기 · 동네 가게 순서입니다. 지갑 첫 화면에는 라비 한 줄, 오늘 할 일(최대 3개), 내 돈, 새 자산 만들기, 보관함이 차례로 나옵니다.
+- **라비에게 말로 시키기:** 첫 화면 라비 한 줄 오른쪽 마이크를 눌러 말하면 됩니다. 라비는 준비만 하고, 보내기·올리기는 직접 누릅니다.
+- **알림 종:** 백업 확인·잠금 문제처럼 꼭 볼 것만 셉니다. 누르면 알림·할 일·최근 거래가 펼쳐집니다.
+- **저절로 뜨는 창을 없앴습니다:** 처음 켤 때 묻는 창이 갑자기 나타나지 않습니다.
+- **공개 장부를 받는 중일 때:** 자산 만들기를 누르면 영어 오류 대신 쉬운 안내가 나옵니다.
+
+### English
+
+- **A simpler home:** The left menu is now Wallet · Market · Talk · Local shops. The Wallet home shows one Ravi line, today's tasks (up to 3), your money, Create a new asset and your Library.
+- **Ask Ravi by voice:** Press the mic at the right of the Ravi line and speak. Ravi only prepares; you press send or publish yourself.
+- **Notification bell:** Counts only what you must see, such as backup checks and lock problems. Press it to open notifications, tasks and recent activity.
+- **No more pop-ups on start:** Questions no longer appear on their own when you open the app.
+- **While the public ledger is downloading:** Creating an asset now shows a plain message instead of an English error.
+
 ## 0.9.40
 
 ### 한국어
