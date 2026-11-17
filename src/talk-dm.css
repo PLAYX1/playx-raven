@@ -12,6 +12,10 @@ main:has(> #page-talk.on) { padding:0 !important; }
 @media (max-width:1240px) { #page-talk .talkwrap { grid-template-columns:288px minmax(0,1fr) auto; } }
 #page-talk .rv-person { display:none; width:300px; box-sizing:border-box; }
 #page-talk.infoon .rv-person { display:block; }
+/* 11-17 대표 「오른쪽 팝업이 안 사라진다」 — 좁은 창에서 덮는 칸이라 닫기 단추를 늘 둔다(Esc·정보 단추 말고도). */
+#page-talk .rv-person { position:relative; }
+#page-talk .rv-person-x { position:absolute; top:12px; right:12px; width:44px; height:44px; min-height:44px; padding:0; border:0; border-radius:50%; background:transparent; color:var(--muted); display:grid; place-items:center; cursor:pointer; }
+#page-talk .rv-person-x:hover { background:var(--line); color:inherit; }
 @media (max-width:1320px) { #page-talk.infoon .rv-person { position:absolute; top:0; right:0; bottom:0; z-index:8; box-shadow:-12px 0 32px #0002; } }
 
 /* 세 칸 탭(친구 · 채팅 · 광장) */

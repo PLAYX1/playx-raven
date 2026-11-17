@@ -99,7 +99,8 @@ main #page-home.on { background:var(--v2-page); margin:-0px; }
 #page-home .v2-money-top h2 { margin:0; font-size:16px; font-weight:500; color:rgba(255,255,255,.82); }
 #page-home .v2-money .v2-link { color:#fff !important; }
 #page-home .v2-money .overview-values { display:flex; align-items:baseline; flex-wrap:wrap; gap:4px 12px; margin:0; }
-#page-home .v2-money #overview-balance { font-size:40px; line-height:1.1; font-weight:800; letter-spacing:-0.02em; color:#fff; overflow-wrap:anywhere; }
+#page-home .v2-money .overview { min-width:0; }
+#page-home .v2-money #overview-balance { min-width:0; max-width:100%; font-size:40px; line-height:1.1; font-weight:800; letter-spacing:-0.02em; color:#fff; overflow-wrap:anywhere; }
 #page-home .v2-money #overview-balance.unknown { font-size:26px; }
 #page-home .v2-money .v2-krw { font-size:16px; color:rgba(255,255,255,.88); white-space:nowrap; }
 #page-home .v2-money #overview-incoming-row.v2-incoming { display:block; font-size:15px; line-height:1.4; color:rgba(255,255,255,.88); }

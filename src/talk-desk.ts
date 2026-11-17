@@ -87,6 +87,14 @@ export function wireTalkDesk(d: DeskDeps) {
   const info = $("tk-info");
   const paintInfo = () => info?.setAttribute("aria-pressed", String(page.classList.contains("infoon")));
   info?.addEventListener("click", () => { page.classList.toggle("infoon"); paintInfo(); });
+  $("rv-person-close")?.addEventListener("click", () => { page.classList.remove("infoon"); paintInfo(); });
+  // 좁은 창(칸이 글 위를 덮을 때)은 칸 밖을 누르면 닫는다.
+  page.addEventListener("click", (ev) => {
+    if (!page.classList.contains("infoon") || innerWidth > 1320) return;
+    const t = ev.target as HTMLElement | null;
+    if (!t || t.closest(".rv-person, #tk-info, [data-person]")) return;
+    page.classList.remove("infoon");
+  });
   new MutationObserver(paintInfo).observe(page, { attributes: true, attributeFilter: ["class"] });
   if (info) { info.title = t("정보"); }
   const more = $("tk-more");

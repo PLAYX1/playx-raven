@@ -214,6 +214,7 @@ export type V2Deps = {
 };
 export function wireDeskV2(d: V2Deps): void {
   const $ = (id: string) => document.getElementById(id);
+  fitBalance();
   $("v2-ravi-face")?.replaceChildren(d.face());
   const ravi = $("v2-ravi-say"); if (ravi) ravi.onclick = () => d.openRavi();
   const mic = $("v2-ravi-mic");
@@ -277,4 +278,28 @@ export function wireDeskV2(d: V2Deps): void {
   };
   if (cards) new MutationObserver(count).observe(cards, { childList: true });
   count();
+}
+
+/**
+ * 11-17 대표 「지갑에 돈이 칸을 넘어간다」(1,653,413.69505… RVN) — 숫자가 칸보다 길면 글자를 줄여 한 줄에 맞춘다(40px → 최소 18px).
+ * 숫자가 바뀌거나 창 크기가 바뀔 때마다 다시 잰다. 자르지 않는다(돈 숫자는 끝까지 보여야 한다).
+ */
+function fitBalance(): void {
+  const el = document.getElementById("overview-balance");
+  const box = el?.parentElement;
+  if (!el || !box) return;
+  let busy = false;
+  const fit = () => {
+    if (busy) return; busy = true;
+    el.style.fontSize = "";
+    el.style.whiteSpace = "nowrap";
+    const max = parseFloat(getComputedStyle(el).fontSize) || 40;
+    const room = box.clientWidth;
+    if (room > 0 && el.scrollWidth > room) el.style.fontSize = Math.max(18, Math.floor(max * room / el.scrollWidth)) + "px";
+    if (el.scrollWidth > room) el.style.whiteSpace = "";
+    busy = false;
+  };
+  new MutationObserver(fit).observe(el, { childList: true, characterData: true, subtree: true });
+  new ResizeObserver(fit).observe(box);
+  fit();
 }
