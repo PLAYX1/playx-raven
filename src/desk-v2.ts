@@ -1,5 +1,5 @@
 /**
- * 11-17 레이븐볼트 단순화 2판 — 데스크탑 첫 화면 「내 것」(대표 「다 진행하자」 · 시안 debate/shots2/9-데스크탑.png).
+ * 11-17 레이븐볼트 단순화 2판 — 데스크탑 첫 화면 「지갑」(페이블 판정: 「내 것」→「지갑」, 묶음 이름 「보관함」 · 폰과 같은 말)(대표 「다 진행하자」 · 시안 debate/shots2/9-데스크탑.png).
  *
  * 이 파일은 **화면 배치·문구만** 맡는다. 노드·지갑·채굴·발행 동작은 main.ts 의 기존 함수를 부를 뿐이다.
  *  - 맨 위 「라비 한 줄」: 라비 얼굴(이 화면에 하나) + 말풍선 「오늘 할 일 N개 · …처럼 말해도 돼요」 + 마이크.
@@ -32,7 +32,7 @@ export const V2_COPY = {
   krw: "약 {0}원",
   krwUnknown: "원화 환산 확인 중",
   wait: "장부 다 받으면 켜져요",
-  mineTitle: "내 것 {0}개",
+  mineTitle: "보관함 {0}개",
   mineEmpty: "아직 가진 것이 없어요. 위 「새 자산 만들기」나 장터에서 시작해요.",
   made: "만든 것",
   got: "받은 것 · 산 것",
@@ -58,7 +58,7 @@ const COPY: Record<string, [string, string, string]> = {
   [V2_COPY.krw]: ["about ₩{0}", "約{0}ウォン", "约 {0} 韩元"],
   [V2_COPY.krwUnknown]: ["Checking won value", "ウォン換算を確認中", "正在确认韩元换算"],
   [V2_COPY.wait]: ["Turns on once the ledger is in", "台帳を受信すると使えます", "账本接收完后开启"],
-  [V2_COPY.mineTitle]: ["My things: {0}", "自分のもの {0}個", "我的物品 {0} 个"],
+  [V2_COPY.mineTitle]: ["Library: {0}", "保管庫 {0}個", "资料库 {0} 个"],
   [V2_COPY.mineEmpty]: ["Nothing here yet. Start with “New asset” above or the market.", "まだ持っているものがありません。上の「新しいアセット」かマーケットから始めましょう。", "还没有物品。从上面的“新建资产”或市场开始吧。"],
   [V2_COPY.made]: ["Made", "作ったもの", "我做的"],
   [V2_COPY.got]: ["Received · bought", "受け取った・買ったもの", "收到的 · 买的"],
@@ -67,6 +67,8 @@ const COPY: Record<string, [string, string, string]> = {
   [V2_COPY.noMic]: ["Speaking is off on this computer for now. Please type in Ravi's window.", "このコンピューターでは音声入力がまだオフです。ラビの窓に文字で書いてください。", "这台电脑暂时没有开启语音。请在拉比窗口里打字。"],
   [V2_COPY.syncBlock]: ["You can record it once the public ledger is fully received. What you wrote stays here.", "公開台帳をすべて受信すると刻めます。書いた内容はそのまま残ります。", "公开账本全部接收后即可写入。已填写的内容会保留。"],
   "내 것": ["My things", "自分のもの", "我的"],
+  "지갑": ["Wallet", "ウォレット", "钱包"],
+  "보관함": ["Library", "保管庫", "资料库"],
   "내 돈": ["My money", "自分のお金", "我的钱"],
   "기록 ›": ["History ›", "記録 ›", "记录 ›"],
   "모두 보기 ›": ["See all ›", "すべて見る ›", "查看全部 ›"],
