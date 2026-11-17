@@ -1,5 +1,17 @@
 # 변경 기록
 
+## 0.9.42
+
+### 한국어
+
+- **이야기 오른쪽 정보 칸이 닫힙니다:** 창이 좁아 칸이 글을 덮을 때 칸 밖을 누르면 닫히고, 오른쪽 위 닫기(✕) 단추도 생겼습니다.
+- **잔액 숫자가 칸을 넘지 않습니다:** 「내 돈」 숫자가 길면 글자를 줄여 칸 안에 한 줄로 보여 줍니다. 숫자는 자르지 않습니다.
+
+### English
+
+- **The info panel in Talk now closes:** In a narrow window, click outside the panel to close it; there is also a close (✕) button at the top right.
+- **The balance stays inside its card:** A long "Your money" number now shrinks to fit on one line. Digits are never cut off.
+
 ## 0.9.41
 
 ### 한국어
