@@ -1,5 +1,17 @@
 # 변경 기록
 
+## 0.9.43
+
+### 한국어
+
+- **메시지 소리가 「레볼!」로 바뀝니다:** 쪽지나 방에 새 글이 오면 라비 목소리로 「레볼!」(레이븐볼트의 애칭) 하고 울립니다. 컴퓨터 알림의 기본 소리는 끄고 이 소리 하나만 냅니다. 알림을 끈 방은 울리지 않습니다. (AI 음성)
+- **노드가 「장부 여는 중」에서 멈췄을 때 고칠 수 있습니다:** 30분 넘게 기록이 그대로면 「장부 다시 만들기」 단추가 나옵니다. 누르면 멈춘 노드를 끄고 장부를 다시 계산합니다. 블록은 다시 받지 않고, 지갑과 코인은 그대로입니다. 몇 시간 걸립니다.
+
+### English
+
+- **New message sound "Revol!":** When a new message or room post arrives, Ravi says "Revol!" (RavenVault's nickname). The system notification sound is turned off so you hear only this one. Muted rooms stay silent. (AI voice)
+- **Fix a node stuck at "Opening the ledger":** If nothing is logged for over 30 minutes, a "Rebuild ledger" button appears. It stops the stuck node and recalculates the ledger. Blocks are not downloaded again, and your wallet and coins stay as they are. It takes a few hours.
+
 ## 0.9.42
 
 ### 한국어

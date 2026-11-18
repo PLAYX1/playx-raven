@@ -855,6 +855,7 @@ pub fn run() {
             reindex_run::chain_broken,
             node_boot::node_boot_progress,
             reindex_run::chain_heal,
+            reindex_run::chain_heal_stalled,
             prep::pc_prepare,
             resources::start_disk_check,
             setupflow::shop_setup,

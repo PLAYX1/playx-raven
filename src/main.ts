@@ -2227,7 +2227,27 @@ function bootLine(b: NodeBoot | null, msg = ""): string {
 function bootReportButton(): string {
   return `<button class="ghost" id="nd-stuck" style="margin-top:10px;white-space:nowrap;flex-shrink:0">${copyHtml("기록과 함께 알리기")}</button>`;
 }
+/** 「장부 여는 중」에서 이만큼 기록이 없으면 「장부 다시 만들기」를 내민다(정상이면 몇 분 · 느린 디스크도 30분 안). */
+const BOOT_HEAL_SECS = 30 * 60;
 function bindBootReport(b: NodeBoot) {
+  document.getElementById("nd-boot-heal")?.addEventListener("click", async () => {
+    const ok = await sure(
+      t("장부를 다시 만들까요?"),
+      t("몇 시간 걸릴 수 있습니다. 그동안 결제 확인이 안 됩니다. 블록 파일은 다시 받지 않고, 지갑과 코인은 그대로입니다.")
+    );
+    if (!ok) return;
+    const btn = document.getElementById("nd-boot-heal") as HTMLButtonElement | null;
+    if (btn) btn.disabled = true;
+    const say = document.getElementById("nd-boot-heal-say");
+    if (say) say.textContent = t("멈춘 노드를 끄고 다시 켜는 중…");
+    try {
+      const r = await invoke<any>("chain_heal_stalled");
+      if (say) say.textContent = String(r?.note || t("시작했습니다."));
+    } catch (e) {
+      if (btn) btn.disabled = false;
+      if (say) say.innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
+    }
+  });
   document.getElementById("nd-stuck")?.addEventListener("click", () => {
     const text = b.exited && b.error_say
       ? tf("노드가 오류를 남기고 멈췄어요: {0}", t(b.error_say))
@@ -2244,9 +2264,13 @@ function bootTroubleHtml(b: NodeBoot | null): string {
       bootReportButton();
   }
   if (b.booting && b.stalled) {
+    // 11-18 윈도우 신고 2건: 「장부(코인 상태) 여는 중」에서 15~23시간 멈춤 → 30분 넘게 그대로면 장부 다시 만들기를 내민다.
+    const heal = b.phase === "chainstate" && (b.quiet_secs ?? 0) >= BOOT_HEAL_SECS;
     return `<div class="meta" style="margin-top:10px;color:var(--warn)">${escapeHtml(tf("노드 기록이 {0}째 그대로예요 · 마지막 단계: {1}", durText(b.quiet_secs), t(b.say || "켜기 시작")))}</div>` +
-      `<p class="meta">${copyHtml("느린 디스크라도 보통 몇 분 안에 다음 줄이 나와요. 멈춘 것 같으면 기록과 함께 알려 주세요.")}</p>` +
-      bootReportButton();
+      (heal
+        ? `<p class="meta">${copyHtml("장부(코인 상태) 파일이 상해서 멈춘 것 같아요. 장부를 다시 만들면 고쳐져요. 블록은 다시 받지 않고 계산만 다시 해요. 몇 시간 걸리고, 지갑과 코인은 그대로예요.")}</p>` +
+          `<div class="row" style="margin-top:10px;gap:8px;flex-wrap:wrap"><button id="nd-boot-heal" style="white-space:nowrap;flex-shrink:0">${copyHtml("장부 다시 만들기")}</button>${bootReportButton()}</div><span class="meta" id="nd-boot-heal-say"></span>`
+        : `<p class="meta">${copyHtml("느린 디스크라도 보통 몇 분 안에 다음 줄이 나와요. 멈춘 것 같으면 기록과 함께 알려 주세요.")}</p>` + bootReportButton());
   }
   return "";
 }
@@ -18980,7 +19004,12 @@ function 대화알림켜짐(): boolean {
 ///    한 번이다. 말은 나중에 읽어도 되고, 두 번 부르는 순간 이것도 「돈이
 ///    들어왔나」로 읽힌다. 못 들은 사람을 위해서는 소리 대신 **왼쪽 숫자**가
 ///    남는다 — 지나간 소리를 대신 들고 있는 자리다.
+let 말소리마지막 = 0;
 function 말소리() {
+  // 한꺼번에 여러 방·쪽지가 와도 3초에 한 번만.
+  const 지금 = Date.now();
+  if (지금 - 말소리마지막 < 3000) return;
+  말소리마지막 = 지금;
   const ctx = 소리준비();
   if (!ctx) return;
   // 🔴 주문 소리와 **같은 병**이다. 잠긴 채로 예약하면 이미 지나간 시각에
@@ -18992,13 +19021,30 @@ function 말소리() {
   말소리내기(ctx);
 }
 
+/**
+ * 11-18 대표: 메시지 소리 = 라비 목소리 「레볼!」(레이븐볼트 애칭 · Supertonic 3 F1 · 0.908 · ×1.1553 · 0.38초 · AI 음성).
+ * 주문 소리(659·880 두 음)와는 그대로 갈린다. 파일을 못 읽으면 예전 낮은 솔 한 음으로.
+ */
+let 레볼소리: AudioBuffer | null = null;
+let 레볼읽기: Promise<AudioBuffer | null> | null = null;
+function 레볼준비(ctx: AudioContext): Promise<AudioBuffer | null> {
+  레볼읽기 ??= fetch("/sounds/revol.mp3").then((r) => r.arrayBuffer()).then((b) => ctx.decodeAudioData(b))
+    .then((buf) => (레볼소리 = buf)).catch(() => { 레볼읽기 = null; return null; });
+  return 레볼읽기;
+}
 function 말소리내기(ctx: AudioContext) {
-  try {
-    // 392 = 낮은 솔. 주문의 659·880 보다 한참 아래라 곁눈으로도 갈린다.
-    한음(ctx, ctx.currentTime + 0.02, 392.0, 0.34, 0.12);
-  } catch {
-    // 소리가 안 나도 왼쪽 숫자는 남는다. 여기서 던지면 그것까지 죽는다.
-  }
+  const 틀기 = (buf: AudioBuffer | null) => {
+    try {
+      if (!buf) { 한음(ctx, ctx.currentTime + 0.02, 392.0, 0.34, 0.12); return; }
+      const 소스 = ctx.createBufferSource(), 크기 = ctx.createGain();
+      소스.buffer = buf; 크기.gain.value = 0.9;
+      소스.connect(크기).connect(ctx.destination);
+      소스.start(ctx.currentTime + 0.02);
+    } catch {
+      // 소리가 안 나도 왼쪽 숫자는 남는다. 여기서 던지면 그것까지 죽는다.
+    }
+  };
+  if (레볼소리) 틀기(레볼소리); else void 레볼준비(ctx).then(틀기);
 }
 
 // ── 같은 글에 두 번 울리지 않게 ───────────────────────────────────────
@@ -19075,7 +19121,9 @@ function 방알림단추그리기() {
 
 /** 컴퓨터 알림(macOS·Windows). 실패는 조용히 — 앱 안 소리·배지가 남는다. */
 function tkOsNotify(kind: "room" | "reply" | "dm", room: string, from: string, count: number) {
-  void invoke("talk_os_notify", { kind, room, from, count, locale: lang, sound: true }).catch(() => {});
+  // 11-18 소리는 「레볼!」 하나만 — 컴퓨터 알림의 기본음(Ping·Default)은 끄고 앱이 직접 낸다(두 번 울리지 않게).
+  void invoke("talk_os_notify", { kind, room, from, count, locale: lang, sound: false }).catch(() => {});
+  if (kind === "dm") 말소리();
 }
 
 function 대화살피기(room: string, list: any[]) {

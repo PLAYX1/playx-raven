@@ -546,6 +546,32 @@ pub async fn chain_heal() -> Result<Value, String> {
     }))
 }
 
+/// 11-18 윈도우 신고: 「장부(코인 상태) 여는 중」에서 몇 시간째 한 줄도 없이 멈춘 노드.
+/// 멈춘 노드는 RPC 에 답하지 않고, 앞선 실행에서 띄워 이 앱이 모르는 프로세스일 수도 있다 —
+/// 그래서 **켜지는 중이고 기록이 30분 넘게 그대로일 때만** 이름으로 끄고(ravend 만 · raven-qt 는 안 건드림)
+/// `chain_heal` 과 같은 길로 계산을 다시 한다.
+#[tauri::command]
+pub async fn chain_heal_stalled() -> Result<Value, String> {
+    let boot = crate::node_boot::node_boot_progress();
+    let stalled = boot["booting"].as_bool().unwrap_or(false)
+        && boot["quiet_secs"].as_i64().unwrap_or(0) >= 30 * 60;
+    if !stalled {
+        return Err("노드가 멈춘 상태가 아닙니다. 조금 더 기다려 주세요.".into());
+    }
+    let _ = crate::services::services_stop();
+    #[cfg(target_os = "windows")]
+    {
+        let _ = crate::quiet::cmd("taskkill").args(["/IM", "ravend.exe", "/F"]).status();
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = crate::quiet::cmd("pkill").args(["-x", "ravend"]).status();
+    }
+    // 끝난 프로세스가 장부 폴더 잠금을 놓을 틈.
+    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+    chain_heal().await
+}
+
 #[cfg(test)]
 mod heal_tests {
     /// 🔴 **`-reindex` 가 아니라 `-reindex-chainstate`** 여야 한다.

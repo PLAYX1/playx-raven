@@ -5745,3 +5745,20 @@ for (const [source, values] of Object.entries(TALK_SOCIAL_COPY)) {
 for (const [source, values] of Object.entries(TALK_DESK_COPY)) {
   (["en", "ja", "zh"] as const).forEach((language, index) => { DICT[language][source] ??= values[index]; });
 }
+// 11-18 노드가 「장부(코인 상태) 여는 중」에서 30분 넘게 멈췄을 때 — 장부 다시 만들기(src/main.ts bootTroubleHtml). 이미 있는 번역은 덮지 않는다.
+for (const [source, values] of Object.entries({
+  "장부(코인 상태) 파일이 상해서 멈춘 것 같아요. 장부를 다시 만들면 고쳐져요. 블록은 다시 받지 않고 계산만 다시 해요. 몇 시간 걸리고, 지갑과 코인은 그대로예요.": [
+    "The ledger (coin state) file looks damaged, so the node stopped. Rebuilding the ledger fixes it. Blocks are not downloaded again; only the calculation is redone. It takes a few hours, and your wallet and coins stay as they are.",
+    "台帳（コインの状態）ファイルが傷んで止まったようです。台帳を作り直すと直ります。ブロックは再ダウンロードせず、計算だけをやり直します。数時間かかりますが、ウォレットとコインはそのままです。",
+    "账本（币状态）文件似乎已损坏，因此节点停住了。重建账本即可修复。不会重新下载区块，只重新计算。需要几个小时，钱包和币保持不变。"],
+  "장부 다시 만들기": ["Rebuild ledger", "台帳を作り直す", "重建账本"],
+  "장부를 다시 만들까요?": ["Rebuild the ledger?", "台帳を作り直しますか？", "要重建账本吗？"],
+  "몇 시간 걸릴 수 있습니다. 그동안 결제 확인이 안 됩니다. 블록 파일은 다시 받지 않고, 지갑과 코인은 그대로입니다.": [
+    "This can take a few hours. Payments cannot be confirmed in the meantime. Block files are not downloaded again, and your wallet and coins stay as they are.",
+    "数時間かかることがあります。その間は支払いの確認ができません。ブロックファイルは再ダウンロードせず、ウォレットとコインはそのままです。",
+    "可能需要几个小时。在此期间无法确认付款。不会重新下载区块文件，钱包和币保持不变。"],
+  "멈춘 노드를 끄고 다시 켜는 중…": ["Stopping the stuck node and starting it again…", "止まったノードを終了して起動し直しています…", "正在关闭卡住的节点并重新启动…"],
+  "노드가 멈춘 상태가 아닙니다. 조금 더 기다려 주세요.": ["The node is not stuck. Please wait a little longer.", "ノードは止まっていません。もう少しお待ちください。", "节点没有卡住。请再等一会儿。"],
+} as Record<string, [string, string, string]>)) {
+  (["en", "ja", "zh"] as const).forEach((language, index) => { DICT[language][source] ??= values[index]; });
+}
