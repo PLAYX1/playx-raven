@@ -109,13 +109,19 @@ pub async fn nostr_publish(event: Value) -> Result<Value, String> {
     Ok(json!({ "ok": ok, "failed": failed }))
 }
 
-/// 11-23 비공개 글·열쇠 꾸러미 올리기 — **모든 릴레이 답**을 기다려 (받은 곳, 안 받은 곳)을 돌려준다(폰 publish {all:true}).
-/// 이웃 전파(relay_share::forward)는 하지 않는다. 이 컴퓨터 릴레이에는 바로 둔다.
+/// 11-23 대표 결정: PLAY X 릴레이(N100)는 남의 「나만·친구만」을 받지 않는다 → 비공개 글·꾸러미는 **공용 릴레이에만**(폰과 같다).
+/// 이 컴퓨터 릴레이(주인 글 지키기)에는 따로 바로 둔다.
+fn private_targets() -> Vec<String> {
+    RELAYS.iter().filter(|u| !u.contains("playx.")).map(|s| s.to_string()).collect()
+}
+
+/// 11-23 비공개 글·열쇠 꾸러미 올리기 — 공용 릴레이 **모든 답**을 기다려 (받은 곳, 안 받은 곳)을 돌려준다(폰 publish {all:true}).
+/// 받은 곳·안 받은 곳은 공용 릴레이 기준이다. 이웃 전파(relay_share::forward)는 하지 않는다. 이 컴퓨터 릴레이에는 바로 둔다.
 pub(crate) async fn publish_private_all(event: Value) -> Result<(Vec<String>, Vec<String>), String> {
     validate_private_event(&event)?;
     crate::relay::absorb(vec![event.clone()]);
     let msg = serde_json::to_string(&json!(["EVENT", event])).map_err(|e| format!("보낼 것을 만들지 못했습니다: {e}"))?;
-    let runs = targets().into_iter().map(|url| { let msg = msg.clone(); async move { let r = send_one(&url, &msg).await; (url, r) } });
+    let runs = private_targets().into_iter().map(|url| { let msg = msg.clone(); async move { let r = send_one(&url, &msg).await; (url, r) } });
     let (mut ok, mut refused) = (Vec::new(), Vec::new());
     for (url, r) in futures_util::future::join_all(runs).await {
         if r.is_ok() { ok.push(url) } else { refused.push(url) }
@@ -152,6 +158,12 @@ mod tests {
     use super::*;
 
     /// 11-23 비공개 글(4470)·열쇠 꾸러미는 이 컴퓨터 안 길로만 올린다 — 바깥 중계 검사는 거절한다.
+    #[test]
+    fn private_events_go_only_to_public_relays() {
+        let t = private_targets();
+        assert_eq!(t, vec!["wss://relay.damus.io", "wss://nos.lol", "wss://relay.primal.net"]);
+        assert!(!t.iter().any(|u| u.contains("playx") || u.starts_with("ws://127.0.0.1")), "PLAY X 릴레이·이 컴퓨터 릴레이는 발행 대상이 아니다(이 컴퓨터는 absorb 로 따로)");
+    }
     #[test]
     fn private_events_only_through_the_inside_path() {
         let mut sk = [0u8; 32];
