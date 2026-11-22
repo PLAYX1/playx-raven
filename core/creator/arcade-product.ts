@@ -35,6 +35,14 @@ import { signMessageWithKeyForTest } from '../signer/test-key';
  *   · x.arcade: 1단계는 혼자 하기·네트워크 없음만 받는다(mode 'solo', network 'none'), minutes = 한 판 대략 분(1~240).
  *     genre(선택) = ARCADE_GENRES 의 id 하나(고정 목록, 모르는 id 는 거절). 없으면 화면은 'other'(기타)로 본다(arcadeGenreOf).
  *     v1 그대로다: genre 가 없는 옛 문서도 그대로 확인되고, 있으면 다른 칸처럼 서명 본문에 들어간다(바꾸면 서명이 깨진다).
+ *     firstFree(선택, 11-22 대표 「사는 사람은 먼저 한 판」) = true 하나만. 유료 게임에서 판매자가 켜면 지갑 없이 첫 판 한 번(기본 꺼짐 = 칸 없음).
+ *     무료 게임에는 둘 수 없다(뜻이 없다). 화면은 arcadeFirstFree 로만 읽는다.
+ *   · blob(선택, 11-22 대표 「누구나 폰·웹에서 자유롭게 게임 올리기」) = 공개 파일 보관소 Blossom(Nostr BUD-01/02)의 zip 한 덩어리:
+ *       { kind:'zip', sha256:<zip 바이트 sha256>, size:<zip 바이트 수>, servers:['https://…' 1~3곳] }
+ *     blob 이 있으면 cid 칸을 두지 않는다(둘 중 하나만 — IPFS 폴더 또는 Blossom zip). lock 과 함께 쓸 수 없다(잠금은 파일마다 IPFS CID 가 필요).
+ *     files[] 는 그 zip 을 푼 평문 파일 목록(arcade-zip.ts readGameZip 과 같은 경로 규칙)이고, 받는 쪽은 zip sha256 → 파일마다 sha256 을 다시 본다.
+ *     servers 는 「어디서 받을 수 있나」 안내일 뿐이다 — 바이트는 sha256 으로만 믿는다(Blossom 주소 = 내용 해시).
+ *     🔴 하위 호환: cid 가 있는 옛 문서(데스크탑이 올린 것)는 바뀐 것 없이 그대로 확인된다. blob 문서는 이 판 이전의 앱이 「모르는 칸」으로 버린다(조용히 안 보임).
  */
 
 export const ARCADE_PRODUCT_FORMAT = 'rv-arcade-product';
@@ -49,6 +57,8 @@ export const ARCADE_LIMITS = Object.freeze({
   title: 80, description: 2000, minutesMin: 1, minutesMax: 240, maxVersion: 1_000_000_000,
   /** 잠글 수 있는 파일 수 = RV-LOCK v1 매니페스트 lock 칸 상한(manifest.ts 50)과 같게. */
   lockFiles: 50,
+  /** Blossom zip 한 덩어리 상한(폰·웹 올리기 30MB) · 안내할 보관소 수. */
+  blobBytes: 30 * 1024 * 1024, blobServers: 3,
 });
 
 export type ArcadeFile = { path: string; sha256: string; size: number };
@@ -62,19 +72,30 @@ export const ARCADE_GENRE_LABELS: Readonly<Record<ArcadeGenre, string>> = Object
   board: '보드·카드', adventure: '모험', shooting: '슈팅', casual: '캐주얼', kids: '어린이', other: '기타',
 });
 export const isArcadeGenre = (g: unknown): g is ArcadeGenre => typeof g === 'string' && (ARCADE_GENRES as readonly string[]).includes(g);
-export type ArcadeX = { arcade: { mode: 'solo'; network: 'none'; minutes: number; genre?: ArcadeGenre } };
+export type ArcadeX = { arcade: { mode: 'solo'; network: 'none'; minutes: number; genre?: ArcadeGenre; firstFree?: true } };
+/** Blossom 보관소의 zip 한 덩어리(BUD-01 GET <server>/<sha256>). */
+export type ArcadeBlobRef = { kind: 'zip'; sha256: string; size: number; servers: string[] };
+/** 판매자가 켠 「첫 판 무료」인가(유료 게임만 — 무료 게임은 검사에서 막힌다). */
+export const arcadeFirstFree = (doc: { priceSats: string; x: ArcadeX }): boolean => doc.priceSats !== '0' && doc.x.arcade.firstFree === true;
+/** 보관소 주소 모양: https 원점 하나(경로·포트·사용자 없음, 소문자). */
+export const BLOSSOM_ORIGIN = /^https:\/\/[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
 /** 문서의 장르. 칸이 없으면(옛 문서) 'other'. */
 export const arcadeGenreOf = (doc: { x: ArcadeX }): ArcadeGenre => doc.x.arcade.genre ?? 'other';
 export type ArcadeProductBody = {
   format: typeof ARCADE_PRODUCT_FORMAT; v: 1; kind: typeof ARCADE_KIND; id: string; version: number; title: string; description: string;
-  priceSats: string; seller: string; payTo: string; feeBps: number; entry: string; cid: string; files: ArcadeFile[];
+  priceSats: string; seller: string; payTo: string; feeBps: number; entry: string;
+  /** IPFS 폴더 CID(데스크탑 길). blob 이 있으면 없다. */
+  cid?: string;
+  /** Blossom zip(폰·웹 길). cid 가 있으면 없다. */
+  blob?: ArcadeBlobRef;
+  files: ArcadeFile[];
   lock?: ArcadeLockRef; assetName?: string; x: ArcadeX;
 };
 export type ArcadeProductDoc = ArcadeProductBody & { sig: string };
 export type VerifiedArcadeProduct = { doc: ArcadeProductDoc; docHash: string; key: string };
 
 export type ArcadeErrorCode = 'arcade-json' | 'arcade-shape' | 'arcade-id' | 'arcade-version' | 'arcade-text' | 'arcade-price' | 'arcade-address' |
-  'arcade-fee' | 'arcade-files' | 'arcade-entry' | 'arcade-cid' | 'arcade-lock' | 'arcade-asset' | 'arcade-x' | 'arcade-too-large' | 'arcade-signature';
+  'arcade-fee' | 'arcade-files' | 'arcade-entry' | 'arcade-cid' | 'arcade-blob' | 'arcade-lock' | 'arcade-asset' | 'arcade-x' | 'arcade-too-large' | 'arcade-signature';
 export class ArcadeProductError extends Error {
   constructor(readonly code: ArcadeErrorCode, readonly detail = '') { super(detail ? `${code}: ${detail}` : code); this.name = 'ArcadeProductError'; }
 }
@@ -135,10 +156,22 @@ function checkLock(lock: unknown, files: ArcadeFile[]): void {
   }
 }
 
+function checkBlob(blob: unknown): void {
+  if (!plain(blob) || !keysAre(blob, 'kind,sha256,size,servers') || blob.kind !== 'zip') return fail('arcade-blob', 'shape');
+  if (typeof blob.sha256 !== 'string' || !SHA.test(blob.sha256)) fail('arcade-blob', 'sha256');
+  if (!int(blob.size, 22, ARCADE_LIMITS.blobBytes)) fail('arcade-blob', 'size');
+  const servers = blob.servers as unknown;
+  if (!Array.isArray(servers) || servers.length < 1 || servers.length > ARCADE_LIMITS.blobServers ||
+      servers.some(u => typeof u !== 'string' || u.length > 100 || !BLOSSOM_ORIGIN.test(u)) || new Set(servers).size !== servers.length) fail('arcade-blob', 'servers');
+}
+
 /** 엄격 검사(모르는 칸·빠진 칸 거절). 서명은 보지 않는다. */
 export function validateArcadeProduct(raw: unknown): ArcadeProductDoc {
-  const base = 'format,v,kind,id,version,title,description,priceSats,seller,payTo,feeBps,entry,cid,files,x,sig';
-  if (!plain(raw) || !keysAre(raw, base + ('lock' in raw ? ',lock' : '') + ('assetName' in raw ? ',assetName' : ''))) return fail('arcade-shape', 'keys');
+  const base = 'format,v,kind,id,version,title,description,priceSats,seller,payTo,feeBps,entry,files,x,sig';
+  if (!plain(raw)) return fail('arcade-shape', 'keys');
+  // 게임 파일이 있는 곳: IPFS 폴더(cid) 또는 Blossom zip(blob) — 꼭 하나.
+  if (('cid' in raw) === ('blob' in raw)) return fail('arcade-shape', 'keys');
+  if (!keysAre(raw, base + ('cid' in raw ? ',cid' : ',blob') + ('lock' in raw ? ',lock' : '') + ('assetName' in raw ? ',assetName' : ''))) return fail('arcade-shape', 'keys');
   const d = raw as Loose;
   if (d.format !== ARCADE_PRODUCT_FORMAT || d.v !== ARCADE_PRODUCT_VERSION || d.kind !== ARCADE_KIND) fail('arcade-shape', 'format');
   if (typeof d.id !== 'string' || !ID.test(d.id)) fail('arcade-id');
@@ -152,8 +185,10 @@ export function validateArcadeProduct(raw: unknown): ArcadeProductDoc {
   if (d.priceSats !== '0') {
     try { splitPrice(d.priceSats, d.feeBps); } catch (e) { fail('arcade-price', e instanceof PlatformFeeError ? e.code : 'split'); }
   }
-  if (!isFolderCid(d.cid)) fail('arcade-cid');
+  if ('cid' in d && !isFolderCid(d.cid)) fail('arcade-cid');
+  if ('blob' in d) checkBlob(d.blob);
   const files = checkFiles(d.files);
+  if ('blob' in d && 'lock' in d) fail('arcade-lock', 'blob');
   if (typeof d.entry !== 'string' || !/\.html?$/i.test(d.entry) || !files.some(f => f.path === d.entry)) fail('arcade-entry');
   if ('lock' in d) checkLock(d.lock, files);
   if ('assetName' in d) {
@@ -161,9 +196,10 @@ export function validateArcadeProduct(raw: unknown): ArcadeProductDoc {
     if (!c.valid || c.parsed!.kind === 'shop') fail('arcade-asset');
   }
   const x = d.x as Loose;
-  if (!plain(x) || !keysAre(x, 'arcade') || !plain(x.arcade) || !keysAre(x.arcade, 'mode,network,minutes' + ('genre' in x.arcade ? ',genre' : '')) || x.arcade.mode !== 'solo' ||
+  if (!plain(x) || !keysAre(x, 'arcade') || !plain(x.arcade) || !keysAre(x.arcade, 'mode,network,minutes' + ('genre' in x.arcade ? ',genre' : '') + ('firstFree' in x.arcade ? ',firstFree' : '')) || x.arcade.mode !== 'solo' ||
       x.arcade.network !== 'none' || !int(x.arcade.minutes, ARCADE_LIMITS.minutesMin, ARCADE_LIMITS.minutesMax)) fail('arcade-x');
   if ('genre' in x.arcade && !isArcadeGenre(x.arcade.genre)) fail('arcade-x', 'genre');
+  if ('firstFree' in x.arcade && (x.arcade.firstFree !== true || d.priceSats === '0')) fail('arcade-x', 'first-free');
   if (typeof d.sig !== 'string' || d.sig.length > 200) fail('arcade-signature', 'shape');
   let bytes = 0;
   try { bytes = utf8(canonicalJson(d)).length; } catch { fail('arcade-shape', 'canonical'); }

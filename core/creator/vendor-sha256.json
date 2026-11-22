@@ -69,8 +69,8 @@
     "core/store/limits.ts": "706b71c41f15e9b16749e21096d018f6cbb37fc2e7a0d78e077fd958fef6c185",
     "core/store/photo.ts": "3fc95f90fe84713e109825596027852879e7e96db086e7cc7f46ecf55fdb5fda",
     "core/store/store-key.ts": "14d1b348759d6879ee2500123e99c91ecac1577d01b0bf852cca62458c9f8b35",
-    "core/creator/arcade-product.ts": "af552b1f0e6af38425d286beebfcf3cf2f41b2ebddad0a59dafc7de5da1075c6",
-    "core/creator/arcade-catalog.ts": "0d513bf3a138f372a0867837d76d77f97422186180e6f546e2b15a07b8b3bceb",
+    "core/creator/arcade-product.ts": "5a746eabd6aa1aa71f81385871ef61a79a4332eef07cd758c4412beb0ba7ec44",
+    "core/creator/arcade-catalog.ts": "299e6a18814101614fbdd6b934b84224fae274b8c3df17ad30a73ce625cfb390",
     "core/creator/asset-name-v3.ts": "0c3382b18473159f76fbd9ea082d4874d4db90f58001a59a1f42e2a1c6e296b4",
     "core/creator/asset-name-v2.ts": "c63bef1f4d0b9e11756b9305f98cbbaf85246da8f08097cf53293869525e0c24",
     "core/creator/arcade-credit.ts": "44f0359ed8445c08890ebdaf7bd40fa1fda9623f67c2903ee0c05efd2720b493"

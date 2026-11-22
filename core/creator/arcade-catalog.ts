@@ -24,7 +24,8 @@ export type Dropped = { reason: DropReason; asset?: string; source?: DocSource; 
 
 export type CatalogItem = {
   key: string; seller: string; id: string; version: number; docHash: string; title: string; priceSats: string;
-  cid: string; entry: string; assetName: string | null;
+  /** IPFS 폴더 CID — Blossom zip 문서(blob)면 null. */
+  cid: string | null; entry: string; assetName: string | null;
   /** 장르(문서에 없으면 'other'). */
   genre: ArcadeGenre;
   /** RVLT/* 체인 자산이 이 판매자·이 상품을 가리키고, 최신 판도 그 이름을 들고 있다. */
@@ -93,7 +94,7 @@ export function buildArcadeCatalog(p: {
     const verified = anchor !== null && v.doc.assetName === anchor;
     return {
       key: v.key, seller: v.doc.seller, id: v.doc.id, version: v.doc.version, docHash: v.docHash, title: v.doc.title, priceSats: v.doc.priceSats,
-      cid: v.doc.cid, entry: v.doc.entry, assetName: v.doc.assetName ?? null, genre: arcadeGenreOf(v.doc),
+      cid: v.doc.cid ?? null, entry: v.doc.entry, assetName: v.doc.assetName ?? null, genre: arcadeGenreOf(v.doc),
       verified, verifiedBy: verified ? anchor : null, unverifiedReason: verified ? null : anchor === null ? 'no-asset' : 'asset-changed',
       conflict, sources: [...sources].sort(), verifiedDoc: v,
     };
