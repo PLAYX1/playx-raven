@@ -254,6 +254,8 @@ async fn tick_inner() {
         },
         Err(e) => note_error(&e),
     }
+    // 공동구매 열림 쪽지(kind 31406) — 바뀐 것·1시간 지난 것만 올린다(groupbuy_pub.rs). 폰 장터 「공동구매」 칩이 읽는다.
+    crate::groupbuy_pub::sync(&signer, &nk, &cfg.slug, &cfg.area, false).await;
 }
 
 /// 이 가게의 무료 고정 링크(`https://ravenvault.ex.erci.se/s/<가게 주소 이름>-<8자리>`).
@@ -500,7 +502,13 @@ pub fn map_unpublish() -> Result<Value, String> {
         s.beat_ok_at = 0;
         s.card_ok_at = 0;
     }
-    tauri::async_runtime::spawn(async move { send_close(&cfg, true).await });
+    tauri::async_runtime::spawn(async move {
+        send_close(&cfg, true).await;
+        // [내리기] — 열려 있던 공동구매도 「끝남」으로 닫는다(폰 장터에서 사라지게).
+        if let Ok((signer, nk, _)) = keys() {
+            crate::groupbuy_pub::sync(&signer, &nk, &cfg.slug, &cfg.area, true).await;
+        }
+    });
     Ok(json!({ "ok": true }))
 }
 

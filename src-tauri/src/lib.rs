@@ -97,6 +97,7 @@ mod rewards;
 mod stock;
 mod booking;
 mod groupbuy;
+mod groupbuy_pub;
 mod trade;
 mod walletx;
 mod wiring;
