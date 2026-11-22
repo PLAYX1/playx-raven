@@ -393,6 +393,8 @@ pub(crate) fn absorb(events: Vec<Value>) {
             if ok && why.is_empty() {
                 any = true;
                 let _ = live().send(e);
+            } else if ok && why == crate::post_office::TOOK {
+                let _ = post_live().send(e);
             }
         }
         if any { start_saver(); }
@@ -1181,6 +1183,13 @@ fn live() -> &'static tokio::sync::broadcast::Sender<Value> {
     LIVE.get_or_init(|| tokio::sync::broadcast::channel(256).0)
 }
 
+/// 11-23 우체국: 새로 맡은 글의 방송 — 사람을 적은 열린 구독(1059=#p · 4470·꾸러미=authors)에만 민다(named_for). 넓은 구독은 제외.
+/// 폰이 「내 우체국」을 듣고 있으면 맡기자마자 받는다.
+static POST_LIVE: std::sync::OnceLock<tokio::sync::broadcast::Sender<Value>> = std::sync::OnceLock::new();
+fn post_live() -> &'static tokio::sync::broadcast::Sender<Value> {
+    POST_LIVE.get_or_init(|| tokio::sync::broadcast::channel(256).0)
+}
+
 fn now_secs() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -1379,6 +1388,7 @@ pub async fn serve_with(mut ws: WebSocket, ip: Option<std::net::IpAddr>, private
     let mut req_times: std::collections::VecDeque<std::time::Instant> = Default::default();
     let mut out_window = (std::time::Instant::now(), 0usize);
     let mut rx = live().subscribe();
+    let mut post_rx = post_live().subscribe();
     let mut heard = std::time::Instant::now();
     let mut ping = tokio::time::interval(std::time::Duration::from_secs(PING_EVERY_SECS));
     ping.tick().await;
@@ -1390,6 +1400,16 @@ pub async fn serve_with(mut ws: WebSocket, ip: Option<std::net::IpAddr>, private
                 if heard.elapsed().as_secs() >= SILENT_CLOSE_SECS || !matches!(pinged, Ok(Ok(()))) {
                     let _ = ws.send(Message::Close(None)).await;
                     return;
+                }
+                continue;
+            }
+            held = post_rx.recv() => {
+                if let Ok(e) = held {
+                    let hits: Vec<String> = subs.iter().filter(|(_, fs)| fs.iter().any(|f| matches(&e, f) && named_for(&e, f))).map(|(id, _)| id.clone()).collect();
+                    for id in hits {
+                        let pushed = tokio::time::timeout(std::time::Duration::from_secs(10), ws.send(Message::Text(json!(["EVENT", id, e]).to_string().into()))).await;
+                        if !matches!(pushed, Ok(Ok(()))) { return; }
+                    }
                 }
                 continue;
             }
@@ -1465,6 +1485,8 @@ pub async fn serve_with(mut ws: WebSocket, ip: Option<std::net::IpAddr>, private
                         // 새로 저장한 것만 열린 구독에 민다(「이미 있습니다」·「옛 글」은 안 민다).
                         if r.0 && r.1.is_empty() {
                             let _ = live().send(e);
+                        } else if r.0 && r.1 == crate::post_office::TOOK {
+                            let _ = post_live().send(e);
                         }
                         r
                     }
@@ -1947,11 +1969,17 @@ mod tests {
         assert_eq!(ask(json!({ "authors": [friend] }), None).await.0, want, "authors 를 적은 물음에 맡은 글을 안 줬다");
         assert_eq!(ask(json!({ "#p": [bob] }), None).await.0, vec![id(&wrap)]);
         assert!(ask(json!({ "kinds": [1059, 4470, 30078] }), None).await.0.is_empty(), "넓은 물음에 맡은 글이 나갔다");
-        // 열린 구독(받는 사람을 적었어도)에는 밀어 주지 않는다 — 다음 물음에서 꺼낸다.
+        // 받는 사람을 적은 열린 구독에는 새로 맡은 글을 바로 민다(폰이 「내 우체국」을 들을 때) · 넓은 구독에는 안 민다.
         let wrap2 = crate::shopkey::sign_with(&[0x44u8; 32], 1059, json!([["p", bob.clone()]]), "sealed-2", t).unwrap();
         let (_, pushed) = ask(json!({ "#p": [bob] }), Some(wrap2.clone())).await;
-        assert!(pushed.is_empty(), "맡은 글을 실시간으로 밀었다: {pushed:?}");
-        assert_eq!(crate::post_office::counts().0, 4);
+        assert_eq!(pushed, vec![id(&wrap2)], "#p 를 적은 구독에 맡은 글을 안 밀었다");
+        let wrap3 = crate::shopkey::sign_with(&[0x45u8; 32], 1059, json!([["p", bob.clone()]]), "sealed-3", t).unwrap();
+        let (_, pushed) = ask(json!({ "kinds": [1059] }), Some(wrap3)).await;
+        assert!(pushed.is_empty(), "넓은 구독에 맡은 글을 밀었다: {pushed:?}");
+        let note2 = crate::shopkey::sign_with(&friend_sk, KIND_PRIVATE_NOTE, json!([]), "{\"v\":2}", t + 1).unwrap();
+        let (_, pushed) = ask(json!({ "authors": [friend], "since": t + 1 }), Some(note2.clone())).await;
+        assert_eq!(pushed, vec![id(&note2)], "authors 를 적은 구독에 맡은 4470 을 안 밀었다");
+        assert_eq!(crate::post_office::counts().0, 6);
         // 주인 글은 주인 칸 — 바깥에도 authors 를 적은 물음에는 준다(11-23 · 남의 것과 같은 규칙).
         let mine = crate::shopkey::sign_with(&[7u8; 32], KIND_PRIVATE_NOTE, json!([]), "{}", t).unwrap();
         assert_eq!(store(mine.clone()), (true, String::new()));
