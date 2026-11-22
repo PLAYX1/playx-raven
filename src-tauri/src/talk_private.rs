@@ -25,6 +25,10 @@ const CIRCLE_PARSE_MAX: usize = 50;
 /// 내 칸에 남기는 옛 세대 열쇠 수 · 친구 칸에 넣는 세대 수(폰 SELF_KEEP_EPOCHS · SLOT_EPOCHS).
 pub const SELF_KEEP_EPOCHS: usize = 64;
 pub const SLOT_EPOCHS: usize = 3;
+/// 11-23 우체국 F(폰 34c574d SLOT_ROUND): 꾸러미 칸을 빈 칸으로 10칸 단위까지 채워 친구 수를 가린다.
+pub const SLOT_ROUND: usize = 10;
+/// 친구 n 명 → 꾸러미 칸 수(빈 칸 포함). 친구가 없어도 10칸(「모두 뺐다」도 안 드러나게). 폰 paddedSlotCount 와 같다.
+pub fn padded_slot_count(n: usize) -> usize { SLOT_ROUND.max(n.div_ceil(SLOT_ROUND) * SLOT_ROUND) }
 /// 한 글 사진 최대 수 · 글 최대 길이(폰 MAX_POST_PHOTOS · MESSAGE_MAX).
 const MAX_PHOTOS: usize = 4;
 const MESSAGE_MAX: usize = 8000;
@@ -250,11 +254,20 @@ pub fn bundle_content(sk: &[u8; 32], st: &CircleState) -> Result<String, String>
     let keys: Vec<Value> = st.keys.iter().map(|(e, k)| json!([e, k])).collect();
     let self_c = nip44_encrypt(&json!({ "v": 1, "epoch": st.epoch, "friends": friends, "keys": keys }).to_string(), &conv, rand32()).ok_or("친구 목록을 잠그지 못했어요.")?;
     let mut slots = Vec::new();
+    let mut counts: Vec<usize> = Vec::new();
     for (p, since) in &st.friends {
         let mine: Vec<&(i64, String)> = st.keys.iter().filter(|(e, _)| e >= since).collect();
         let k: Vec<Value> = mine[mine.len().saturating_sub(SLOT_EPOCHS)..].iter().map(|(e, k)| json!([e, k])).collect();
+        counts.push(k.len().max(1));
         let c = conv_key(sk, p).ok_or("친구 열쇠를 읽지 못했어요.")?;
         slots.push(nip44_encrypt(&json!({ "v": 1, "k": k }).to_string(), &c, rand32()).ok_or("친구 칸을 잠그지 못했어요.")?);
+    }
+    // 빈 칸: 진짜 칸과 같은 모양·같은 길이(열쇠 수를 진짜 칸 중 하나에서 빌린다)를 아무도 모르는 랜덤 열쇠로 잠근다 — 열리는 사람이 없다(폰 circleBundleDraft 와 같다).
+    for i in slots.len()..padded_slot_count(st.friends.len()) {
+        let n = if counts.is_empty() { 1 } else { counts[i % counts.len()] };
+        let mut fake: Vec<Value> = (0..n).map(|j| json!([(st.epoch - j as i64).max(1), hex::encode(rand32())])).collect();
+        fake.reverse();
+        slots.push(nip44_encrypt(&json!({ "v": 1, "k": fake }).to_string(), &rand32(), rand32()).ok_or("친구 칸을 잠그지 못했어요.")?);
     }
     slots.shuffle(&mut rand::rngs::OsRng);
     Ok(json!({ "v": 1, "self": self_c, "slots": slots }).to_string())
@@ -581,6 +594,37 @@ mod tests {
         assert_eq!((bundle_time(100, 50), bundle_time(10, 50)), (101, 50));
     }
 
+    /// 11-23 우체국 F: 칸 수는 10 단위(0~10명 10칸 · 11~20 20칸 · 21~30 30칸) · 빈 칸은 아무도 못 열고, 진짜 칸과 길이가 같다 · 30명도 32KB 안.
+    #[test]
+    fn 꾸러미_칸을_10칸_단위로_채운다() {
+        assert_eq!([0, 1, 10, 11, 20, 21, 30].map(padded_slot_count), [10, 10, 10, 20, 20, 30, 30]);
+        let me = sk(7);
+        let mp = crate::shopkey::pubkey_of(&me).unwrap();
+        let slots_of = |st: &CircleState| -> Vec<String> {
+            let c: Value = serde_json::from_str(&bundle_content(&me, st).unwrap()).unwrap();
+            c["slots"].as_array().unwrap().iter().map(|x| x.as_str().unwrap().to_string()).collect()
+        };
+        assert_eq!(slots_of(&CircleState::default()).len(), 10, "친구가 없어도 10칸");
+        let mut st = CircleState::default();
+        for i in 0..11u8 { st = st.add(&mp, &crate::shopkey::pubkey_of(&sk(20 + i)).unwrap(), &[i + 1; 32]).unwrap(); }
+        let s = slots_of(&st);
+        assert_eq!(s.len(), 20);
+        // 진짜 칸은 열쇠 1~3개라 길이가 셋뿐 — 빈 칸이 다른 길이를 만들지 않는다.
+        let lens: std::collections::HashSet<usize> = s.iter().map(String::len).collect();
+        assert!(lens.len() <= SLOT_EPOCHS, "빈 칸이 다른 길이를 만든다: {lens:?}");
+        let one = CircleState::default().add(&mp, &crate::shopkey::pubkey_of(&sk(8)).unwrap(), &[1u8; 32]).unwrap();
+        let l1: std::collections::HashSet<usize> = slots_of(&one).iter().map(String::len).collect();
+        assert_eq!(l1.len(), 1, "친구 1명: 빈 칸 9개가 진짜 칸과 길이가 다르다: {l1:?}");
+        let ev = crate::shopkey::sign_with(&me, 30078, json!([["d", CIRCLE_KEYS_D]]), &bundle_content(&me, &st).unwrap(), 50).unwrap();
+        assert!(open_friend_slot(&ev, &sk(25)).is_some(), "진짜 친구는 연다");
+        assert!(open_friend_slot(&ev, &sk(99)).is_none(), "남은 빈 칸도 못 연다");
+        assert_eq!(open_my_circle(&[ev], &me).unwrap().0, st);
+        for i in 11..30u8 { st = st.add(&mp, &crate::shopkey::pubkey_of(&sk(20 + i)).unwrap(), &[i + 1; 32]).unwrap(); }
+        assert_eq!(slots_of(&st).len(), 30);
+        let ev = crate::shopkey::sign_with(&me, 30078, json!([["d", CIRCLE_KEYS_D]]), &bundle_content(&me, &st).unwrap(), 50).unwrap();
+        assert!(serde_json::to_vec(&ev).unwrap().len() < crate::relay::MAX_EVENT_BYTES, "30명 꾸러미가 32KB 를 넘는다");
+    }
+
     #[test]
     fn 암호_사진_잠그고_푼다() {
         let plain = b"\xff\xd8\xff-fixture".to_vec();
@@ -598,6 +642,9 @@ mod tests {
         let me = sk(7);
         let friend = sk(8);
         let bundle = &v["bundle"];
+        // 11-23 폰 34c574d: 친구 1명이어도 10칸(빈 칸 9).
+        let slots: Value = serde_json::from_str(bundle["content"].as_str().unwrap()).unwrap();
+        assert_eq!(slots["slots"].as_array().unwrap().len(), 10, "폰 꾸러미가 10칸이 아니다");
         let (st, _) = open_my_circle(std::slice::from_ref(bundle), &me).unwrap();
         assert_eq!(st.epoch, v["epoch"].as_i64().unwrap());
         let fk = open_friend_slot(bundle, &friend).expect("친구 칸");
