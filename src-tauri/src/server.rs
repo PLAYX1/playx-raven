@@ -1834,7 +1834,7 @@ async fn api_shop(State(state): State<ServerState>) -> impl IntoResponse {
 /// Read from the OS every time rather than stored, because a shop that moves —
 /// or a laptop that travels — should not have to remember to change a setting
 /// for its opening hours to keep meaning what they say.
-fn local_tz_offset_min() -> i64 {
+pub(crate) fn local_tz_offset_min() -> i64 {
     // 🔴 윈도우에는 `date +%z` 가 없다(`date` 는 cmd 내장 명령이고 형식도 다르다).
     //    예전엔 실패해서 늘 UTC(0) 로 떨어졌다 — 한국 가게면 영업시간이 9시간
     //    어긋난다. 윈도우는 OS 에 직접 묻는다(창 없음·프로세스 없음).

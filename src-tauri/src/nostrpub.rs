@@ -689,8 +689,8 @@ pub(crate) fn validate_publish_event(event: &Value) -> Result<(), String> {
     }
     let hex_field = |key: &str, size: usize| o[key].as_str().is_some_and(|s| s.len() == size && s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)));
     if !hex_field("id",64) || !hex_field("pubkey",64) || !hex_field("sig",128) { return Err("이벤트 ID·공개키·서명 모양이 올바르지 않습니다.".into()); }
-    // 31402 지도 이름표 · 31403 영업 중 신호 · 31404 고정 링크(map.rs) · 31405 오락실 일반 판매자(arcade_listing.rs) — 11-13 앞 셋이 빠져 데스크탑 지도·/s/ 링크가 못 올라갔다.
-    let kind = o["kind"].as_u64().filter(|k| [0,1,5,40,41,42,1059,30078,30402,31402,31403,31404,31405].contains(k)).ok_or("이 가게는 프로필·레이븐 이야기(방 만들기·방 정보 수정 포함)·상품·가게 공지·지도 이름표·영업 신호·고정 링크·오락실 게임·쪽지·삭제 요청만 중계합니다.")?;
+    // 31402 지도 이름표 · 31403 영업 중 신호 · 31404 고정 링크(map.rs) · 31405 오락실 일반 판매자(arcade_listing.rs) · 31406 공동구매 열림(groupbuy_pub.rs, 11-22) — 11-13 앞 셋이 빠져 데스크탑 지도·/s/ 링크가 못 올라갔다.
+    let kind = o["kind"].as_u64().filter(|k| [0,1,5,40,41,42,1059,30078,30402,31402,31403,31404,31405,31406].contains(k)).ok_or("이 가게는 프로필·레이븐 이야기(방 만들기·방 정보 수정 포함)·상품·가게 공지·지도 이름표·영업 신호·고정 링크·오락실 게임·공동구매 알림·쪽지·삭제 요청만 중계합니다.")?;
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
     if !o["created_at"].as_u64().is_some_and(|t| t >= now.saturating_sub(7 * 86_400) && t <= now.saturating_add(300) && t <= 9_007_199_254_740_991) { return Err("이벤트 시각이 올바르지 않습니다. 기기 시계를 확인해 주세요.".into()); }
     let content = o["content"].as_str().ok_or("이벤트 내용은 글자여야 합니다.")?;
@@ -708,7 +708,7 @@ pub(crate) fn validate_publish_event(event: &Value) -> Result<(), String> {
         1059 => if !tag("p") || content.is_empty() { return Err("쪽지의 받는 사람과 봉함 내용을 확인해 주세요.".into()); },
         _ => (),
     }
-    if matches!(kind,30078|30402|31402|31403|31404|31405) && !tag("d") { return Err("가게·상품 식별자가 없습니다.".into()); }
+    if matches!(kind,30078|30402|31402|31403|31404|31405|31406) && !tag("d") { return Err("가게·상품 식별자가 없습니다.".into()); }
     if !crate::relay::verify(event) { return Err("이벤트 ID 또는 서명이 맞지 않습니다. 지갑에서 다시 서명해 주세요.".into()); }
     // 11-10 지운 방(묘비)의 방 글·수정·대화는 내보내지 않는다.
     if crate::relay::in_deleted_room(event) { return Err("지운 방입니다. 이 방에는 더 쓸 수 없어요.".into()); }
