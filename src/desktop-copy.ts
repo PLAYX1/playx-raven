@@ -2836,6 +2836,13 @@ export const SETTINGS_TALK_090_COPY: Record<string, [string, string, string]> = 
   "더 이상 더할 수 없어요. 하나를 지우고 더해 주세요.": ["You can’t add more. Remove one first, then add.", "これ以上追加できません。1つ削除してから追加してください。", "不能再添加了。请先删除一个再添加。"],
   "이 컴퓨터 릴레이는 광장 글과 가게 공지를 받아 둡니다. 「릴레이 나누기」를 켠 컴퓨터끼리만 서로 붙어, 큰 릴레이가 끊겨도 그 사이에서는 글이 돕니다.": ["This computer’s relay keeps Raven Talk posts and shop notices. Only computers with “Relay sharing” on connect to each other, so posts keep moving between them even if the big relays go down.", "このパソコンのリレーはレイヴンのトークとお店のお知らせを保管します。「リレー共有」をオンにしたパソコン同士だけがつながり、大きなリレーが止まってもその間では投稿が届きます。", "这台电脑的中继会保存渡鸦聊天帖子和店铺公告。只有开启“中继共享”的电脑之间才会互相连接，即使大型中继中断，它们之间的帖子也能继续传递。"],
   "「릴레이 나누기」를 켠 컴퓨터끼리 서로 릴레이가 되어 줍니다. 켠 컴퓨터가 늘수록 큰 릴레이가 끊겨도 글이 잘 돕니다.": ["Computers with “Relay sharing” on act as relays for each other. The more computers turn it on, the better posts keep moving when the big relays go down.", "「リレー共有」をオンにしたパソコン同士がお互いのリレーになります。オンにするパソコンが増えるほど、大きなリレーが止まっても投稿がよく届きます。", "开启“中继共享”的电脑会互相充当中继。开启的电脑越多，即使大型中继中断，帖子也越能顺利传递。"],
+// 11-23 우체국(src/post-office-ui.ts · src-tauri/src/post_office.rs)
+  "우체국": ["Post office", "郵便局", "邮局"],
+  "우체국 — 이 컴퓨터가 다른 사람의 잠긴 글을 잠깐 맡았다가 전해 줘요. 내용은 이 컴퓨터도 못 읽어요. 사진·파일은 맡지 않아요. 끄면 맡은 글을 지우고, 내 글만 지켜요.": ["Post office — this computer briefly holds other people’s locked posts and passes them on. Even this computer can’t read them. It doesn’t hold photos or files. Turning it off deletes what it holds and keeps only your own posts.", "郵便局 — このコンピューターが他の人の鍵付き投稿を少しの間預かって届けます。中身はこのコンピューターにも読めません。写真やファイルは預かりません。オフにすると預かった投稿を消し、自分の投稿だけを守ります。", "邮局 — 这台电脑会暂时代管别人的加密帖子再转交。内容连这台电脑也读不了。不代管照片和文件。关闭后会删除代管的帖子，只保护你自己的帖子。"],
+  "우체국 켜기": ["Turn on post office", "郵便局をオンにする", "开启邮局"],
+  "지금 맡은 글 {0}개 · {1}MB": ["Holding {0} posts · {1} MB", "預かっている投稿 {0}件 · {1}MB", "正在代管 {0} 条 · {1}MB"],
+  "다른 분들이 이 우체국을 찾으려면 「릴레이 나누기」로 바깥 주소를 알려야 해요.": ["For others to find this post office, share its outside address with “Relay sharing”.", "他の人がこの郵便局を見つけるには、「リレー共有」で外部アドレスを知らせる必要があります。", "要让别人找到这个邮局，需要用“中继共享”公布外部地址。"],
+  "끄기": ["Turn off", "オフにする", "关闭"],
 // 11-08 지킴이 고마움(src/keeper-thanks-ui.ts · relay-share-ui.ts 릴레이 지킴이 · docs/KEEPER-THANKS.md)
   "릴레이 지킴이": ["Relay keeper", "リレーキーパー", "中继守护者"],
   "릴레이 지킴이 표시가 있는 분이 글을 써요. 읽기는 누구나 돼요.": ["People with the Relay keeper badge post here. Anyone can read.", "リレーキーパーバッジのある方が投稿します。読むのは誰でもできます。", "有中继守护者标识的人在这里发帖。任何人都可以阅读。"],

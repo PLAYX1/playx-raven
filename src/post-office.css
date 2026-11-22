@@ -1,0 +1,8 @@
+/* 설정 › 「우체국」. style="…" 속성 대신 여기서만 모양을 준다(CSP nonce 가 속성을 막는다). */
+#post-office-card [hidden] { display: none !important; }
+#post-office-card h3 { margin: 0 0 6px; font-size: 16px; }
+#post-office-card .po-what { margin: 0 0 6px; }
+#post-office-card .po-switch { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 12px 0 6px; min-height: 44px; }
+#post-office-card .po-switch .sx-txt { display: flex; flex-direction: column; gap: 2px; white-space: nowrap; }
+#post-office-card .po-status { font-weight: 700; margin: 6px 0 2px; overflow-wrap: anywhere; }
+#post-office-card .po-status.ok { color: var(--ok, #1a7f37); }

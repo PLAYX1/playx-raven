@@ -103,6 +103,9 @@ pub struct Share {
     pub announced_url: Option<String>,
     #[serde(default)]
     pub announced_at: i64,
+    /// 마지막으로 올린 10002 에 우체국 능력 표(`rv-post-1`)를 달았나.
+    #[serde(default)]
+    pub announced_post: bool,
     /// 지금 나누지 못하는 까닭: `no-outside` · `self-test` · `no-key` · `publish`.
     #[serde(default)]
     pub problem: Option<String>,
@@ -130,6 +133,7 @@ impl Default for Share {
             extra: vec![],
             announced_url: None,
             announced_at: 0,
+            announced_post: false,
             problem: None,
             full_at: 0,
             republish_at: 0,
@@ -311,7 +315,23 @@ pub fn list_tags(my_url: Option<&str>) -> Value {
 }
 
 pub fn build_list(sk: &[u8; 32], my_url: Option<&str>, at: i64) -> Result<Value, String> {
-    crate::shopkey::sign_with(sk, LIST_KIND, list_tags(my_url), "", at)
+    build_list_with(sk, my_url, false, at)
+}
+
+/// 11-23 우체국 능력 표: 내 주소를 알릴 때, 우체국을 켠 컴퓨터만 `["t","rv-post-1"]` 를 더 단다(§1).
+/// 폰은 이 표가 있는 곳에만 「나만·친구만」·쪽지를 맡긴다(페이블 F — 주소가 아니라 능력 기준).
+pub fn list_tags_with(my_url: Option<&str>, post: bool) -> Value {
+    let mut tags = list_tags(my_url);
+    if my_url.is_some() && post {
+        if let Some(a) = tags.as_array_mut() {
+            a.push(json!(["t", crate::post_office::POST_TAG]));
+        }
+    }
+    tags
+}
+
+pub fn build_list_with(sk: &[u8; 32], my_url: Option<&str>, post: bool, at: i64) -> Result<Value, String> {
+    crate::shopkey::sign_with(sk, LIST_KIND, list_tags_with(my_url, post), "", at)
 }
 
 /// 한 사람의 10002 에서 쓸 주소들. 검사(§2) 통과 · 기본 릴레이와 겹치는 것 빼기 · 중복 빼기 · 최대 `max`.
@@ -788,9 +808,14 @@ pub enum Announce {
 }
 
 pub fn announce_plan(s: &Share, outside: Option<&str>, at: i64) -> Announce {
+    announce_plan_with(s, outside, at, s.announced_post)
+}
+
+/// `post` = 지금 우체국이 켜져 있나. 켜고 끌 때 능력 표가 바뀌므로 다시 올린다.
+pub fn announce_plan_with(s: &Share, outside: Option<&str>, at: i64, post: bool) -> Announce {
     match (s.enabled, outside) {
         (true, Some(u)) => {
-            if s.announced_url.as_deref() != Some(u) || at - s.announced_at >= REANNOUNCE_SECS || s.problem.is_some() {
+            if s.announced_url.as_deref() != Some(u) || at - s.announced_at >= REANNOUNCE_SECS || s.problem.is_some() || s.announced_post != post {
                 Announce::TryWith(u.to_string())
             } else {
                 Announce::Nothing
@@ -802,8 +827,8 @@ pub fn announce_plan(s: &Share, outside: Option<&str>, at: i64) -> Announce {
 }
 
 /// 10002 를 이 컴퓨터 릴레이 + 기본 릴레이에 올린다. 바깥 한 곳이라도 받으면 성공.
-async fn publish_list(sk: &[u8; 32], my_url: Option<&str>) -> bool {
-    let Ok(ev) = build_list(sk, my_url, now()) else { return false };
+async fn publish_list(sk: &[u8; 32], my_url: Option<&str>, post: bool) -> bool {
+    let Ok(ev) = build_list_with(sk, my_url, post, now()) else { return false };
     let Ok(msg) = serde_json::to_string(&json!(["EVENT", ev])) else { return false };
     let local = format!("ws://127.0.0.1:{}/api/relay", crate::server::PORT);
     let mut urls = vec![local.clone()];
@@ -838,7 +863,8 @@ fn forward_list(msg: &str) {
 async fn announce_step() {
     let at = now();
     let s = current();
-    let plan = announce_plan(&s, outside_url().as_deref(), at);
+    let post = crate::post_office::on();
+    let plan = announce_plan_with(&s, outside_url().as_deref(), at, post);
     if s.enabled && outside_url().is_none() {
         update(|x| x.problem = Some("no-outside".into()));
     }
@@ -846,10 +872,11 @@ async fn announce_step() {
         Announce::Nothing => {}
         Announce::Withdraw => {
             let Some((sk, _, _)) = crate::talk::key_on_disk() else { return };
-            if publish_list(&sk, None).await {
+            if publish_list(&sk, None, false).await {
                 update(|x| {
                     x.announced_url = None;
                     x.announced_at = at;
+                    x.announced_post = false;
                 });
             }
         }
@@ -861,19 +888,21 @@ async fn announce_step() {
             // 바깥 주소로 **스스로** 들어와 본다. 터널 주소는 cloudflare 이름이라 DNS 검사도 그대로 건다.
             if !probe_inner(&url, true).await {
                 // 옛 주소를 계속 알리면 이웃이 죽은 곳에 붙는다 — 뺀 목록으로 바꿔 둔다.
-                if s.announced_url.is_some() && publish_list(&sk, None).await {
+                if s.announced_url.is_some() && publish_list(&sk, None, false).await {
                     update(|x| {
                         x.announced_url = None;
                         x.announced_at = at;
+                        x.announced_post = false;
                     });
                 }
                 update(|x| x.problem = Some("self-test".into()));
                 return;
             }
-            if publish_list(&sk, Some(&url)).await {
+            if publish_list(&sk, Some(&url), post).await {
                 update(|x| {
                     x.announced_url = Some(url.clone());
                     x.announced_at = at;
+                    x.announced_post = post;
                     x.problem = None;
                 });
             } else {
@@ -925,7 +954,7 @@ async fn tick() {
     BUSY.store(false, Ordering::SeqCst);
 }
 
-/// 우체국을 켜고 끌 때 — 10002 를 곧바로 다시 올리게.
+/// 우체국을 켜고 끌 때 — 10002 능력 표를 곧바로 다시 올리게.
 pub(crate) fn kick_now() {
     if !cfg!(test) { kick(); }
 }
@@ -1352,6 +1381,27 @@ mod tests {
         // 남이 쓴 kind 5 로는 내 글이 지워진 것으로 치지 않는다.
         let fake = note(&other, 5, NOW, "", json!([["e", mine[2]["id"]]]));
         assert!(deleted_ids(&[fake], &me).is_empty());
+    }
+
+    #[test]
+    fn post_office_tag_only_when_on_with_address() {
+        let tags = |v: &Value| v.as_array().unwrap().iter().filter(|t| t[0] == "t").map(|t| t[1].as_str().unwrap().to_string()).collect::<Vec<_>>();
+        let u = "wss://a.trycloudflare.com/api/relay";
+        assert!(tags(&list_tags_with(Some(u), true)).contains(&"rv-post-1".to_string()));
+        assert!(!tags(&list_tags_with(Some(u), false)).contains(&"rv-post-1".to_string()), "우체국을 끈 컴퓨터가 능력 표를 달았다");
+        assert!(!tags(&list_tags_with(None, true)).contains(&"rv-post-1".to_string()), "주소 없이 능력 표를 달았다");
+        assert_eq!(list_tags_with(Some(u), false), list_tags(Some(u)));
+        // 우체국을 켜고 끄면 능력 표가 바뀌므로 다시 올린다.
+        let mut s = Share { enabled: true, ..Share::default() };
+        s.announced_url = Some(u.into());
+        s.announced_at = 1_000;
+        assert_eq!(announce_plan_with(&s, Some(u), 1_600, false), Announce::Nothing);
+        assert_eq!(announce_plan_with(&s, Some(u), 1_600, true), Announce::TryWith(u.into()));
+        s.announced_post = true;
+        assert_eq!(announce_plan_with(&s, Some(u), 1_600, true), Announce::Nothing);
+        assert_eq!(announce_plan_with(&s, Some(u), 1_600, false), Announce::TryWith(u.into()));
+        // 4470 은 이웃 퍼뜨리기·다시 올리기에 넣지 않는다(gossip 금지).
+        assert!(!SHARE_KINDS.contains(&4470) && !REPUBLISH_KINDS.contains(&4470) && !SHARE_KINDS.contains(&1059));
     }
 
     #[test]

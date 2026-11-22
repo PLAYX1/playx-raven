@@ -100,6 +100,7 @@ import { wirePhoneTransaction } from "./phone-transaction";
 import { wirePairing } from "./pairing-ui";
 import { wireNodeKeeper, openNodeKeeper } from "./node-keeper-ui";
 import { wireRelayShare } from "./relay-share-ui";
+import { wirePostOffice } from "./post-office-ui";
 import { endTip, mountCertShare, startTip, tipButtonHtml, wireKeeperThanks } from "./keeper-thanks-ui"; // 11-08 지킴이 고마움(docs/KEEPER-THANKS.md §2·§3)
 import { FINGERPRINT_GUESS, wireCreate, type CreateApi } from "./create-page";
 import { readItemName, verifyLink } from "./easy-create";
@@ -19987,6 +19988,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   wireNodeKeeper();
   // 설정 › 「릴레이 나누기」(docs/RELAY-SHARE.md) — 카드는 relay-share-ui.ts 가 스스로 만든다.
   wireRelayShare();
+  // 설정 › 「우체국」(post_office.rs) — 기존 설치는 처음 한 번 알린 뒤 켠다.
+  wirePostOffice(choose);
   wireKeeperThanks({
     openSendRvn: async () => { showPage("wallet"); await openSend("rvn"); },
     setQtySats: (sats) => { setAmountSats($("s-qty") as HTMLInputElement, BigInt(sats)); composeChanged(); },
