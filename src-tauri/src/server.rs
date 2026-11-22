@@ -582,10 +582,11 @@ thread_local! { pub(crate) static TEST_NOT_SHOP: std::cell::Cell<bool> = const {
 
 /// 11-23 우체국(제미나이 E1): 터널은 8790 **전체**를 내준다. 가게가 아닌 컴퓨터에서 우체국을 기본으로 켜면
 /// 손님 길(/api/nostr/publish·order·ask·chain/*·/ipfs/* …)까지 바깥에 열린다 — 손님이 없는 컴퓨터에 그럴 까닭이 없다.
-/// 그래서 가게가 아니고 원격 관리도 끈 컴퓨터는 바깥에서 **릴레이(우체국) 한 길만** 연다. 나머지는 404(없는 길).
-/// 가게 컴퓨터·원격 관리를 켠 컴퓨터는 예전 그대로(customer_path).
+/// 그래서 가게가 아니고 원격 관리도 끈 컴퓨터는 **인증 없는 공개 손님 길(customer_path)** 을 바깥에 404 로 닫고 릴레이(우체국)만 연다.
+/// 짝 맺기·토큰 인증이 있는 길(가게 연결 봉함 /api/scan/sealed · /admin · /staff · /scan · /api/admin/* …)은 예전 그대로 —
+/// 원격 관리를 끄면 401 REMOTE_OFF(폰이 「원격 관리 꺼짐」을 안내), 켜면 토큰으로 들어온다. 가게 컴퓨터는 전부 예전 그대로.
 pub(crate) fn relay_only_blocks(outside: bool, shop: bool, remote_admin: bool, path: &str) -> bool {
-    outside && !shop && !remote_admin && path != "/api/relay"
+    outside && !shop && !remote_admin && path != "/api/relay" && customer_path(path)
 }
 
 fn relay_only_blocked(state: &ServerState, headers: &HeaderMap, path: &str) -> bool {
@@ -6687,8 +6688,27 @@ mod lan_mount_in_phone_router {
         assert_ne!(get("abc.trycloudflare.com", "/api/relay", true).await, StatusCode::NOT_FOUND);
         // 가게 안에서는 그대로 열린다.
         assert_ne!(get("192.168.0.10:8790", "/api/shop", false).await, StatusCode::NOT_FOUND);
-        // 원격 관리를 켜면 예전 규칙(customer_path).
-        *st.remote_admin.lock().unwrap() = true;
+        // 인증이 있는 길(가게 연결 봉함·사장·직원 화면)은 404 가 아니라 예전처럼 401 REMOTE_OFF — 폰이 「원격 관리 꺼짐」을 안내한다.
+        for path in ["/api/admin/states", "/staff", "/admin"] {
+            let s = get("abc.trycloudflare.com", path, true).await;
+            assert_ne!(s, StatusCode::NOT_FOUND, "{path} 를 404 로 닫았다");
+            assert!(s == StatusCode::UNAUTHORIZED || s == StatusCode::FORBIDDEN, "{path}: {s}");
+        }
+        let post_sealed = |remote: bool| { let app = app.clone(); let st = st.clone(); async move {
+            *st.remote_admin.lock().unwrap() = remote;
+            let r = axum::http::Request::post("/api/scan/sealed").header("host", "abc.trycloudflare.com").header("cf-connecting-ip", "198.51.100.7")
+                .header("content-type", "application/json").body(axum::body::Body::from("{}")).unwrap();
+            let res = app.oneshot(r).await.unwrap();
+            let status = res.status();
+            let b: Value = serde_json::from_slice(&axum::body::to_bytes(res.into_body(), 4096).await.unwrap()).unwrap_or(serde_json::json!({}));
+            (status, b)
+        }};
+        let (s, b) = post_sealed(false).await;
+        assert_eq!((s, b["code"].as_str()), (StatusCode::UNAUTHORIZED, Some("REMOTE_OFF")), "짝 맺은 폰의 봉함 길이 바뀌었다");
+        // 원격 관리를 켜면 예전 규칙: 공개 손님 길도 열리고, 봉함 길은 처리기까지 간다(빈 봉투라 거절 — 문 앞 REMOTE_OFF·404 가 아니다).
+        let (s, b) = post_sealed(true).await;
+        assert_ne!(s, StatusCode::NOT_FOUND);
+        assert_ne!(b["code"].as_str(), Some("REMOTE_OFF"));
         assert_ne!(get("abc.trycloudflare.com", "/api/shop", true).await, StatusCode::NOT_FOUND);
         super::TEST_NOT_SHOP.with(|c| c.set(false));
     }
