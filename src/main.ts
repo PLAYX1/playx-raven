@@ -7718,7 +7718,9 @@ async function talkPaint(opts: { cached?: boolean; list?: any[] } = {}) {
         if (!ok) return;
         const note = box.querySelector(`[data-note="${gid}"]`) as HTMLElement | null;
         try {
-          const r = await invoke<any>("talk_delete_request", { id: gid });
+          // 11-23 지운 글 종류(k 표)도 함께 — 폰 requestDelete 와 같게. 모르면 데스크탑이 찾아 넣는다.
+          const kind = Number(list.find((x) => String(x.id || "") === gid)?.kind);
+          const r = await invoke<any>("talk_delete_request", { id: gid, kind: Number.isInteger(kind) ? kind : null });
           // 🔴 글을 화면에서 없애지 않는다. 없애면 지워진 줄 안다.
           setCopyText((b as HTMLElement), () => t("지우기 요청함"));
           (b as HTMLButtonElement).disabled = true;

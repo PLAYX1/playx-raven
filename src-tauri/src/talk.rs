@@ -1164,16 +1164,29 @@ pub async fn talk_photo_post(
 ///
 /// 보낸 뒤에도 화면에서 글을 없애거나 「삭제된 메시지」로 바꾸지 않는다.
 /// **「지우기 요청함」**으로 둔다 — 되는 척하지 않는 쪽이 신뢰다.
+/// 지운 글의 종류(`k` 표). 이 컴퓨터 릴레이에 그 글이 있으면 그 종류, 없으면 화면이 준 종류, 그것도 없으면 방 글(42 · 폰 deleteDraft 기본값).
+fn delete_kind(id: &str, given: Option<i64>) -> i64 {
+    crate::relay::query_local(&[json!({ "ids": [id], "limit": 1 })]).first()
+        .and_then(|e| e.get("kind").and_then(Value::as_i64))
+        .or(given.filter(|k| (0..=65_535).contains(k)))
+        .unwrap_or(KIND_ROOM_MSG)
+}
+/// 지우기 요청 표 — 폰 talkSession.ts requestDelete 와 같게: 글 번호 · 지운 글 종류 · 레이븐 이야기 표(데스크탑 릴레이도 받게).
+fn delete_tags(id: &str, kind: i64) -> Value {
+    json!([["e", id], ["k", kind.to_string()], ["t", TAG]])
+}
+
 #[tauri::command]
-pub async fn talk_delete_request(id: String) -> Result<Value, String> {
+pub async fn talk_delete_request(id: String, kind: Option<i64>) -> Result<Value, String> {
     if id.len() != 64 || !id.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Err("글 번호가 올바르지 않습니다.".into());
     }
+    let id = id.to_ascii_lowercase();
     let sk = key()?;
-    // kind 5 = 지움 요청. `e` 태그로 어느 글인지 가리킨다(NIP-09).
-    let tags = json!([["e", id]]);
-    let ev = crate::shopkey::sign_with(&sk, 5, tags, "", now())?;
+    let ev = crate::shopkey::sign_with(&sk, 5, delete_tags(&id, delete_kind(&id, kind)), "", now())?;
     crate::nostrpub::nostr_publish(ev).await?;
+    // 11-23 내 사진 사본: 이 글만 쓰던 사진은 이 컴퓨터 사진 폴더에서도 지운다(다른 글이 같은 사진을 쓰면 남긴다).
+    crate::my_photos::drop_sources(&std::collections::HashSet::from([id.clone()]));
     Ok(json!({
         "ok": true,
         // 🔴 이 말을 화면이 그대로 띄워야 한다.
@@ -1968,6 +1981,12 @@ where
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn 지우기_요청에_폰과_같은_t_k_표() {
+        let id = "a".repeat(64);
+        assert_eq!(super::delete_tags(&id, 42), serde_json::json!([["e", id], ["k", "42"], ["t", "ravencoin"]]));
+        assert_eq!(super::delete_tags(&id, 1)[1], serde_json::json!(["k", "1"]));
+    }
     #[test]
     fn 라비_이모티콘에_emoji_표() {
         let t = super::with_sticker_tags(serde_json::json!([["t", "x"]]), "hi :ravi_like: :ravi_like: :nope: :ravi_ok:");

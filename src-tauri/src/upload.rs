@@ -514,23 +514,35 @@ fn photo_magic(bytes: &[u8]) -> bool {
         || (bytes.starts_with(b"RIFF") && bytes.get(8..12) == Some(b"WEBP"))
         || (bytes.get(4..8) == Some(b"ftyp") && matches!(bytes.get(8..12), Some(b"avif") | Some(b"avis")))
 }
-async fn photo_body(mut response: reqwest::Response) -> Result<Vec<u8>, String> {
+#[cfg(test)]
+async fn photo_body(response: reqwest::Response) -> Result<Vec<u8>, String> {
+    capped_body(response, MAX_PHOTO_BYTES, true).await
+}
+/// 받은 몸통을 상한까지만 읽는다. `image` 면 사진 종류(헤더)·첫 바이트(매직)를 본다 — 쪽지 사진 **암호문**은 사진처럼 안 생겼으니 끈다.
+async fn capped_body(mut response: reqwest::Response, max: usize, image: bool) -> Result<Vec<u8>, String> {
     if !response.status().is_success() { return Err("사진 서버가 거절했습니다. 원래 사진 주소를 확인해 주세요.".into()); }
-    let mime = response.headers().get(reqwest::header::CONTENT_TYPE).and_then(|h| h.to_str().ok())
-        .unwrap_or("").split(';').next().unwrap_or("").trim();
-    if !matches!(mime, "image/jpeg" | "image/png" | "image/gif" | "image/webp" | "image/avif") {
-        return Err("JPG·PNG·GIF·WebP·AVIF 사진만 보관합니다. 사진 파일의 직접 주소를 사용해 주세요.".into());
+    if image {
+        let mime = response.headers().get(reqwest::header::CONTENT_TYPE).and_then(|h| h.to_str().ok())
+            .unwrap_or("").split(';').next().unwrap_or("").trim();
+        if !matches!(mime, "image/jpeg" | "image/png" | "image/gif" | "image/webp" | "image/avif") {
+            return Err("JPG·PNG·GIF·WebP·AVIF 사진만 보관합니다. 사진 파일의 직접 주소를 사용해 주세요.".into());
+        }
     }
-    if response.content_length().is_some_and(|n| n > MAX_PHOTO_BYTES as u64) { return Err("사진이 12 MB를 넘습니다. 사진을 줄여 다시 올려 주세요.".into()); }
+    let too_big = || format!("사진이 {} MB를 넘습니다. 사진을 줄여 다시 올려 주세요.", max / (1024 * 1024));
+    if response.content_length().is_some_and(|n| n > max as u64) { return Err(too_big()); }
     let mut bytes = Vec::new();
     while let Some(chunk) = response.chunk().await.map_err(|_| "사진을 다 받지 못했습니다. 다시 시도해 주세요.")? {
-        if chunk.len() > MAX_PHOTO_BYTES.saturating_sub(bytes.len()) { return Err("사진이 12 MB를 넘습니다. 사진을 줄여 다시 올려 주세요.".into()); }
+        if chunk.len() > max.saturating_sub(bytes.len()) { return Err(too_big()); }
         bytes.extend_from_slice(&chunk);
     }
-    if !photo_magic(&bytes) { return Err("사진 내용이 JPG·PNG·GIF·WebP·AVIF 형식과 다릅니다. 원래 사진 파일을 다시 올려 주세요.".into()); }
+    if image && !photo_magic(&bytes) { return Err("사진 내용이 JPG·PNG·GIF·WebP·AVIF 형식과 다릅니다. 원래 사진 파일을 다시 올려 주세요.".into()); }
     Ok(bytes)
 }
 async fn download_photo(text: &str) -> Result<Vec<u8>, String> {
+    fetch_public(text, MAX_PHOTO_BYTES, true).await
+}
+/// 공개 HTTPS 주소 하나를 받는다 — DNS 결과를 모두 검사해 그 주소로만 붙고(사설·내부 IP 금지), 프록시·다시 보내기(redirect) 금지, 상한까지만.
+async fn fetch_public(text: &str, max: usize, image: bool) -> Result<Vec<u8>, String> {
     let url = photo_url(text)?;
     let host = url.host_str().ok_or("사진 서버 주소가 없습니다.")?;
     let addresses = tokio::time::timeout(std::time::Duration::from_secs(5), tokio::net::lookup_host((host, 443)))
@@ -539,10 +551,22 @@ async fn download_photo(text: &str) -> Result<Vec<u8>, String> {
     let addresses = photo_addresses(addresses)?;
     let client = reqwest::Client::builder().no_proxy()
         .redirect(reqwest::redirect::Policy::none()).resolve_to_addrs(host, &addresses)
-        .timeout(std::time::Duration::from_secs(30)).connect_timeout(std::time::Duration::from_secs(5))
+        .timeout(std::time::Duration::from_secs(if max > MAX_PHOTO_BYTES { 60 } else { 30 })).connect_timeout(std::time::Duration::from_secs(5))
         .build().map_err(|_| "안전한 사진 연결을 준비하지 못했습니다.")?;
     let response = client.get(url).send().await.map_err(|_| "사진을 받지 못했습니다. 공개 HTTPS 직접 주소인지 확인해 주세요.")?;
-    photo_body(response).await
+    capped_body(response, max, image).await
+}
+
+/// 11-23 이야기 사진 한 장(공용 사진 서버 Blossom 은 한 장 20MiB 까지 — 폰 core/talk/photo.ts MAX_PHOTO_BYTES).
+/// 장터 쪽 12MB(`download_photo`)는 그대로 둔다.
+pub(crate) const MAX_TALK_PHOTO_BYTES: usize = 20 * 1024 * 1024;
+/// 이야기 사진(내 글의 사진) 받기 — 사진 종류·매직바이트까지 본다.
+pub(crate) async fn download_talk_photo(text: &str) -> Result<Vec<u8>, String> {
+    fetch_public(text, MAX_TALK_PHOTO_BYTES, true).await
+}
+/// 쪽지 사진 **암호문** 받기 — 암호문은 사진처럼 생기지 않았으니 종류·매직바이트는 안 본다(지문은 부르는 쪽이 맞춘다).
+pub(crate) async fn download_talk_cipher(text: &str) -> Result<Vec<u8>, String> {
+    fetch_public(text, MAX_TALK_PHOTO_BYTES, false).await
 }
 #[cfg(test)]
 mod photo_security_tests {
@@ -570,6 +594,10 @@ mod photo_security_tests {
             .route("/large", get(|| async {
                 let chunks = futures_util::stream::iter((0..13).map(|_| Ok::<_, std::io::Error>(vec![0u8; 1024*1024])));
                 ([("content-type", "image/png")], axum::body::Body::from_stream(chunks))
+            }))
+            .route("/huge", get(|| async {
+                let chunks = futures_util::stream::iter((0..21).map(|_| Ok::<_, std::io::Error>(vec![0u8; 1024*1024])));
+                ([("content-type", "application/octet-stream")], axum::body::Body::from_stream(chunks))
             }));
         let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
         let client = reqwest::Client::new();
@@ -578,6 +606,15 @@ mod photo_security_tests {
         let response = client.get(format!("http://{address}/large")).send().await.unwrap();
         assert_eq!(response.content_length(), None);
         assert!(photo_body(response).await.unwrap_err().contains("12 MB"));
+        // 이야기 사진·암호문은 20MiB 까지 — 13MiB 는 받고, 암호문은 사진 모양이 아니어도 받는다.
+        let response = client.get(format!("http://{address}/large")).send().await.unwrap();
+        assert_eq!(capped_body(response, MAX_TALK_PHOTO_BYTES, true).await.unwrap_err(), "사진 내용이 JPG·PNG·GIF·WebP·AVIF 형식과 다릅니다. 원래 사진 파일을 다시 올려 주세요.");
+        let response = client.get(format!("http://{address}/large")).send().await.unwrap();
+        assert_eq!(capped_body(response, MAX_TALK_PHOTO_BYTES, false).await.unwrap().len(), 13 * 1024 * 1024);
+        let response = client.get(format!("http://{address}/huge")).send().await.unwrap();
+        assert!(capped_body(response, MAX_TALK_PHOTO_BYTES, false).await.unwrap_err().contains("20 MB"));
+        let response = client.get(format!("http://{address}/bad")).send().await.unwrap();
+        assert!(capped_body(response, MAX_TALK_PHOTO_BYTES, false).await.is_ok(), "암호문 길은 매직바이트를 안 본다");
         server.abort();
     }
 }

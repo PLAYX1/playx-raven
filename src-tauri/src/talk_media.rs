@@ -115,6 +115,7 @@ pub async fn talk_blossom_upload(data: String, mime: String) -> Result<Value, St
     let bytes = base64::engine::general_purpose::STANDARD.decode(data.trim()).map_err(|_| "사진을 읽지 못했어요.".to_string())?;
     if bytes.is_empty() || bytes.len() > MAX_UPLOAD { return Err("사진이 너무 커요. 다른 사진을 골라 주세요.".into()); }
     let hash = hex::encode(Sha256::digest(&bytes));
+    let bytes_kept = bytes.clone();
     let mut once = [0u8; 32];
     rand::RngCore::fill_bytes(&mut rand::thread_rng(), &mut once);
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
@@ -136,6 +137,8 @@ pub async fn talk_blossom_upload(data: String, mime: String) -> Result<Value, St
     if v.get("sha256").and_then(Value::as_str) != Some(hash.as_str()) || !url.contains(&hash) || !blossom_ok(url) {
         return Err("사진 서버의 답이 맞지 않아요. 다시 올려 주세요.".into());
     }
+    // 11-23 내 사진 사본 — 올린 바이트 그대로 이 컴퓨터 사진 폴더에도 한 부(my_photos.rs · IPFS 아님).
+    crate::my_photos::keep_uploaded(&hash, &bytes_kept);
     Ok(json!({ "url": url }))
 }
 

@@ -21,3 +21,5 @@
 .md-editor[hidden], .md-tools[hidden] { display: none; }
 .md-confirm { display: grid; gap: 8px; margin: 8px 0; padding: 12px 14px; border: 1px solid var(--danger); border-radius: 12px; background: var(--panel); }
 .md-confirm .md-tools { margin: 0; gap: 48px; }
+.md-photos { justify-content: space-between; }
+.md-photos button { min-height: 44px; white-space: nowrap; flex-shrink: 0; }

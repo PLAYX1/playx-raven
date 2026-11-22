@@ -110,6 +110,12 @@ fn file_ok(content: &str, tags: &[Value]) -> bool {
 
 /// 겉봉 → 쪽지(폰 nip17.unwrap 과 같은 검사). 못 열거나(남의 것) 서명·보낸 이가 안 맞으면 None — 오류가 아니다.
 pub(crate) fn open_wrap(my: &[u8; 32], gift: &Value) -> Option<Dm> {
+    open_wrap_with_file(my, gift).map(|(m, _)| m)
+}
+
+/// 11-23 내 사진 사본(my_photos.rs)용: 쪽지 + (사진 쪽지면) 암호문 주소·지문(x).
+/// 🔴 열쇠(decryption-key·nonce)는 내보내지 않는다 — 데스크탑은 암호문을 **그대로** 지킬 뿐 풀지 않는다.
+pub(crate) fn open_wrap_with_file(my: &[u8; 32], gift: &Value) -> Option<(Dm, Option<(String, String)>)> {
     use crate::wallet_link::{conv_key, nip44_decrypt};
     if gift.get("kind")?.as_i64()? != KIND_WRAP || !crate::relay::verify(gift) {
         return None;
@@ -156,7 +162,8 @@ pub(crate) fn open_wrap(my: &[u8; 32], gift: &Value) -> Option<Dm> {
     if photo && !file_ok(content, tags) {
         return None;
     }
-    Some(Dm {
+    let file = photo.then(|| (content.trim().to_string(), tag_value(tags, "x").to_string()));
+    Some((Dm {
         id: rumor.get("id")?.as_str()?.to_string(),
         from,
         to,
@@ -166,7 +173,7 @@ pub(crate) fn open_wrap(my: &[u8; 32], gift: &Value) -> Option<Dm> {
         members: if members.len() > 2 { members } else { vec![] },
         subject: tag_value(tags, "subject").trim().chars().take(60).collect(),
         photo,
-    })
+    }, file))
 }
 
 /// 글 속 라비 짧은 이름마다 emoji 표 하나(폰 stickerTags 와 같다 — 같은 것은 한 번, 모르는 이름은 표 없음).

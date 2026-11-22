@@ -84,7 +84,11 @@ pub fn my_notes() -> Result<Value, String> {
     };
     let status = crate::relay::relay_status();
     let collected = !status["my_backup_at"].is_null();
-    Ok(json!({ "me": me, "notes": notes, "deleted": deleted, "folders": folders, "assign": assign, "rev": rev, "drawer_problem": problem, "collected": collected, "status": status }))
+    // 11-23 이 컴퓨터 사진 폴더에 있는 내 사진(지문) — 화면이 공용 주소보다 먼저 그린다 · 폴더 한 줄(my_photos.rs).
+    let local_photos = crate::my_photos::local_photo_hashes();
+    let photo_store = crate::my_photos::my_photos_status();
+    Ok(json!({ "me": me, "notes": notes, "deleted": deleted, "folders": folders, "assign": assign, "rev": rev, "drawer_problem": problem, "collected": collected, "status": status,
+               "local_photos": local_photos, "photo_store": photo_store }))
 }
 
 /// 폴더와 배정을 통째로 저장한다. `rev` 가 지금 판과 같아야 한다 — 다르면 다른 곳에서 바뀐 것이니 거절한다.

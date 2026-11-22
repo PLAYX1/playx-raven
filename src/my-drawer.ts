@@ -43,7 +43,8 @@ export function noteOfEvent(e: any): Note | null {
   return { id, at: Number(e?.created_at ?? 0), text, photos, tags: [...found], reply };
 }
 
-let state: { notes: Note[]; folders: Folder[]; assign: Record<string, string>; rev: number; drawerProblem: string; view: View; local: boolean; status: any; limit: number; confirmDelete: boolean } | null = null;
+type PhotoStore = { count: number; full: boolean; cap: number };
+let state: { notes: Note[]; folders: Folder[]; assign: Record<string, string>; rev: number; drawerProblem: string; view: View; local: boolean; status: any; limit: number; confirmDelete: boolean; localPhotos: Set<string>; photoStore: PhotoStore } | null = null;
 const PAGE = 100;
 let seq = 0;
 let saveQueue: Promise<void> = Promise.resolve();
@@ -52,6 +53,7 @@ export async function paintMyDrawer(host: HTMLElement, deps: { invoke: Invoke; e
   const my = ++seq;
   host.innerHTML = `<p class="meta">${copyHtml("내 글 가져오는 중…")}</p>`;
   let notes: Note[] = [], folders: Folder[] = [], assign: Record<string, string> = {}, local = true, status: any = null, rev = 0, drawerProblem = "";
+  let localPhotos = new Set<string>(), photoStore: PhotoStore = { count: 0, full: false, cap: 0 };
   try {
     const r = await deps.invoke<any>("my_notes");
     notes = (Array.isArray(r?.notes) ? r.notes : []).map(noteOfEvent).filter(Boolean) as Note[];
@@ -60,6 +62,10 @@ export async function paintMyDrawer(host: HTMLElement, deps: { invoke: Invoke; e
     status = r?.status ?? null;
     rev = Number(r?.rev ?? 0);
     drawerProblem = typeof r?.drawer_problem === "string" ? r.drawer_problem : "";
+    // 11-23 이 컴퓨터 사진 폴더에 있는 내 사진(지문) — 공용 사진 서버보다 먼저 그린다.
+    localPhotos = new Set((Array.isArray(r?.local_photos) ? r.local_photos : []).filter((h: unknown) => typeof h === "string" && /^[0-9a-f]{64}$/.test(h)));
+    const ps = r?.photo_store;
+    photoStore = { count: Number(ps?.count ?? 0) || 0, full: ps?.full === true, cap: Number(ps?.cap ?? 0) || 0 };
     if (!notes.length && !r?.collected) {
       // 아직 이 컴퓨터가 한 번도 끝까지 모으기 전 — 바깥 릴레이에서 읽는 옛 길로 보여 준다.
       // 내가 지운 글은 여기서도 빼고 보여 준다(GPT P2 — 지운 글이 되살아나 보였다).
@@ -75,7 +81,7 @@ export async function paintMyDrawer(host: HTMLElement, deps: { invoke: Invoke; e
   }
   if (my !== seq) return;
   notes.sort((a, b) => b.at - a.at);
-  state = { notes, folders, assign, rev, drawerProblem, view: state?.view ?? { kind: "all" }, local, status, limit: PAGE, confirmDelete: false };
+  state = { notes, folders, assign, rev, drawerProblem, view: state?.view ?? { kind: "all" }, local, status, limit: PAGE, confirmDelete: false, localPhotos, photoStore };
   render(host, deps, openFeed);
   if (status?.my_backfill) watchBackfill(host, deps, openFeed, my);
 }
@@ -97,6 +103,31 @@ function watchBackfill(host: HTMLElement, deps: { invoke: Invoke; errText: (e: u
       void paintMyDrawer(host, deps, openFeed);
     }
   }, 5000);
+}
+
+/** 사진 주소 → 지문(우리 사진 길 주소 끝 `<sha256>.<확장자>`). */
+const hashOf = (u: string) => /\/([0-9a-f]{64})(?:\.[a-z]+)?$/.exec(u)?.[1] ?? "";
+/** 사진 한 장. 이 컴퓨터에 사본이 있으면 공용 주소를 먼저 부르지 않는다 — 보일 때 이 컴퓨터 사본(data:)으로 채우고, 못 읽으면 공용 주소로. */
+function picHtml(u: string): string {
+  const alt = esc(t("내가 올린 사진"));
+  const h = hashOf(u);
+  if (h && state?.localPhotos.has(h)) return `<img data-local="${h}" data-remote="${esc(u)}" alt="${alt}" />`;
+  return `<img src="${esc(u)}" alt="${alt}" loading="lazy" referrerpolicy="no-referrer" />`;
+}
+function fillLocalPhotos(host: HTMLElement, invoke: Invoke) {
+  const imgs = [...host.querySelectorAll<HTMLImageElement>("img[data-local]")];
+  if (!imgs.length) return;
+  const fill = async (img: HTMLImageElement) => {
+    const remote = img.dataset.remote || "";
+    const data = await invoke<string | null>("my_photo_local", { hash: img.dataset.local }).catch(() => null);
+    if (typeof data === "string" && /^data:image\/(jpeg|png|gif|webp|avif);base64,/.test(data)) img.src = data;
+    else { img.referrerPolicy = "no-referrer"; img.src = remote; }
+  };
+  if (typeof IntersectionObserver !== "function") { imgs.forEach((img) => void fill(img)); return; }
+  const io = new IntersectionObserver((entries) => {
+    for (const en of entries) if (en.isIntersecting) { io.unobserve(en.target); void fill(en.target as HTMLImageElement); }
+  }, { rootMargin: "300px" });
+  imgs.forEach((img) => io.observe(img));
 }
 
 function shown(): Note[] {
@@ -135,6 +166,14 @@ function render(host: HTMLElement, deps: { invoke: Invoke; errText: (e: unknown)
       // 11-08 지난 글을 모으는 동안은 모은 수가 늘어나는 한 줄(아래 watchBackfill 이 몇 초마다 고친다), 끝나면 「다 모았어요」.
       : s.status?.my_backfill || backfillWatched ? `<p class="meta" id="md-progress" aria-live="polite">${esc(deps.statusLine(s.status))}</p>` : "");
 
+  // 11-23 내 사진 사본 — 이 컴퓨터 사진 폴더 한 줄 + 폴더 열기(가득 찼으면 그 말도).
+  const ps = s.photoStore;
+  const photoLine = ps.count || ps.full
+    ? `<div class="md-tools md-photos"><span class="meta">${esc(tf("사진 {0}장이 이 컴퓨터에 있어요", String(ps.count)))}</span>` +
+      `<button type="button" class="ghost" id="md-openphotos">${copyHtml("폴더 열기")}</button></div>` +
+      (ps.full ? `<p class="meta danger" role="status">${esc(tf("사진 칸이 가득 찼어요({0}GB). 새 사진은 더 받지 않아요.", String(Math.round(ps.cap / 1024 ** 3) || 2)))}</p>` : "")
+    : "";
+
   const chips =
     `<div class="md-chips" role="group" aria-label="${esc(t("보기"))}">` +
     chip("전체", { kind: "all" }, s.notes.length) +
@@ -165,12 +204,12 @@ function render(host: HTMLElement, deps: { invoke: Invoke; errText: (e: unknown)
   if (!s.notes.length) body = `<p class="meta">${copyHtml("아직 올린 글이 없어요.")}</p>`;
   else if (!list.length) body = `<p class="meta">${copyHtml("여기에 맞는 글이 없어요.")}</p>`;
   else if (v.kind === "photos")
-    body = `<div class="md-grid">` + list.flatMap((n) => n.photos.map((u) => ({ n, u }))).slice(0, s.limit).map(({ n, u }) => `<figure><img src="${esc(u)}" alt="${esc(t("내가 올린 사진"))}" loading="lazy" referrerpolicy="no-referrer" /><figcaption class="meta">${esc(new Date(n.at * 1000).toLocaleDateString())}</figcaption></figure>`).join("") + `</div>`;
+    body = `<div class="md-grid">` + list.flatMap((n) => n.photos.map((u) => ({ n, u }))).slice(0, s.limit).map(({ n, u }) => `<figure>${picHtml(u)}<figcaption class="meta">${esc(new Date(n.at * 1000).toLocaleDateString())}</figcaption></figure>`).join("") + `</div>`;
   else
     body = `<ul class="md-list">` + list.slice(0, s.limit).map((n) => {
       const sel = locked ? "" : `<select data-assign="${esc(n.id)}" aria-label="${esc(t("폴더에 넣기"))}"><option value="">${esc(t("폴더 없음"))}</option>` +
         s.folders.map((f) => `<option value="${esc(f.id)}" translate="no"${s.assign[n.id] === f.id ? " selected" : ""}>${esc(f.name)}</option>`).join("") + `</select>`;
-      const pics = n.photos.length ? `<div class="md-pics">${n.photos.slice(0, 4).map((u) => `<img src="${esc(u)}" alt="${esc(t("내가 올린 사진"))}" loading="lazy" referrerpolicy="no-referrer" />`).join("")}</div>` : "";
+      const pics = n.photos.length ? `<div class="md-pics">${n.photos.slice(0, 4).map(picHtml).join("")}</div>` : "";
       return `<li><div class="md-row"><time class="meta">${esc(new Date(n.at * 1000).toLocaleString())}${n.reply ? " · " + esc(t("답글")) : ""}</time>${sel}</div>` +
         (n.text ? `<p translate="no">${esc(n.text)}</p>` : "") + pics + `</li>`;
     }).join("") + `</ul>`;
@@ -179,13 +218,16 @@ function render(host: HTMLElement, deps: { invoke: Invoke; errText: (e: unknown)
   const more = total > s.limit ? `<div class="row"><button type="button" class="ghost" id="md-more">${esc(tf("더 보기 ({0}개 남음)", String(total - s.limit)))}</button></div>` : "";
 
   const problemLine = locked ? `<p class="meta danger" role="status">${esc(t(s.drawerProblem))}</p>` : "";
-  host.innerHTML = head + problemLine + chips + folderTools + editor + body + more +
+  host.innerHTML = head + photoLine + problemLine + chips + folderTools + editor + body + more +
     `<div class="row"><button type="button" class="ghost" id="md-feed">${copyHtml("피드에서 보기")}</button></div>`;
 
   host.querySelectorAll<HTMLButtonElement>("[data-view]").forEach((b) => {
     b.onclick = () => { try { s.view = JSON.parse(b.dataset.view || "{}"); } catch { s.view = { kind: "all" }; } s.limit = PAGE; s.confirmDelete = false; render(host, deps, openFeed); };
   });
   host.querySelector<HTMLButtonElement>("#md-feed")!.onclick = openFeed;
+  fillLocalPhotos(host, deps.invoke);
+  const openPhotos = host.querySelector<HTMLButtonElement>("#md-openphotos");
+  if (openPhotos) openPhotos.onclick = () => { void deps.invoke("my_photos_open_folder").catch((e) => alertInline(host, deps.errText(e))); };
   const moreBtn = host.querySelector<HTMLButtonElement>("#md-more");
   if (moreBtn) moreBtn.onclick = () => { s.limit += PAGE; render(host, deps, openFeed); };
   if (locked) { host.querySelectorAll<HTMLButtonElement>("#md-newfolder").forEach((b) => { b.disabled = true; }); }

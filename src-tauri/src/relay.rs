@@ -853,6 +853,10 @@ fn owner() -> Option<String> {
 
 /// 내 글 서랍(my_drawer.rs)이 쓴다: 주인 공개키.
 pub(crate) fn owner_pub() -> Option<String> { owner() }
+/// 11-23 내 사진 사본(my_photos.rs)이 쓴다: 이 컴퓨터가 지켜 둔 「나에게 온」 겉봉 전부(봉한 그대로 · 내가 보낸 쪽지의 내 사본 포함).
+pub(crate) fn owner_wraps(me: &str) -> Vec<Value> {
+    peek(|v| v.iter().filter(|x| owner_wrap(x, Some(me))).cloned().collect())
+}
 /// 한 사람의 글(종류 지정), 새 글이 먼저 + 그 사람이 지운 글 번호들.
 /// 잠금 안에서는 그 사람 글만 복사하고, 거르기·정렬은 잠금 밖에서 한다(GPT P2 — 릴레이가 기다리지 않게).
 pub(crate) fn events_of(pubkey: &str, kinds: &[i64]) -> (Vec<Value>, Vec<String>) {
@@ -1032,6 +1036,8 @@ pub fn start_own_backup() {
             tokio::time::sleep(std::time::Duration::from_secs(30)).await;
             loop {
                 let _ = backup_my_notes_once().await;
+                // 11-23 내 사진 사본 — 모은 글·쪽지의 사진을 이 컴퓨터 일반 폴더에(my_photos.rs).
+                crate::my_photos::sync_once().await;
                 tokio::time::sleep(std::time::Duration::from_secs(15 * 60)).await;
             }
         });

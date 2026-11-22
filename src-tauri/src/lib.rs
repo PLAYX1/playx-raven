@@ -163,6 +163,7 @@ mod ticket;
 mod relay;
 mod relay_pool;
 mod my_drawer;
+mod my_photos;
 mod upload;
 mod spec;
 mod lockbox;
@@ -464,6 +465,9 @@ pub fn run() {
             relay::relay_status,
             my_drawer::my_notes,
             my_drawer::my_drawer_save,
+            my_photos::my_photos_status,
+            my_photos::my_photo_local,
+            my_photos::my_photos_open_folder,
             devfee::fee_pay,
             shopkey::shop_announce,
             shopkey::shop_refresh,
