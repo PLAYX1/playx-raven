@@ -153,10 +153,11 @@ async fn run(url: String, mut rx: mpsc::UnboundedReceiver<Cmd>, conn: Arc<Conn>)
     use futures_util::{SinkExt, StreamExt};
     use tokio_tungstenite::tungstenite::Message;
 
-    let ws = match tokio::time::timeout(CONNECT_TIMEOUT, tokio_tungstenite::connect_async(url.as_str())).await {
+    let ws = match tokio::time::timeout(CONNECT_TIMEOUT, crate::relay_share::connect_ws(url.as_str())).await {
+        // 11-23 제미나이 E4: 이웃·더한 곳은 확인한 공개 IP 로 직접 붙는다(DNS 바꿔치기 막기) — relay_share::connect_ws.
         Err(_) => Err("연결이 오래 걸립니다".to_string()),
         Ok(Err(e)) => Err(format!("연결 실패: {e}")),
-        Ok(Ok((ws, _))) => Ok(ws),
+        Ok(Ok(ws)) => Ok(ws),
     };
     let ws = match ws {
         Ok(ws) => ws,

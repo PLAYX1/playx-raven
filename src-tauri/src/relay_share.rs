@@ -278,6 +278,50 @@ pub fn ip_is_public(ip: std::net::IpAddr) -> bool {
     }
 }
 
+/// 11-23 제미나이 E4: 이름을 한 번 풀어 공개 주소인지 본 뒤 `connect_async` 가 **다시 풀면** 그 사이 사설 주소로 바꿔치기할 수 있다(DNS rebinding).
+/// 그래서 이웃·더한 곳·글쓴이 릴레이(기본 릴레이가 아닌 wss)는 **확인한 공개 IP 로 직접** 붙고, TLS 이름(SNI)·인증서 확인은 주소의 이름으로 한다
+/// (폰 relay-probe.ts 와 같은 방식). 기본 릴레이·이 컴퓨터(ws://)는 예전대로.
+pub(crate) fn needs_pinning(url: &str) -> bool {
+    url.len() > 6 && url[..6].eq_ignore_ascii_case("wss://") && !DEFAULT_RELAYS.iter().any(|d| d.eq_ignore_ascii_case(url.trim_end_matches('/')))
+}
+
+/// 공개 IP 로 풀린 주소들(하나라도 사설이면 빈 목록 — 섞어 두는 속임도 막는다).
+async fn public_addrs(url: &str) -> Vec<std::net::SocketAddr> {
+    let Some(clean) = clean_relay_url(url) else { return vec![] };
+    let target = format!("{}:443", host_of(&clean));
+    match tokio::net::lookup_host(target).await {
+        Ok(addrs) => {
+            let v: Vec<std::net::SocketAddr> = addrs.collect();
+            if !v.is_empty() && v.iter().all(|a| ip_is_public(a.ip())) { v } else { vec![] }
+        }
+        Err(_) => vec![],
+    }
+}
+
+pub(crate) type Ws = tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
+
+/// 웹소켓으로 붙는다. 고정이 필요한 주소면 확인한 공개 IP 로 TCP 를 열고 그 위에 TLS(이름 = 주소의 호스트)를 얹는다.
+pub(crate) async fn connect_ws(url: &str) -> Result<Ws, String> {
+    if !needs_pinning(url) {
+        return tokio_tungstenite::connect_async(url).await.map(|(ws, _)| ws).map_err(|e| e.to_string());
+    }
+    let addrs = public_addrs(url).await;
+    if addrs.is_empty() {
+        return Err("공개 주소가 아닙니다".into());
+    }
+    let mut last = String::from("연결 실패");
+    for a in addrs.iter().take(4) {
+        match tokio::net::TcpStream::connect(a).await {
+            Ok(tcp) => {
+                let _ = tcp.set_nodelay(true);
+                return tokio_tungstenite::client_async_tls(url, tcp).await.map(|(ws, _)| ws).map_err(|e| e.to_string());
+            }
+            Err(e) => last = e.to_string(),
+        }
+    }
+    Err(last)
+}
+
 /// 이름이 공개 주소로만 풀리는가 — DNS 로 사설 주소를 가리키는 속임을 접속 직전에 막는다.
 async fn resolves_public(url: &str) -> bool {
     let target = format!("{}:443", host_of(url));
@@ -505,7 +549,7 @@ async fn probe_inner(url: &str, check_dns: bool) -> bool {
         }
         use futures_util::{SinkExt, StreamExt};
         use tokio_tungstenite::tungstenite::Message;
-        let Ok((mut ws, _)) = tokio_tungstenite::connect_async(url).await else { return false };
+        let Ok(mut ws) = connect_ws(url).await else { return false };
         let sub = "rvprobe";
         let req = json!(["REQ", sub, { "kinds": [LIST_KIND], "limit": 1 }]).to_string();
         if ws.send(Message::Text(req.into())).await.is_err() {
@@ -1381,6 +1425,21 @@ mod tests {
         // 남이 쓴 kind 5 로는 내 글이 지워진 것으로 치지 않는다.
         let fake = note(&other, 5, NOW, "", json!([["e", mine[2]["id"]]]));
         assert!(deleted_ids(&[fake], &me).is_empty());
+    }
+
+    #[test]
+    fn peer_relays_are_pinned_but_default_relays_are_not() {
+        assert!(needs_pinning("wss://a.trycloudflare.com/api/relay"));
+        assert!(needs_pinning("wss://shop.example.com"));
+        for d in DEFAULT_RELAYS { assert!(!needs_pinning(d), "{d}"); }
+        assert!(!needs_pinning("ws://127.0.0.1:8790/api/relay"), "이 컴퓨터는 그대로");
+    }
+
+    #[tokio::test]
+    async fn pinned_connect_refuses_names_that_resolve_private() {
+        // localhost 는 주소 검사(§2)에서, 숫자 주소도 거절 — 붙기 전에 끝난다.
+        assert!(connect_ws("wss://localhost/relay").await.is_err());
+        assert!(connect_ws("wss://127.0.0.1/relay").await.is_err());
     }
 
     #[test]
