@@ -121,15 +121,8 @@ pub fn start_saver() {
             if !DIRTY.swap(false, std::sync::atomic::Ordering::Relaxed) {
                 continue;
             }
-            let snapshot = {
-                let g = STORE.lock().unwrap_or_else(|e| e.into_inner());
-                g.clone().unwrap_or_default()
-            };
-            // 11-07: 임시 파일 → 이름 바꾸기. 실패하면 다음 차례에 다시 쓴다(표시를 되살린다).
-            let tmp = file().with_extension("json.tmp");
-            let ok = std::fs::write(&tmp, serde_json::to_vec(&json!({ "events": snapshot })).unwrap_or_default()).is_ok()
-                && std::fs::rename(&tmp, file()).is_ok();
-            if !ok {
+            // 11-23 제미나이 E2: 통째로 다시 쓰지 않고 바뀐 것만 덧붙인다(save_changes). 실패하면 다음 차례에 다시.
+            if !save_changes(false) {
                 DIRTY.store(true, std::sync::atomic::Ordering::Relaxed);
             }
         }
@@ -140,12 +133,91 @@ fn file() -> std::path::PathBuf {
     crate::paths::app_file("relay-events.json")
 }
 
+/// 바뀐 것만 덧붙이는 기록(11-23 제미나이 E2). 한 줄 = `{"a": 글}`(더함) 또는 `{"d": 글 번호}`(뺌).
+/// `relay-events.json` 은 마지막으로 압축한 바탕이고, 읽을 때 바탕 + 이 기록을 차례로 되짚는다.
+fn log_path() -> std::path::PathBuf {
+    file().with_file_name("relay-events.log")
+}
+
+/// 디스크(바탕 + 기록)에 이미 있는 글 번호들과 기록 줄 수. None = 모른다(다음 저장은 바탕을 새로 쓴다).
+static SAVED: Mutex<Option<(std::collections::HashSet<String>, usize)>> = Mutex::new(None);
+
+fn ev_id(e: &Value) -> Option<&str> { e.get("id").and_then(Value::as_str) }
+
 fn load() -> Vec<Value> {
-    std::fs::read_to_string(file())
+    let mut v: Vec<Value> = std::fs::read_to_string(file())
         .ok()
         .and_then(|t| serde_json::from_str::<Value>(&t).ok())
         .and_then(|v| v.get("events").and_then(Value::as_array).cloned())
-        .unwrap_or_default()
+        .unwrap_or_default();
+    let mut lines = 0usize;
+    if let Ok(text) = std::fs::read_to_string(log_path()) {
+        let mut gone: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut have: std::collections::HashSet<String> = v.iter().filter_map(ev_id).map(str::to_string).collect();
+        for line in text.lines() {
+            lines += 1;
+            let Ok(x) = serde_json::from_str::<Value>(line) else { continue };
+            if let Some(id) = x.get("d").and_then(Value::as_str) {
+                if have.remove(id) { gone.insert(id.to_string()); }
+            } else if let Some(e) = x.get("a") {
+                if let Some(id) = ev_id(e) {
+                    if gone.remove(id) { v.retain(|y| ev_id(y) != Some(id)); }
+                    if have.insert(id.to_string()) { v.push(e.clone()); }
+                }
+            }
+        }
+        if !gone.is_empty() { v.retain(|y| ev_id(y).is_none_or(|id| !gone.contains(id))); }
+    }
+    let ids = v.iter().filter_map(ev_id).map(str::to_string).collect();
+    *SAVED.lock().unwrap_or_else(|e| e.into_inner()) = Some((ids, lines));
+    v
+}
+
+/// 디스크에 내린다. 보통은 지난번과 달라진 글만 기록 끝에 덧붙이고,
+/// 기록이 길어지면(들고 있는 수 + 2000 줄 넘게) 또는 `compact` 면 바탕을 새로 쓰고 기록을 비운다. 성공해야 true.
+fn save_changes(compact: bool) -> bool {
+    enum Plan { Base(Vec<Value>), Append(Vec<String>, std::collections::HashSet<String>) }
+    let plan = {
+        let g = STORE.lock().unwrap_or_else(|e| e.into_inner());
+        let Some(v) = g.as_ref() else { return true };
+        let saved = SAVED.lock().unwrap_or_else(|e| e.into_inner());
+        match saved.as_ref() {
+            Some((ids, lines)) if !compact => {
+                let now: std::collections::HashSet<String> = v.iter().filter_map(ev_id).map(str::to_string).collect();
+                let mut out: Vec<String> = ids.iter().filter(|id| !now.contains(*id)).map(|id| json!({ "d": id }).to_string()).collect();
+                out.extend(v.iter().filter(|e| ev_id(e).is_some_and(|id| !ids.contains(id))).map(|e| json!({ "a": e }).to_string()));
+                if lines + out.len() > v.len() + 2000 { Plan::Base(v.clone()) } else { Plan::Append(out, now) }
+            }
+            _ => Plan::Base(v.clone()),
+        }
+    };
+    match plan {
+        Plan::Append(lines, now) => {
+            if lines.is_empty() { return true; }
+            let mut body = lines.join("\n");
+            body.push('\n');
+            let ok = std::fs::OpenOptions::new().create(true).append(true).open(log_path())
+                .and_then(|mut f| std::io::Write::write_all(&mut f, body.as_bytes())).is_ok();
+            if ok {
+                let mut saved = SAVED.lock().unwrap_or_else(|e| e.into_inner());
+                let n = saved.as_ref().map(|(_, l)| *l).unwrap_or(0) + lines.len();
+                *saved = Some((now, n));
+            }
+            ok
+        }
+        Plan::Base(snapshot) => {
+            // 11-07: 임시 파일 → 이름 바꾸기. 바탕을 바꾼 뒤에 기록을 비운다(그 사이 꺼져도 되짚기가 같은 결과).
+            let tmp = file().with_extension("json.tmp");
+            let ok = std::fs::write(&tmp, serde_json::to_vec(&json!({ "events": snapshot })).unwrap_or_default()).is_ok()
+                && std::fs::rename(&tmp, file()).is_ok();
+            if ok {
+                let _ = std::fs::remove_file(log_path());
+                let ids = snapshot.iter().filter_map(ev_id).map(str::to_string).collect();
+                *SAVED.lock().unwrap_or_else(|e| e.into_inner()) = Some((ids, 0));
+            }
+            ok
+        }
+    }
 }
 
 fn with<T>(f: impl FnOnce(&mut Vec<Value>) -> T) -> T {
@@ -925,10 +997,8 @@ fn owner_same_as_wallet() -> bool {
 
 /// 지금 들고 있는 글을 **바로** 디스크에 쓴다(임시 파일 → 이름 바꾸기). 성공해야 true.
 fn flush_now() -> bool {
-    let snapshot = peek(|v| v.clone());
-    let Ok(body) = serde_json::to_vec(&json!({ "events": snapshot })) else { return false };
-    let tmp = file().with_extension("json.tmp");
-    std::fs::write(&tmp, body).is_ok() && std::fs::rename(&tmp, file()).is_ok()
+    peek(|_| ());
+    save_changes(false)
 }
 
 /// 한 릴레이에서 쪽을 넘기며 끝까지 읽는다(내 글 또는 나에게 온 겉봉). 릴레이마다 따로 넘긴다(합친 뒤 넘기면 가운데가 빠진다 — GPT P2).
@@ -1806,6 +1876,45 @@ mod tests {
         assert!(peek(|v| v.iter().any(|x| x["id"] == mine["id"])), "끄면서 내 글을 지웠다");
         *TEST_OWNER.lock().unwrap() = None;
         *STORE.lock().unwrap() = None;
+    }
+
+    /// 11-23 제미나이 E2: 저장은 바뀐 것만 기록 끝에 덧붙이고(바탕을 다시 안 쓴다), 다시 켜면 바탕 + 기록을 되짚어 같은 글이 된다.
+    #[test]
+    fn saves_append_changes_and_reload_the_same_events() {
+        use super::*;
+        let _g = OWNER_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _e = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
+        let home = crate::paths::test_fixture_root().join(format!("relay-append-{}", std::process::id()));
+        std::fs::create_dir_all(&home).unwrap();
+        std::env::set_var("PLAYX_RAVEN_HOME", &home);
+        *TEST_OWNER.lock().unwrap() = None;
+        *STORE.lock().unwrap() = None;
+        *SAVED.lock().unwrap() = None;
+        let t = json!([["t", "ravencoin"]]);
+        let evs: Vec<Value> = (0..5).map(|i| crate::shopkey::sign_with(&[0x51u8; 32], 1, t.clone(), &format!("글 {i}"), now_secs() - i).unwrap()).collect();
+        for e in &evs[..3] { assert!(store(e.clone()).0); }
+        assert!(save_changes(false));
+        assert_eq!(std::fs::read_to_string(log_path()).unwrap().lines().count(), 3, "처음에도 덧붙인다");
+        assert!(save_changes(true), "압축 = 바탕");
+        let base = std::fs::read(file()).unwrap();
+        assert!(!log_path().exists());
+        assert!(store(evs[3].clone()).0 && store(evs[4].clone()).0);
+        with(|v| v.retain(|x| x["id"] != evs[0]["id"]));
+        assert!(save_changes(false));
+        assert_eq!(std::fs::read(file()).unwrap(), base, "바탕을 다시 썼다");
+        assert_eq!(std::fs::read_to_string(log_path()).unwrap().lines().count(), 3, "더함 2 + 뺌 1");
+        let before: Vec<Value> = peek(|v| v.clone());
+        *STORE.lock().unwrap() = None;
+        let after: Vec<Value> = peek(|v| v.clone());
+        assert_eq!(after, before, "다시 켜면 같은 글이어야 한다");
+        // 압축하면 기록이 없어지고 바탕에 다 들어간다.
+        assert!(save_changes(true));
+        assert!(!log_path().exists());
+        *STORE.lock().unwrap() = None;
+        assert_eq!(peek(|v| v.clone()), before);
+        *STORE.lock().unwrap() = None;
+        *SAVED.lock().unwrap() = None;
+        std::env::remove_var("PLAYX_RAVEN_HOME");
     }
 
     /// 방 이름·설명 수정(kind 41)도 레이븐 이야기다 — 우리 릴레이가 안 남기면 이 컴퓨터는
