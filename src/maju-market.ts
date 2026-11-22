@@ -89,7 +89,7 @@ export function mountMaju(page: HTMLElement, host: HTMLElement, deps: MajuDeps) 
     const link = `<button type="button" class="ghost mj-link" data-mj-orders="1">${copyHtml("내 주문 · 주문 찾기")}</button>`;
     host.innerHTML = !list.length ? `<div class="mj-orders-only">${link}</div>` :
       `<div class="mj-sec-head"><h3>${copyHtml("이번 주 공동구매")}</h3>${link}</div>` +
-      `<p class="meta">${copyHtml("마주가 고른 상품")}</p>` +
+      `<p class="meta">${copyHtml("PLAY X 장터가 고른 상품")}</p>` +
       `<ul class="mj-grid">${list.map((p) => {
         const left = p.left > 0 ? [tf("남은 수량 {0}개", p.left), untilText(p.sellUntil)].filter(Boolean).join(" · ") : t("다 팔렸어요");
         const tag = p.test ? t("시험") : !majuOpen(p) ? t("시험 중") : "";
@@ -163,7 +163,7 @@ export function mountMaju(page: HTMLElement, host: HTMLElement, deps: MajuDeps) 
       `<p class="meta">${copyHtml("동의하지 않으면 주문할 수 없어요. 받는 분 정보는 다음에 쓰도록 이 기기에도 남겨요.")}</p></div>` +
       `<div data-mj-err="1">${errLine()}</div>` +
       `<div class="row mj-acts"><button type="button" data-mj-go="1" disabled>${copyHtml("결제하기")}</button><button type="button" class="ghost" data-mj-stop="1">${copyHtml("그만두기")}</button></div>` +
-      `<p class="meta">${esc(tf("판매처 {0}", t("마주")))} · <span translate="no">${esc(p.title)}</span></p></div>`;
+      `<p class="meta">${esc(tf("판매처 {0}", t("PLAY X 장터")))} · <span translate="no">${esc(p.title)}</span></p></div>`;
     wireBack(() => ({ at: "detail", p }));
     host.querySelector<HTMLElement>("[data-mj-stop]")!.onclick = () => go({ at: "detail", p });
     const field = (k: "name" | "phone" | "memo") => host.querySelector<HTMLInputElement>(`[data-mj-f="${k}"]`)!;
@@ -244,7 +244,7 @@ export function mountMaju(page: HTMLElement, host: HTMLElement, deps: MajuDeps) 
     const { p, pay } = v;
     host.innerHTML = `<div class="mj-form"><h3>${copyHtml("RVN 보내기")}</h3><p class="meta" translate="no">${esc(p.title)}</p>` +
       `<div class="mj-big">${esc(`${atomsText(pay.priceSats)} RVN`)}</div>` +
-      `<div class="mj-box">${row("받는 곳", `${copyHtml("마주 판매 대금")} · <code translate="no">${esc(pay.address)}</code>`)}` +
+      `<div class="mj-box">${row("받는 곳", `${copyHtml("PLAY X 장터 판매 대금")} · <code translate="no">${esc(pay.address)}</code>`)}` +
       row("상품값", esc(`${atomsText(pay.sellerSats)} RVN`)) + row("레이븐볼트 1%", esc(`${atomsText(pay.feeSats)} RVN`)) + `</div>` +
       `<p class="meta">${copyHtml("공개 장부 수수료는 노드가 정해 따로 조금 붙어요. 레이븐볼트는 거래 당사자가 아니고, 보낸 RVN은 돌려받을 수 없어요.")}</p>` +
       `<p class="meta">${copyHtml("한 번 보내면 되돌릴 수 없어요. 15분 안에 보내야 주문이 돼요.")}</p>` +
@@ -290,7 +290,7 @@ export function mountMaju(page: HTMLElement, host: HTMLElement, deps: MajuDeps) 
   function paintSent(v: Extract<View, { at: "sent" }>) {
     focus(true);
     host.innerHTML = `<div class="mj-form mj-done"><span class="mj-mark">${ICON_CHECK}</span><h3>${copyHtml("RVN 을 보냈어요")}</h3>` +
-      `<p class="meta">${copyHtml(busy ? "마주가 장부에서 확인하고 있어요…" : "마주가 아직 확인하지 못했어요")}</p>` + errLine() +
+      `<p class="meta">${copyHtml(busy ? "PLAY X 장터가 장부에서 확인하고 있어요…" : "PLAY X 장터가 아직 확인하지 못했어요")}</p>` + errLine() +
       `<p class="meta">${copyHtml("다시 보내지 마세요. 거래 보관함에도 남아 있어요.")}</p>` +
       (v.txid ? `<p class="meta">${copyHtml("거래 번호")} <code translate="no">${esc(v.txid)}</code></p>` : "") +
       `<div class="row mj-acts">${!busy && v.txid ? `<button type="button" data-mj-again="1">${copyHtml("주문 다시 확인")}</button>` : ""}` +
@@ -301,7 +301,7 @@ export function mountMaju(page: HTMLElement, host: HTMLElement, deps: MajuDeps) 
 
   function paintDone(v: Extract<View, { at: "done" }>) {
     focus(true);
-    host.innerHTML = `<div class="mj-form mj-done"><span class="mj-mark">${ICON_CHECK}</span><h3>${copyHtml("결제했어요")}</h3><p class="meta">${copyHtml("마주가 주문을 받았어요")}</p>` +
+    host.innerHTML = `<div class="mj-form mj-done"><span class="mj-mark">${ICON_CHECK}</span><h3>${copyHtml("결제했어요")}</h3><p class="meta">${copyHtml("PLAY X 장터가 주문을 받았어요")}</p>` +
       `<div class="mj-box">${row("주문 번호", esc(v.order.shortNo))}${row("상품", `<span translate="no">${esc(v.p.title)}</span> × ${v.qty}`)}${row("낸 돈", esc(wonText(v.order.totalWon)))}</div>` +
       (v.p.test ? `<p class="meta">${copyHtml("시험 주문이에요. 돈이 나가지 않았고 실제로 보내지 않아요.")}</p>` : "") +
       `<div class="row mj-acts"><button type="button" data-mj-orders="1">${copyHtml("내 주문 · 주문 찾기")}</button><button type="button" class="ghost" data-mj-back="1">${copyHtml("장터로")}</button></div></div>`;
@@ -352,13 +352,13 @@ export function mountMaju(page: HTMLElement, host: HTMLElement, deps: MajuDeps) 
     const tr = v ? majuTracking(v) : null;
     const a = v?.after;
     box.innerHTML =
-      `<div class="mj-ohead"><b>${copyHtml("마주")}${o.test ? ` · ${copyHtml("시험")}` : ""}</b><span class="meta">${esc(o.shortNo)}</span></div>` +
+      `<div class="mj-ohead"><b>${copyHtml("PLAY X 장터")}${o.test ? ` · ${copyHtml("시험")}` : ""}</b><span class="meta">${esc(o.shortNo)}</span></div>` +
       `<p class="mj-ctitle" translate="no">${esc(o.title)}${v ? ` × ${v.qty}` : ""}</p>` +
       (v ? `<p class="meta">${esc(wonText(v.totalWon))}</p>` : got === "failed" ? `<p class="meta">${copyHtml("지금 상태를 받지 못했어요")}</p>` : `<p class="meta">${copyHtml("가져오는 중…")}</p>`) +
       (step === -1 ? `<p class="danger">${copyHtml("취소된 주문이에요")}</p>` : "") +
       (v && step >= 0 ? `<ol class="mj-steps" aria-label="${esc(`${t("진행")} · ${t(MAJU_STEPS[Math.min(step, 3)])}`)}">${MAJU_STEPS.map((n, i) => `<li class="${i <= step ? "on" : ""}${i === step ? " now" : ""}">${copyHtml(n)}</li>`).join("")}</ol>` : "") +
       (tr ? `<p class="mj-track"><span>${esc(t(tr.name))}</span> <code translate="no">${esc(tr.number)}</code>${tr.url ? ` <button type="button" class="ghost" data-mj-track="1">${copyHtml("배송 조회")}</button>` : ""}</p>` : "") +
-      (a ? afterHtml(a) : v?.ask.phone ? `<p class="meta">${copyHtml("마주에 묻기")} · <span translate="no">${esc(v.ask.phone)}</span></p>` : "") +
+      (a ? afterHtml(a) : v?.ask.phone ? `<p class="meta">${copyHtml("PLAY X 장터에 묻기")} · <span translate="no">${esc(v.ask.phone)}</span></p>` : "") +
       (note ? `<p class="meta" role="status">${esc(t(note))}</p>` : "") +
       `<div class="row mj-small"><button type="button" class="ghost" data-mj-re="1">${copyHtml("새로 보기")}</button><button type="button" class="ghost" data-mj-copy="1">${copyHtml("코드 복사")}</button></div>` +
       `<p class="meta" data-mj-copied="1" role="status"></p>`;
@@ -381,7 +381,7 @@ export function mountMaju(page: HTMLElement, host: HTMLElement, deps: MajuDeps) 
         `<input data-mj-pline="1" maxlength="200" hidden placeholder="${esc(t("한 줄 더 적어도 돼요 (없어도 돼요)"))}" aria-label="${esc(t("한 줄 더 적어도 돼요 (없어도 돼요)"))}" />` +
         `<div class="row"><button type="button" data-mj-praise="1" disabled>${copyHtml("칭찬 보내기")}</button></div></div>` : "") +
       (a.praise ? `<div class="mj-box"><b>${copyHtml("남긴 칭찬")}</b><p class="meta">${esc(a.praise.tags.map((g) => t(g)).join(" · "))}</p>${a.praise.line && a.praise.line !== a.praise.tags.join(" · ") ? `<p class="meta">“${esc(a.praise.line)}”</p>` : ""}</div>` : "") +
-      (a.problemSent ? `<p class="meta">${copyHtml("문제를 알려 주셨어요. 마주가 확인한 뒤 연락드려요")}</p>` : "") +
+      (a.problemSent ? `<p class="meta">${copyHtml("문제를 알려 주셨어요. PLAY X 장터가 확인한 뒤 연락드려요")}</p>` : "") +
       (a.thread.length ? `<div class="mj-thread">${a.thread.map((m) => `<div class="mj-bubble ${m.from === "me" ? "me" : "them"}"><small>${esc(m.from === "maker" ? m.who.replace("만든 분", t("만든 분")) : t(m.who))}</small><span>${esc(m.text)}</span></div>`).join("")}</div>` : "") +
       `<div data-mj-open-box="1"></div>` +
       `<div class="row mj-small"><button type="button" class="ghost" data-mj-ask="1">${copyHtml("만든 분께 묻기")}</button>` +
@@ -407,19 +407,19 @@ export function mountMaju(page: HTMLElement, host: HTMLElement, deps: MajuDeps) 
         `<div class="row"><button type="button" data-mj-asksend="1" disabled>${copyHtml("보내기")}</button></div></div>`;
       const ta = openBox.querySelector<HTMLTextAreaElement>("[data-mj-askt]")!, sendBtn = openBox.querySelector<HTMLButtonElement>("[data-mj-asksend]")!;
       ta.oninput = () => { sendBtn.disabled = ta.value.trim().length < 2; };
-      sendBtn.onclick = () => void run(sendBtn, () => majuAsk(o, ta.value.trim()), "보냈어요. 만든 분이나 마주가 답하면 여기에 보여요");
+      sendBtn.onclick = () => void run(sendBtn, () => majuAsk(o, ta.value.trim()), "보냈어요. 만든 분이나 PLAY X 장터가 답하면 여기에 보여요");
       ta.focus();
     };
     box.querySelector<HTMLElement>("[data-mj-prob]")?.addEventListener("click", () => {
       let reason = "";
       openBox.innerHTML = `<div class="mj-box"><b>${copyHtml("어떤 문제가 있나요?")}</b><div class="mj-chips" role="radiogroup">${a.problemReasons.map((g, i) => `<button type="button" class="ghost" data-mj-why="${i}" role="radio" aria-checked="false">${copyHtml(g)}</button>`).join("")}</div>` +
         `<textarea data-mj-probt="1" maxlength="500" rows="3" placeholder="${esc(t("조금 더 알려 주세요 (없어도 돼요)"))}" aria-label="${esc(t("조금 더 알려 주세요 (없어도 돼요)"))}"></textarea>` +
-        `<div class="row"><button type="button" class="danger-btn" data-mj-probsend="1" disabled>${copyHtml("마주에 알리기")}</button></div></div>`;
+        `<div class="row"><button type="button" class="danger-btn" data-mj-probsend="1" disabled>${copyHtml("PLAY X 장터에 알리기")}</button></div></div>`;
       const sendBtn = openBox.querySelector<HTMLButtonElement>("[data-mj-probsend]")!;
       openBox.querySelectorAll<HTMLButtonElement>("[data-mj-why]").forEach((b) => {
         b.onclick = () => { reason = a.problemReasons[Number(b.dataset.mjWhy)]; openBox.querySelectorAll("[data-mj-why]").forEach((x) => x.setAttribute("aria-checked", String(x === b))); sendBtn.disabled = false; };
       });
-      sendBtn.onclick = () => void run(sendBtn, () => majuProblem(o, reason, openBox.querySelector<HTMLTextAreaElement>("[data-mj-probt]")!.value.trim()), "알려 주셔서 고마워요. 마주가 확인한 뒤 연락드려요");
+      sendBtn.onclick = () => void run(sendBtn, () => majuProblem(o, reason, openBox.querySelector<HTMLTextAreaElement>("[data-mj-probt]")!.value.trim()), "알려 주셔서 고마워요. PLAY X 장터가 확인한 뒤 연락드려요");
     });
   }
   async function refreshOrderQuiet(o: SavedMajuOrder) { try { orderViews.set(o.orderId, await loadMajuOrder(o)); } catch { /* 그대로 */ } }

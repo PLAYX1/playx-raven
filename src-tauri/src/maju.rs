@@ -76,14 +76,14 @@ fn query_ok(path: &str, k: &str, v: &str) -> bool {
 pub async fn maju_call(method: String, path: String, query: Option<Value>, body: Option<Value>, token: Option<String>) -> Result<Value, String> {
     let method = method.to_ascii_uppercase();
     if !path_ok(&method, &path) {
-        return Err("마주에 부를 수 없는 길이에요.".into());
+        return Err("PLAY X 장터에 부를 수 없는 길이에요.".into());
     }
-    let mut url = reqwest::Url::parse(&format!("{MAJU_FUNCTION}{path}")).map_err(|_| "마주 주소 오류")?;
+    let mut url = reqwest::Url::parse(&format!("{MAJU_FUNCTION}{path}")).map_err(|_| "PLAY X 장터 주소 오류")?;
     if let Some(Value::Object(q)) = &query {
         let mut pairs = url.query_pairs_mut();
         for (k, v) in q {
-            let v = v.as_str().ok_or("마주 물음 오류")?;
-            if !query_ok(&path, k, v) { return Err("마주 물음 오류".into()); }
+            let v = v.as_str().ok_or("PLAY X 장터 물음 오류")?;
+            if !query_ok(&path, k, v) { return Err("PLAY X 장터 물음 오류".into()); }
             pairs.append_pair(k, v);
         }
     }
@@ -94,17 +94,17 @@ pub async fn maju_call(method: String, path: String, query: Option<Value>, body:
         req = req.header("x-rv-token", t);
     }
     if method == "POST" {
-        let bytes = serde_json::to_vec(&body.unwrap_or_else(|| json!({}))).map_err(|_| "마주 보낼 내용 오류")?;
+        let bytes = serde_json::to_vec(&body.unwrap_or_else(|| json!({}))).map_err(|_| "PLAY X 장터 보낼 내용 오류")?;
         if bytes.len() > BODY_MAX { return Err("보낼 내용이 너무 길어요.".into()); }
         req = req.header("content-type", "application/json").body(bytes);
     }
     let r = req.send().await.map_err(|_| "network".to_string())?;
     let status = r.status().as_u16();
     if r.content_length().map(|n| n as usize > ANSWER_MAX).unwrap_or(false) {
-        return Err("마주 답이 너무 커요.".into());
+        return Err("PLAY X 장터 답이 너무 커요.".into());
     }
     let b = r.bytes().await.map_err(|_| "network".to_string())?;
-    if b.len() > ANSWER_MAX { return Err("마주 답이 너무 커요.".into()); }
+    if b.len() > ANSWER_MAX { return Err("PLAY X 장터 답이 너무 커요.".into()); }
     let body: Value = serde_json::from_slice(&b).unwrap_or(Value::Null);
     Ok(json!({ "status": status, "body": body }))
 }

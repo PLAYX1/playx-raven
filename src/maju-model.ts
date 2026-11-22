@@ -76,7 +76,7 @@ export const searchMajuAddress = (q: string, page = 1) =>
 export function majuErrorText(e: unknown): string {
   const code = e instanceof MajuError ? e.code : "network", detail = e instanceof MajuError ? e.detail : undefined;
   if (code === "bad-input" && detail === "ask") return "두 글자 넘게, 500자 안으로 적어 주세요";
-  if (code === "rate-limit" && detail === "ask") return "오늘은 많이 물어보셨어요. 마주가 답하면 여기에 보여요";
+  if (code === "rate-limit" && detail === "ask") return "오늘은 많이 물어보셨어요. PLAY X 장터가 답하면 여기에 보여요";
   if (code === "state" && detail === "already") return "이미 남겼어요";
   if (code === "state" && (detail === "not-shipped" || detail === "not-yet")) return "아직 그 단계가 아니에요. 「새로 보기」를 눌러 주세요";
   if (code === "sold-out" && detail === "not-enough") return "남은 수량보다 많아요. 수량을 줄여 주세요";
@@ -88,8 +88,8 @@ export function majuErrorText(e: unknown): string {
   if (code === "state" && detail === "rvn-pay-not-ready") return "RVN 결제는 아직 준비 중이에요";
   if (code === "state" && detail === "already-confirmed") return "이미 주문했어요. 보관함의 주문에서 볼 수 있어요";
   if (code === "state" && detail === "rvn-not-seen") return "보낸 RVN 이 아직 장부에 안 보여요. 잠시 뒤 「주문 다시 확인」을 눌러 주세요. 다시 보내지 마세요";
-  if (code === "state" && detail === "rvn-not-verified") return "보낸 거래가 이 주문 값과 맞지 않아요. 마주에 연락해 주세요";
-  if (code === "state" && detail === "paid-late") return "15분이 지나 RVN 이 도착했어요. 돈은 마주가 확인하고 연락드릴게요";
+  if (code === "state" && detail === "rvn-not-verified") return "보낸 거래가 이 주문 값과 맞지 않아요. PLAY X 장터에 연락해 주세요";
+  if (code === "state" && detail === "paid-late") return "15분이 지나 RVN 이 도착했어요. 돈은 PLAY X 장터가 확인하고 연락드릴게요";
   if (code === "state" && detail === "txid-used") return "이미 다른 주문에 쓴 거래예요";
   if (code === "bad-input" && detail === "phone") return "연락처는 휴대폰 번호(010-1234-5678)로 넣어 주세요";
   if (code === "bad-input" && detail === "zip") return "우편번호를 다시 확인해 주세요";
@@ -99,7 +99,7 @@ export function majuErrorText(e: unknown): string {
   if (code === "rate-limit" && detail === "address") return "주소 찾기를 너무 자주 했어요. 1분 뒤 다시 해 주세요";
   if (code === "bad-input" && detail === "q") return "도로명·건물 이름을 두 글자 넘게 넣어 주세요";
   if (code === "bad-code") return "주문 찾기 코드가 맞지 않아요";
-  return "마주에 닿지 못했어요. 잠시 뒤 다시 해 주세요";
+  return "PLAY X 장터에 닿지 못했어요. 잠시 뒤 다시 해 주세요";
 }
 
 // ── 결제 대조(폰 checkMajuPayTo 와 같은 규칙 — 러스트 maju_pay 가 다시 본다) ──
@@ -146,7 +146,7 @@ export const MAJU_RETURN_LINES = [
 ] as const;
 /** 11-16 대표 — 폰 MAJU_DOMESTIC_ONLY 와 같은 글. */
 export const MAJU_DOMESTIC_ONLY = "한국 안에서만 받을 수 있어요 · 해외 배송은 안 돼요";
-export const MAJU_SELLER_LINE = "마주 공동구매 · 확인된 판매처";
+export const MAJU_SELLER_LINE = "PLAY X 장터 공동구매 · 확인된 판매처";
 
 export function majuPhone(raw: string): string | null {
   let d = raw.replace(/[^0-9+]/g, "");
