@@ -10,9 +10,10 @@
  */
 import "./my-drawer.css";
 import { t, tf, copyHtml } from "./i18n";
+import { fillPrivatePhotos, myPrivateNotes, loadPrivate, privateBadgeHtml } from "./talk-private";
 
 type Invoke = <T = any>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
-type Note = { id: string; at: number; text: string; photos: string[]; tags: string[]; reply: boolean };
+type Note = { id: string; at: number; text: string; photos: string[]; tags: string[]; reply: boolean; aud?: "self" | "friends"; sealed?: string[] };
 type Folder = { id: string; name: string };
 type View = { kind: "all" } | { kind: "photos" } | { kind: "nofolder" } | { kind: "folder"; id: string } | { kind: "tag"; tag: string };
 
@@ -80,6 +81,14 @@ export async function paintMyDrawer(host: HTMLElement, deps: { invoke: Invoke; e
     return;
   }
   if (my !== seq) return;
+  // 11-23 내 「나만」·「친구만」 글도 서랍에 — 러스트가 메모리에서 푼 것(디스크에 평문 없음). 처음이면 읽은 뒤 다시 그린다.
+  const have = new Set(notes.map((n) => n.id));
+  for (const e of myPrivateNotes()) {
+    if (have.has(e.id)) continue;
+    const base = noteOfEvent({ id: e.id, created_at: e.created_at, content: e.content || "·", tags: [] });
+    if (base) notes.push({ ...base, text: String(e.content || ""), aud: e._aud, sealed: e._photos });
+  }
+  if (!myPrivateNotes().length) loadPrivate(deps.invoke, () => { if (my === seq && host.isConnected && myPrivateNotes().length) void paintMyDrawer(host, deps, openFeed); });
   notes.sort((a, b) => b.at - a.at);
   state = { notes, folders, assign, rev, drawerProblem, view: state?.view ?? { kind: "all" }, local, status, limit: PAGE, confirmDelete: false, localPhotos, photoStore };
   render(host, deps, openFeed);
@@ -210,8 +219,9 @@ function render(host: HTMLElement, deps: { invoke: Invoke; errText: (e: unknown)
       const sel = locked ? "" : `<select data-assign="${esc(n.id)}" aria-label="${esc(t("폴더에 넣기"))}"><option value="">${esc(t("폴더 없음"))}</option>` +
         s.folders.map((f) => `<option value="${esc(f.id)}" translate="no"${s.assign[n.id] === f.id ? " selected" : ""}>${esc(f.name)}</option>`).join("") + `</select>`;
       const pics = n.photos.length ? `<div class="md-pics">${n.photos.slice(0, 4).map(picHtml).join("")}</div>` : "";
-      return `<li><div class="md-row"><time class="meta">${esc(new Date(n.at * 1000).toLocaleString())}${n.reply ? " · " + esc(t("답글")) : ""}</time>${sel}</div>` +
-        (n.text ? `<p translate="no">${esc(n.text)}</p>` : "") + pics + `</li>`;
+      const sealed = n.sealed?.length ? `<div class="md-pics">${n.sealed.map((h) => `<img data-psha="${esc(h)}" alt="${esc(t("내가 올린 사진"))}" />`).join("")}</div>` : "";
+      return `<li><div class="md-row"><time class="meta">${esc(new Date(n.at * 1000).toLocaleString())}${n.reply ? " · " + esc(t("답글")) : ""}${n.aud ? privateBadgeHtml({ _aud: n.aud }) : ""}</time>${sel}</div>` +
+        (n.text ? `<p translate="no">${esc(n.text)}</p>` : "") + pics + sealed + `</li>`;
     }).join("") + `</ul>`;
   const total = v.kind === "photos" ? list.reduce((a, n) => a + n.photos.length, 0) : list.length;
   // 앞의 몇 개만 그린다 — 「더 보기」로 끝까지 갈 수 있다(GPT P2).
@@ -226,6 +236,7 @@ function render(host: HTMLElement, deps: { invoke: Invoke; errText: (e: unknown)
   });
   host.querySelector<HTMLButtonElement>("#md-feed")!.onclick = openFeed;
   fillLocalPhotos(host, deps.invoke);
+  fillPrivatePhotos(host, deps.invoke);
   const openPhotos = host.querySelector<HTMLButtonElement>("#md-openphotos");
   if (openPhotos) openPhotos.onclick = () => { void deps.invoke("my_photos_open_folder").catch((e) => alertInline(host, deps.errText(e))); };
   const moreBtn = host.querySelector<HTMLButtonElement>("#md-more");

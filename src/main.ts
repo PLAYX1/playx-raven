@@ -7,6 +7,7 @@ import "./talk-badges.css";
 import { looksRisky } from "./ravi-card";
 import { clearMentions, fillNoteLinks, mentionText, nip05Slot, noteBodyHtml, noteStickerOnly, openNote, personMineHtml, raviCheckNotices, refreshNotices, rememberNotes, wirePersonMine, wireTalkSocial } from "./talk-social"; // 11-09 알림·찾기·글 속 링크·NIP-05·내 글 받기
 import "./talk-social.css";
+import { addPrivateNote, circleRowHtml, fillPrivatePhotos, forgetPrivateNote, isPrivate, loadPrivate, currentAudience, privateBadgeHtml, privateNotes, privatePhotosHtml, resetAudience, showAudience, wireAudience, wireCircleRow } from "./talk-private"; // 11-23 「나만」·「친구만」 글
 import { avatarImgHtml, personPictureSrc, roomPictureSrc, setAvatarPicture, reportPicture, wireTalkMedia } from "./talk-media"; // 11-13 링크·미리보기·방 사진·내 사진 이름표
 import { openPictureEditor } from "./talk-picture";
 import { myHeadHtml, nameCardAfterMe, saveTalkName, setMyTalkName, wireTalkIdentity } from "./talk-identity"; // 0.9.0 이야기 이름표 — 레인A
@@ -7341,8 +7342,9 @@ function tkLiveAdd(room: string, ev: any) {
 
 async function talkPaint(opts: { cached?: boolean; list?: any[] } = {}) {
   // 11-12 쪽지를 열어 두었으면 그 대화만 그린다(talk-dm.ts) — 방·광장 목록으로 덮지 않는다.
-  if (tkDmUi?.active()) { tkDmUi.paint(); return; }
+  if (tkDmUi?.active()) { showAudience(false); tkDmUi.paint(); return; }
   tkFeedLayout();
+  showAudience(!tkRoom); // 11-23 「누구에게」는 소식 글쓰기에만
   const box = $("tk-list");
   // ⚠️ 어느 방을 읽는지 **여기서 붙잡아 둔다.** 릴레이가 답하는 사이에
   //    사장이 다른 방을 누르면 `tkRoom` 이 바뀌어, 아래에서 이 목록을
@@ -7408,6 +7410,12 @@ async function talkPaint(opts: { cached?: boolean; list?: any[] } = {}) {
       await tkLoadNames(list.map((e) => String(e.pubkey || "")));
       if (읽은방 !== tkRoom) return;
       tkCacheSet(저장키, list);
+    }
+    // 11-23 「나만」·「친구만」 글을 소식에 섞는다 — 메모리에만 있다(위의 지난 화면 저장·알림 판단에는 안 들어간다).
+    if (!읽은방) {
+      loadPrivate(invoke, () => { if (tkRoom === "" && !tkDmUi?.active()) void talkPaint({ cached: true }); });
+      const have = new Set(list.map((e) => String(e.id || "")));
+      list = [...list, ...privateNotes().filter((e) => !have.has(e.id))];
     }
     // 릴레이가 어느 방향으로 답해도 오래된 것이 위에 오도록 시각으로 정렬한다.
     const all = [...list].sort((a, b) => Number(a?.created_at || 0) - Number(b?.created_at || 0));
@@ -7481,17 +7489,22 @@ async function talkPaint(opts: { cached?: boolean; list?: any[] } = {}) {
     };
     const 피드카드 = (e: any, i: number) => {
       const who = 쓴이[i], mine = who === tkMine, id = String(e.id || ""), ms = 때[i];
-      const { pic, 본문, 조심, 인용 } = 조각(e, mine);
-      const hex = /^[0-9a-f]{64}$/.test(id);
+      const priv = isPrivate(e);
+      const { pic: pic0, 본문, 조심, 인용 } = 조각(e, mine);
+      const pic = priv ? null : pic0;
+      const hex = /^[0-9a-f]{64}$/.test(id) && !priv;
       const 이름 = mine ? `<span translate="no">${escapeHtml(String(tkNames.get(who)?.name || t("나")))}</span>` : tkWho(who);
       return `<article class="fcard${mine ? " me" : ""}" data-card="${escapeHtml(id)}">` +
         `<span class="fav" style="--h:${tkHue(who)}" aria-hidden="true">${escapeHtml((tkNames.get(who)?.name || "레").slice(0, 1))}${avatarImgHtml(personPictureSrc(tkNames.get(who)?.picture))}</span>` +
         `<div class="fbody"><div class="fhead"><span class="fname" data-person="${escapeHtml(who)}">${이름}${nip05Slot(who)}</span>` +
-        `<span class="tk-badges" data-badges-for="${escapeHtml(who)}"></span>` +
+        `<span class="tk-badges" data-badges-for="${escapeHtml(who)}"></span>` + privateBadgeHtml(e) +
         `<span class="fmeta" translate="no">· …${escapeHtml(who.slice(-4))} · <time class="tstamp" title="${escapeHtml(new Date(ms).toLocaleString())}">${escapeHtml(tkAgo(ms))}</time></span></div>` +
-        `<div class="bub${!인용 && !pic && noteStickerOnly(본문) ? " stk" : ""}" data-say="${escapeHtml(id)}" data-author="${escapeHtml(who)}">${인용}${noteBodyHtml(본문)}${pic ? tkPicHtml(pic) : ""}</div>` +
+        `<div class="bub${!인용 && !pic && noteStickerOnly(본문) ? " stk" : ""}" data-say="${escapeHtml(id)}" data-author="${escapeHtml(who)}">${인용}${noteBodyHtml(본문)}${pic ? tkPicHtml(pic) : ""}${priv ? privatePhotosHtml(e) : ""}</div>` +
         조심 +
-        `<div class="facts"><button type="button" data-reply="${escapeHtml(id)}">${TK_ICON_REPLY}${copyHtml("답글")}</button>` +
+        // 11-23 「나만」·「친구만」: 답글·저장·공유·「내 말로」·간직 없음(고른 사람 밖으로 새는 길을 안 만든다) · 내 글이면 지우기.
+        (priv ? `<div class="facts"><button type="button" data-more="${escapeHtml(id)}" aria-label="${escapeHtml(t("더 보기"))}" title="${escapeHtml(t("더 보기"))}">⋯</button></div>` +
+          `<div class="bubacts" data-acts="${escapeHtml(id)}">${mine ? `<button data-pdel="${escapeHtml(id)}">${copyHtml("지우기 요청")}</button>` : ""}<span class="meta" data-note="${escapeHtml(id)}"></span></div></div></article>` : "") +
+        (priv ? "" : `<div class="facts"><button type="button" data-reply="${escapeHtml(id)}">${TK_ICON_REPLY}${copyHtml("답글")}</button>` +
         (hex ? `<button type="button" data-bm="${id}">${TK_ICON_BM}<span class="bmtxt">${copyHtml(tkBm?.has(id) ? "저장됨" : "저장")}</span></button>` : "") +
         (hex ? `<button type="button" class="fshare" data-sharepop="${id}">${TK_ICON_SHARE}${copyHtml("공유")}</button>` : "") +
         `<button type="button" data-more="${escapeHtml(id)}" aria-label="${escapeHtml(t("더 보기"))}" title="${escapeHtml(t("더 보기"))}">⋯</button></div>` +
@@ -7501,7 +7514,7 @@ async function talkPaint(opts: { cached?: boolean; list?: any[] } = {}) {
         (!mine && /^R[1-9A-HJ-NP-Za-km-z]{33}$/.test(String(tkNames.get(who)?.rvn_address || ""))
           ? `<button data-pay="${escapeHtml(String(tkNames.get(who).rvn_address))}" data-payname="${escapeHtml(tkNameText(who))}" data-paywho="${escapeHtml(who)}">${copyHtml("응원 보내기")}</button>` : "") +
         (mine ? `<button data-del="${escapeHtml(id)}">${copyHtml("지우기 요청")}</button>` : "") +
-        `<span class="meta" data-note="${escapeHtml(id)}"></span></div></div></article>`;
+        `<span class="meta" data-note="${escapeHtml(id)}"></span></div></div></article>`);
     };
     box.innerHTML = 피드
       ? asc.map((_, i) => asc.length - 1 - i).map((i) => 피드카드(asc[i], i)).join("") + hidNote
@@ -7611,6 +7624,25 @@ async function talkPaint(opts: { cached?: boolean; list?: any[] } = {}) {
     // 🔴 사진은 그려 놓고 **지켜봐야** 한다. 안 지켜보면 「받는 중…」에서
     //    영영 멈춰 있고, 그건 못 받았다는 말을 안 하는 것과 같다.
     tkWatchPics(box);
+    fillPrivatePhotos(box, invoke);
+    box.querySelectorAll<HTMLElement>("[data-pdel]").forEach((b) => {
+      b.onclick = async (ev) => {
+        ev.stopPropagation();
+        const gid = String(b.dataset.pdel || "");
+        if (!(await sure(t("지워 달라고 요청할까요?"), t("이미 본 사람의 화면과, 따르지 않는 릴레이에는 남을 수 있습니다."), t("요청합니다")))) return;
+        const note = box.querySelector(`[data-note="${gid}"]`) as HTMLElement | null;
+        (b as HTMLButtonElement).disabled = true;
+        try {
+          const r = await invoke<any>("talk_private_delete", { id: gid });
+          forgetPrivateNote(gid);
+          setCopyText(b, () => t("지우기 요청함"));
+          if (note) note.textContent = t(String(r?.say || ""));
+        } catch (e) {
+          (b as HTMLButtonElement).disabled = false;
+          if (note) note.textContent = errText(e);
+        }
+      };
+    });
     // 🔴 다른 나라 말은 저절로 옮긴다(스위치가 켜져 있을 때만). 그리고 나서
     //    부른다 — 그려지기 전에 부르면 옮길 글을 하나도 못 찾는다.
     void tk옮길것찾기();
@@ -7773,8 +7805,13 @@ async function tkShowPerson(pk: string) {
   const address = String(p?.rvn_address || "");
   sec.hidden = false;
   // 11-08 응원 보내기 — 서명 확인된 주소가 있을 때만(keeper-thanks-ui.ts).
-  const paintPerson = () => { sec.innerHTML = personMineHtml(pk) + badgeSectionHtml(pk, !!address) + tipButtonHtml(pk, address, tkMine); wirePersonMine(sec); }; // 11-09 NIP-05 · 나면 「내 글 모두 받기」
+  const paintPerson = () => {
+    sec.innerHTML = personMineHtml(pk) + circleRowHtml(pk, tkMine) + badgeSectionHtml(pk, !!address) + tipButtonHtml(pk, address, tkMine);
+    wirePersonMine(sec);
+    wireCircleRow(sec, { invoke, sure, errText, repaint: paintPerson });
+  }; // 11-09 NIP-05 · 나면 「내 글 모두 받기」
   paintPerson();
+  loadPrivate(invoke, () => { if ($("rv-person-key").textContent === pk) paintPerson(); }); // 친구 목록을 알면 단추를 바로 맞춘다
   await loadBadges(invoke, [{ pubkey: pk, address }]);
   if ($("rv-person-key").textContent === pk) paintPerson();
 }
@@ -8121,6 +8158,8 @@ async function talkSend() {
   if (!text && !tkPhoto) return;
   // 11-10 페이블: 돈·비밀 단어·딴 데로 끌어내는 말이 있던 글에 답장하면 보내기 전에 한 번 더 묻는다(막지는 않는다).
   if (tkReply?.risky && !(await sure(t("돈·비밀 단어 이야기가 있던 글이에요"), t("그래도 이 답장을 보낼까요? 돈을 보내 달라거나 복구 단어·비밀번호를 묻는 사람은 사기일 수 있어요."), t("보내기")))) return;
+  // 11-23 소식 글쓰기 「누구에게: 친구만 / 나만」 — 비공개 글(4470)로. 방·쪽지에는 이 칸이 없다.
+  if (!tkRoom && currentAudience() !== "all") return void talkSendPrivate(text);
   if (tkPhoto) return void talkSendPhoto(text);
   // 누른 즉시 붙는다. 입력칸도 즉시 비운다 — 그래야 다음 말을 바로 친다.
   const 임시 = tk임시풍선(text);
@@ -8171,6 +8210,32 @@ async function talkSend() {
  *    얼마나 들어갔는지 중간에 알려주지 않는다. **없는 퍼센트를 지어내지
  *    않는다** — 30%에서 멈춰 있는 막대가 제일 나쁜 거짓말이다.
  */
+/** 「나만」·「친구만」 글 보내기. 사진은 잠가서(암호문) 올린다. 보낸 뒤 「누구에게」는 「모두」로 되돌린다. */
+async function talkSendPrivate(text: string) {
+  const box = $("tk-text") as HTMLTextAreaElement;
+  const send = $("tk-send") as HTMLButtonElement;
+  const p = tkPhoto;
+  send.disabled = true;
+  $("tk-note").textContent = t(p ? "사진을 잠가서 보내는 중…" : "보내는 중…");
+  try {
+    const r = await invoke<any>("talk_private_post", {
+      text, audience: currentAudience(),
+      path: p?.path ?? null, name: p && !p.path ? p.name : null, bytes: p && !p.path ? (p.bytes ?? null) : null,
+    });
+    addPrivateNote(r?.note);
+    box.value = "";
+    box.style.height = "auto";
+    if (p) tkClearPhoto();
+    resetAudience();
+    $("tk-note").textContent = "";
+    void talkPaint({ cached: true });
+  } catch (e) {
+    $("tk-note").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
+  } finally {
+    send.disabled = false;
+  }
+}
+
 async function talkSendPhoto(text: string) {
   const p = tkPhoto;
   if (!p) return;
@@ -20700,6 +20765,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     void talkPaint();
   });
   // 11-09 알림·찾기·글 속 링크·NIP-05·내 글 받기·「@」(src/talk-social.ts). 바깥에 묻는 일은 러스트가 한다.
+  wireAudience(); // 11-23 소식 글쓰기 「누구에게」
   wireTalkSocial({
     invoke: (cmd, args) => invoke(cmd, args),
     me: () => tkMine,

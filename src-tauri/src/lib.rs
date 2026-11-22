@@ -164,6 +164,7 @@ mod relay;
 mod relay_pool;
 mod my_drawer;
 mod my_photos;
+mod talk_private;
 mod upload;
 mod spec;
 mod lockbox;
@@ -468,6 +469,12 @@ pub fn run() {
             my_photos::my_photos_status,
             my_photos::my_photo_local,
             my_photos::my_photos_open_folder,
+            talk_private::talk_private_load,
+            talk_private::talk_private_photo,
+            talk_private::talk_circle,
+            talk_private::talk_circle_set,
+            talk_private::talk_private_post,
+            talk_private::talk_private_delete,
             devfee::fee_pay,
             shopkey::shop_announce,
             shopkey::shop_refresh,

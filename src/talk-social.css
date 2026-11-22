@@ -61,3 +61,15 @@
 .tk-stickerbox button { display: flex; flex-direction: column; align-items: center; gap: 4px; min-height: 96px; padding: 8px 4px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: inherit; font: inherit; font-size: 13px; cursor: pointer; }
 .tk-stickerbox button:hover { border-color: var(--accent, #6b5bd6); }
 .tk-stickerbox img { width: 56px; height: 56px; object-fit: contain; }
+
+/* 11-23 「나만」·「친구만」(talk-private.ts) — 기존 토큰만 */
+.tk-aud { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 14px 0; }
+.tk-aud[hidden] { display: none; }
+.tk-aud-label { font-size: 0.9em; color: var(--muted, inherit); }
+.tk-aud button { min-height: 36px; padding: 4px 12px; border-radius: 999px; white-space: nowrap; flex-shrink: 0; }
+.tk-aud button.on { border-color: var(--brand); font-weight: 700; box-shadow: inset 0 0 0 1px var(--brand); }
+.fpriv { display: inline-block; margin-left: 6px; padding: 0 8px; border-radius: 999px; border: 1px solid var(--line); font-size: 0.82em; white-space: nowrap; }
+.fpriv-pics { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.fpriv-pics img { max-width: 240px; max-height: 240px; border-radius: 10px; border: 1px solid var(--line); object-fit: cover; }
+.tk-circle { margin: 8px 0; }
+.tk-circle button { min-height: 44px; white-space: nowrap; }

@@ -109,6 +109,35 @@ pub async fn nostr_publish(event: Value) -> Result<Value, String> {
     Ok(json!({ "ok": ok, "failed": failed }))
 }
 
+/// 11-23 비공개 글·열쇠 꾸러미 올리기 — **모든 릴레이 답**을 기다려 (받은 곳, 안 받은 곳)을 돌려준다(폰 publish {all:true}).
+/// 이웃 전파(relay_share::forward)는 하지 않는다. 이 컴퓨터 릴레이에는 바로 둔다.
+pub(crate) async fn publish_private_all(event: Value) -> Result<(Vec<String>, Vec<String>), String> {
+    validate_private_event(&event)?;
+    crate::relay::absorb(vec![event.clone()]);
+    let msg = serde_json::to_string(&json!(["EVENT", event])).map_err(|e| format!("보낼 것을 만들지 못했습니다: {e}"))?;
+    let runs = targets().into_iter().map(|url| { let msg = msg.clone(); async move { let r = send_one(&url, &msg).await; (url, r) } });
+    let (mut ok, mut refused) = (Vec::new(), Vec::new());
+    for (url, r) in futures_util::future::join_all(runs).await {
+        if r.is_ok() { ok.push(url) } else { refused.push(url) }
+    }
+    Ok((ok, refused))
+}
+
+/// 11-23 꾸러미 쓰기 직전 읽기 — 지름길 없이 **모든 릴레이 답(또는 시간 끝)**까지(폰 query {all:true}). (글들, 닿은 곳 수).
+pub(crate) async fn query_all_wait(filters: Vec<Value>) -> (Vec<Value>, usize) {
+    let mut req = vec![json!("REQ"), json!("a1")];
+    req.extend(filters);
+    let Ok(req) = serde_json::to_string(&Value::Array(req)) else { return (vec![], 0) };
+    let runs = targets().into_iter().map(|url| { let req = req.clone(); async move { read_one(&url, &req, "a1").await } });
+    let got = futures_util::future::join_all(runs).await;
+    let reached = got.iter().filter(|r| r.is_ok()).count();
+    let mut seen: std::collections::HashMap<String, Value> = std::collections::HashMap::new();
+    for e in got.into_iter().flatten().flatten() {
+        if let Some(id) = e.get("id").and_then(Value::as_str) { seen.entry(id.to_string()).or_insert(e); }
+    }
+    (seen.into_values().collect(), reached)
+}
+
 pub(crate) async fn send_one(url: &str, msg: &str) -> Result<(), String> {
     let expected_id = serde_json::from_str::<Value>(msg).ok().and_then(|v| v[1]["id"].as_str().map(str::to_string)).ok_or("이벤트 ID가 없습니다.")?;
     // 11-12 연결 풀(relay_pool.rs): 이미 열린 연결로 보낸다 — 손잡기(0.5~0.9초)가 빠진다.
@@ -121,6 +150,22 @@ pub(crate) async fn send_one(url: &str, msg: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 11-23 비공개 글(4470)·열쇠 꾸러미는 이 컴퓨터 안 길로만 올린다 — 바깥 중계 검사는 거절한다.
+    #[test]
+    fn private_events_only_through_the_inside_path() {
+        let mut sk = [0u8; 32];
+        sk[31] = 7;
+        let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+        let note = crate::shopkey::sign_with(&sk, 4470, json!([]), "{\"v\":1,\"a\":\"self\",\"c\":\"x\"}", t).unwrap();
+        let circle = crate::shopkey::sign_with(&sk, 30078, json!([["d", crate::relay::CIRCLE_KEYS_D]]), "{}", t).unwrap();
+        let backup = crate::shopkey::sign_with(&sk, 30078, json!([["d", "ravenvault/backup/v1"]]), "{}", t).unwrap();
+        assert!(validate_publish_event(&note).is_err() && validate_publish_event(&circle).is_err());
+        assert_eq!(validate_private_event(&note), Ok(()));
+        assert_eq!(validate_private_event(&circle), Ok(()));
+        assert!(validate_private_event(&backup).is_err(), "비공개 길은 비공개 글만");
+        assert_eq!(validate_publish_event(&backup), Ok(()), "다른 30078 은 그대로");
+    }
 
     fn synthetic(n: i64, at: i64) -> Value { json!({ "id": format!("{n:064x}"), "created_at": at }) }
     /// 가짜 릴레이: until 이하를 새것부터 limit 개.
@@ -680,6 +725,17 @@ async fn pooled_read(url: &str, req: &str, wait: std::time::Duration, max: usize
 /// Reject malformed fields before hashing, and verify both NIP-01 id and BIP340.
 pub(crate) const MAX_PUBLISH_BYTES: usize = 32 * 1024;
 pub(crate) fn validate_publish_event(event: &Value) -> Result<(), String> {
+    validate_event(event, false)
+}
+
+/// 11-23 「나만·친구만」: 비공개 글(4470)·열쇠 꾸러미(30078 d=ravenvault/circle-keys/v1)는 **이 컴퓨터 안 요청만** 올린다
+/// (talk_private.rs 가 부른다). 바깥 중계(server.rs /api/publish)는 `validate_publish_event` 그대로 — 이 둘을 안 받는다.
+pub(crate) fn validate_private_event(event: &Value) -> Result<(), String> {
+    if !crate::relay::private_event(event) { return Err("비공개 글이 아닙니다.".into()); }
+    validate_event(event, true)
+}
+
+fn validate_event(event: &Value, private_ok: bool) -> Result<(), String> {
     let o = event.as_object().ok_or("이벤트 모양이 올바르지 않습니다.")?;
     for k in ["id", "sig", "pubkey", "kind", "created_at", "content", "tags"] {
         if !o.contains_key(k) { return Err(format!("이벤트에 {k} 가 없습니다.")); }
@@ -690,7 +746,10 @@ pub(crate) fn validate_publish_event(event: &Value) -> Result<(), String> {
     let hex_field = |key: &str, size: usize| o[key].as_str().is_some_and(|s| s.len() == size && s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)));
     if !hex_field("id",64) || !hex_field("pubkey",64) || !hex_field("sig",128) { return Err("이벤트 ID·공개키·서명 모양이 올바르지 않습니다.".into()); }
     // 31402 지도 이름표 · 31403 영업 중 신호 · 31404 고정 링크(map.rs) · 31405 오락실 일반 판매자(arcade_listing.rs) · 31406 공동구매 열림(groupbuy_pub.rs, 11-22) — 11-13 앞 셋이 빠져 데스크탑 지도·/s/ 링크가 못 올라갔다.
-    let kind = o["kind"].as_u64().filter(|k| [0,1,5,40,41,42,1059,30078,30402,31402,31403,31404,31405,31406].contains(k)).ok_or("이 가게는 프로필·레이븐 이야기(방 만들기·방 정보 수정 포함)·상품·가게 공지·지도 이름표·영업 신호·고정 링크·오락실 게임·공동구매 알림·쪽지·삭제 요청만 중계합니다.")?;
+    if !private_ok && crate::relay::private_event(event) {
+        return Err("비공개 글은 이 컴퓨터에서만 올립니다.".into());
+    }
+    let kind = o["kind"].as_u64().filter(|k| [0,1,5,40,41,42,1059,30078,30402,31402,31403,31404,31405,31406].contains(k) || (private_ok && *k == 4470)).ok_or("이 가게는 프로필·레이븐 이야기(방 만들기·방 정보 수정 포함)·상품·가게 공지·지도 이름표·영업 신호·고정 링크·오락실 게임·공동구매 알림·쪽지·삭제 요청만 중계합니다.")?;
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
     if !o["created_at"].as_u64().is_some_and(|t| t >= now.saturating_sub(7 * 86_400) && t <= now.saturating_add(300) && t <= 9_007_199_254_740_991) { return Err("이벤트 시각이 올바르지 않습니다. 기기 시계를 확인해 주세요.".into()); }
     let content = o["content"].as_str().ok_or("이벤트 내용은 글자여야 합니다.")?;

@@ -3733,6 +3733,14 @@
             <p id="tk-gate-note" class="tk-gate-note" role="status" hidden></p>
             <div id="tk-mentionbox" class="tk-mentionbox" hidden></div>
             <div id="tk-stickerbox" class="tk-stickerbox" role="group" aria-label="라비 이모티콘" hidden></div>
+            <!-- 11-23 「누구에게」 — 소식 글쓰기에만(방·쪽지에는 숨김). 늘 「모두」부터. 폰과 같은 말. -->
+            <div class="tk-aud" id="tk-aud" role="group" aria-label="누구에게" hidden>
+              <span class="tk-aud-label">누구에게</span>
+              <button type="button" class="ghost" data-aud="all">모두</button>
+              <button type="button" class="ghost" data-aud="friends">친구만</button>
+              <button type="button" class="ghost" data-aud="self">나만</button>
+              <span class="meta" id="tk-aud-say" role="status"></span>
+            </div>
             <div class="composer">
               <!-- 🔴 그림만 두지 않는다. 「사진」이라고 **글자로** 적는다. -->
               <button class="photobtn" id="tk-photo" type="button">

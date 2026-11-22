@@ -188,6 +188,21 @@ pub(crate) fn keep_uploaded(hash: &str, bytes: &[u8]) {
     let _ = store(hash, bytes, "photo", UPLOAD_SRC);
 }
 
+/// 11-23 talk_private.rs 가 이 데스크탑에서 올린 비공개 글 암호 사진 한 부(암호문 그대로).
+pub(crate) fn keep_cipher(hash: &str, cipher: &[u8]) {
+    if note_source(hash, UPLOAD_SRC) { return; }
+    let _ = store(hash, cipher, "cipher", UPLOAD_SRC);
+}
+/// 이 컴퓨터에 있는 암호문 사본(지문이 맞을 때만). 없으면 None — 부르는 쪽이 사진 서버에서 받는다.
+pub(crate) fn local_cipher(hash: &str) -> Option<Vec<u8>> {
+    if !is_hex64(hash) { return None; }
+    let ext = with_index(|m| items(m).get(hash).and_then(|v| v.get("ext").and_then(Value::as_str).map(str::to_string)))?;
+    let b = std::fs::read(path_of(hash, &ext)).ok()?;
+    (b.len() <= crate::upload::MAX_TALK_PHOTO_BYTES && hex::encode(Sha256::digest(&b)) == hash).then_some(b)
+}
+pub(crate) fn is_image(b: &[u8]) -> bool { image_kind(b).is_some() }
+pub(crate) fn image_mime(b: &[u8]) -> Option<&'static str> { image_kind(b).map(|(_, m)| m) }
+
 /// 받을 것 하나: (주소, 지문, 종류, 출처 글 번호).
 type Want = (String, String, &'static str, String);
 
