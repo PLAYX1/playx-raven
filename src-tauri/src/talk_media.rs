@@ -116,11 +116,15 @@ pub async fn talk_blossom_upload(data: String, mime: String) -> Result<Value, St
     if bytes.is_empty() || bytes.len() > MAX_UPLOAD { return Err("사진이 너무 커요. 다른 사진을 골라 주세요.".into()); }
     let hash = hex::encode(Sha256::digest(&bytes));
     let bytes_kept = bytes.clone();
-    let mut once = [0u8; 32];
-    rand::RngCore::fill_bytes(&mut rand::thread_rng(), &mut once);
+    // 11-23 내 데이터 통제 2단계: 사진마다 「이야기 열쇠 + 지문」에서 뽑은 열쇠로 서명한다(폰 photoUploadKey 와 같은 계산) —
+    //   사진 서버는 사진마다 다른 낯선 열쇠만 보고, 나는 나중에 같은 열쇠를 다시 만들어 지워 달라고 할 수 있다.
+    let mut person = crate::talk::signing_key()?;
+    let derived = photo_upload_key(&person, &hash);
+    person.fill(0);
+    let mut photo_key = derived?;
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
-    let auth = crate::shopkey::sign_with(&once, 24242, blossom_auth_tags(&hash, now), "Upload RavenVault talk photo", now);
-    once.fill(0);
+    let auth = crate::shopkey::sign_with(&photo_key, 24242, blossom_auth_tags(&hash, now), "Upload RavenVault talk photo", now);
+    photo_key.fill(0);
     let auth = auth?;
     let header = format!("Nostr {}", base64::engine::general_purpose::STANDARD.encode(auth.to_string()));
     let r = reqwest::Client::builder().timeout(Duration::from_secs(30)).build().map_err(|e| e.to_string())?
@@ -140,6 +144,103 @@ pub async fn talk_blossom_upload(data: String, mime: String) -> Result<Value, St
     // 11-23 내 사진 사본 — 올린 바이트 그대로 이 컴퓨터 사진 폴더에도 한 부(my_photos.rs · IPFS 아님).
     crate::my_photos::keep_uploaded(&hash, &bytes_kept);
     Ok(json!({ "url": url }))
+}
+
+// ── 11-23 내 데이터 통제 2단계: 사진 열쇠 · 사진 서버에 지워 달라기(BUD-02 DELETE) — 폰 core/talk/photo.ts 와 바이트까지 같다 ──
+pub const PHOTO_KEY_SALT: &str = "ravenvault/blossom-photo-key/v1";
+const CIPHER_SERVER: &str = "https://nostr.download";
+const PHOTO_SERVER: &str = "https://blossom.nostr.build";
+
+/// 사람(이야기) 열쇠 + 사진 파일 지문(sha256 hex, 올리는 바이트 그대로) → 이 사진만의 올리기·지우기 열쇠.
+/// HKDF-SHA256(ikm=사람 열쇠, salt=PHOTO_KEY_SALT, info=지문 [+ "/n"], 32B) · 열쇠 범위 밖이면 "/1"… 로 다시(폰 photoUploadKey).
+/// 🔴 쓰고 나면 부르는 쪽이 지운다(fill(0)). 이 열쇠로는 사진 하나 올리기·지우기 허락만 한다.
+pub fn photo_upload_key(person: &[u8; 32], file_sha256: &str) -> Result<[u8; 32], String> {
+    if !is_hex64(file_sha256) { return Err("사진 지문이 맞지 않아요.".into()); }
+    let hk = hkdf::Hkdf::<Sha256>::new(Some(PHOTO_KEY_SALT.as_bytes()), person);
+    for n in 0..8 {
+        let info = if n == 0 { file_sha256.to_string() } else { format!("{file_sha256}/{n}") };
+        let mut key = [0u8; 32];
+        if hk.expand(info.as_bytes(), &mut key).is_err() { continue; }
+        if crate::shopkey::pubkey_of(&key).is_ok() { return Ok(key); }
+        key.fill(0);
+    }
+    Err("사진 열쇠를 만들지 못했어요.".into())
+}
+
+/// 지우기 허락(BUD-02 kind 24242 t=delete) 표 — 이 지문 하나만 5분. content 는 영문만(폰 blossomDeleteDraft).
+pub fn blossom_delete_tags(hash: &str, now: i64) -> Value { json!([["t", "delete"], ["x", hash], ["expiration", (now + 300).to_string()]]) }
+
+/// 쪽지·비공개 글 암호 사진 주소(nostr.download/<지문>[.bin]).
+fn cipher_url_ok(url: &str) -> bool {
+    url.strip_prefix("https://nostr.download/")
+        .map(|p| p.strip_suffix(".bin").unwrap_or(p))
+        .is_some_and(is_hex64)
+}
+
+/// 우리 사진 길 주소 → 지울 때 부를 사진 서버(폰 blossomServerOf). 모르면 None.
+pub fn blossom_server_of(url: &str) -> Option<&'static str> {
+    if blossom_ok(url) { Some(PHOTO_SERVER) } else if cipher_url_ok(url) { Some(CIPHER_SERVER) } else { None }
+}
+
+/// 내 글 속 우리 사진 길 사진들 (주소, 지문) — 폰 photoFilesOf 와 같은 기준(imeta x 가 있으면 같아야 한다).
+pub fn photo_files_of(e: &Value) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = Vec::new();
+    let mut add = |url: &str, x: &str| {
+        if blossom_server_of(url).is_none() { return; }
+        let h = url.rsplit('/').next().unwrap_or("").split('.').next().unwrap_or("");
+        if !is_hex64(h) || (!x.is_empty() && x != h) || out.iter().any(|(_, have)| have == h) { return; }
+        out.push((url.to_string(), h.to_string()));
+    };
+    for t in e.get("tags").and_then(Value::as_array).into_iter().flatten() {
+        let Some(parts) = t.as_array() else { continue };
+        if parts.first().and_then(Value::as_str) != Some("imeta") { continue; }
+        let field = |name: &str| parts.iter().skip(1).filter_map(Value::as_str).find_map(|p| p.strip_prefix(name).map(str::trim)).unwrap_or("");
+        add(field("url "), field("x "));
+    }
+    let content = e.get("content").and_then(Value::as_str).unwrap_or("");
+    for w in content.split_whitespace().filter(|w| w.starts_with("https://")) { add(w, ""); }
+    out
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Signer { Derived, Person }
+/// 이 사진을 지워 달라고 서명할 열쇠 순서(폰 photoDeleteSigners). blossom.band 주소는 올린 열쇠의 npub 이 주소에 있어 바로 안다.
+/// 둘 다 아니면 옛 일회용 열쇠 사진 — 지울 길이 없다(빈 목록).
+pub fn photo_delete_signers(url: &str, person_pub: &str, derived_pub: &str) -> Vec<Signer> {
+    if let Some(host) = url.strip_prefix("https://").and_then(|r| r.split('/').next()).and_then(|h| h.strip_suffix(".blossom.band")) {
+        let npub = |p: &str| crate::talk_social::npub_of(p).unwrap_or_default();
+        return if host == npub(derived_pub) { vec![Signer::Derived] } else if host == npub(person_pub) { vec![Signer::Person] } else { vec![] };
+    }
+    if cipher_url_ok(url) { return vec![Signer::Derived]; }
+    if blossom_ok(url) { vec![Signer::Derived, Signer::Person] } else { vec![] }
+}
+
+/// 사진 서버에 이 사진을 지워 달라고 한다. 지웠으면(이미 없음 포함) true. 옛 일회용 열쇠 사진·닿지 못함은 false.
+pub async fn delete_my_photo(person: &[u8; 32], url: &str, hash: &str) -> bool {
+    let Some(server) = blossom_server_of(url) else { return false };
+    let Ok(mut derived) = photo_upload_key(person, hash) else { return false };
+    let (Ok(me), Ok(dpub)) = (crate::shopkey::pubkey_of(person), crate::shopkey::pubkey_of(&derived)) else { derived.fill(0); return false };
+    let Ok(c) = reqwest::Client::builder().timeout(Duration::from_secs(15)).redirect(reqwest::redirect::Policy::none()).build() else { derived.fill(0); return false };
+    let mut done = false;
+    for who in photo_delete_signers(url, &me, &dpub) {
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
+        let key = if who == Signer::Derived { &derived } else { person };
+        let Ok(auth) = crate::shopkey::sign_with(key, 24242, blossom_delete_tags(hash, now), "Delete RavenVault talk photo", now) else { break };
+        let header = format!("Nostr {}", base64::engine::general_purpose::STANDARD.encode(auth.to_string()));
+        let Ok(r) = c.delete(format!("{server}/{hash}")).header("authorization", header).send().await else { break };
+        let st = r.status().as_u16();
+        if r.status().is_success() || st == 404 { done = true; break; }
+        if st != 401 && st != 403 { break; } // 닿지 못함 — 다른 열쇠로 다시 해도 같다
+    }
+    derived.fill(0);
+    done
+}
+
+/// 「한 번에 지우기」 결과 문구(폰 phone/screens/talkDeleteText.ts 와 같다 · 대표 확정). 「완전히 지웠어요」는 쓰지 않는다.
+pub fn delete_outcome_text(photos: usize, photos_left: usize) -> &'static str {
+    if photos_left > 0 { return "레이븐볼트에서는 지웠어요. 사진 서버에서는 지우지 못했어요."; }
+    if photos == 0 { return "내 컴퓨터와 레이븐볼트에서 지웠어요. 이미 본 사람이 저장한 것은 못 지워요."; }
+    "내 컴퓨터와 레이븐볼트에서 지웠어요. 사진 서버에도 지워 달라고 보냈어요. 이미 본 사람이 저장한 것은 못 지워요."
 }
 
 #[cfg(test)]
@@ -171,6 +272,39 @@ mod tests {
         assert!(clean_unfurl(&json!({ "none": true })).is_none());
         assert!(clean_unfurl(&json!({ "title": "", "description": "" })).is_none());
         assert_eq!(urlencoding("https://a.b/c?d=e&f"), "https%3A%2F%2Fa.b%2Fc%3Fd%3De%26f");
+    }
+    /// 폰 core/talk/photo.ts photoUploadKey 와 같은 입력 → 같은 열쇠(폰 코드로 뽑은 값 · 11-23 tsx 로 계산).
+    #[test]
+    fn 사진_열쇠는_폰과_바이트까지_같다() {
+        let mut me = [0u8; 32];
+        me[31] = 7;
+        let ka = photo_upload_key(&me, &"a".repeat(64)).unwrap();
+        assert_eq!(hex::encode(ka), "c66fa5c3eb37f1e2cbb8342eafe6ca009e4774174197467530dab2c1873762f7");
+        assert_eq!(crate::shopkey::pubkey_of(&ka).unwrap(), "aa5c6a4165fa6a15a8a30085dd8a0f8c51a7ca090164de23cbf76a50682dc12a");
+        let kb = photo_upload_key(&me, &"b".repeat(64)).unwrap();
+        assert_eq!(hex::encode(kb), "51ee637b0b830f8c483059121650ed65f43f8da477b8304985943a3be6623e92");
+        assert_eq!(PHOTO_KEY_SALT, "ravenvault/blossom-photo-key/v1");
+        assert!(photo_upload_key(&me, "xyz").is_err());
+    }
+    #[test]
+    fn 지우기_서명_순서와_문구() {
+        let mut me = [0u8; 32];
+        me[31] = 7;
+        let mpub = crate::shopkey::pubkey_of(&me).unwrap();
+        let dpub = crate::shopkey::pubkey_of(&photo_upload_key(&me, H).unwrap()).unwrap();
+        let band = |p: &str| format!("https://{}.blossom.band/{H}.jpg", crate::talk_social::npub_of(p).unwrap());
+        assert_eq!(photo_delete_signers(&band(&dpub), &mpub, &dpub), vec![Signer::Derived]);
+        assert_eq!(photo_delete_signers(&band(&mpub), &mpub, &dpub), vec![Signer::Person]);
+        let mut other = [0u8; 32];
+        other[31] = 8;
+        assert!(photo_delete_signers(&band(&crate::shopkey::pubkey_of(&other).unwrap()), &mpub, &dpub).is_empty(), "옛 일회용 열쇠 사진은 지울 길 없음");
+        assert_eq!(photo_delete_signers(&format!("https://nostr.download/{H}.bin"), &mpub, &dpub), vec![Signer::Derived]);
+        assert_eq!(photo_delete_signers(&format!("https://blossom.nostr.build/{H}.jpg"), &mpub, &dpub), vec![Signer::Derived, Signer::Person]);
+        assert_eq!(blossom_delete_tags(H, 1000), json!([["t", "delete"], ["x", H], ["expiration", "1300"]]));
+        let e = json!({ "content": format!("밥\nhttps://blossom.nostr.build/{H}.jpg"), "tags": [["imeta", format!("url https://blossom.nostr.build/{H}.jpg"), format!("x {H}")]] });
+        assert_eq!(photo_files_of(&e).len(), 1);
+        for t in [delete_outcome_text(0, 0), delete_outcome_text(2, 0), delete_outcome_text(2, 1)] { assert!(!t.contains("완전히"), "{t}"); }
+        assert_eq!(delete_outcome_text(2, 1), "레이븐볼트에서는 지웠어요. 사진 서버에서는 지우지 못했어요.");
     }
     #[test]
     fn 올리기_허락은_이_지문_하나만_5분() {

@@ -1164,6 +1164,37 @@ pub async fn talk_photo_post(
 ///
 /// 보낸 뒤에도 화면에서 글을 없애거나 「삭제된 메시지」로 바꾸지 않는다.
 /// **「지우기 요청함」**으로 둔다 — 되는 척하지 않는 쪽이 신뢰다.
+#[tauri::command]
+pub async fn talk_delete_request(id: String, kind: Option<i64>) -> Result<Value, String> {
+    if id.len() != 64 || !id.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err("글 번호가 올바르지 않습니다.".into());
+    }
+    let id = id.to_ascii_lowercase();
+    let mut sk = key()?;
+    let me = crate::shopkey::pubkey_of(&sk)?;
+    // 지우기 요청을 올리면 이 컴퓨터 릴레이에서 그 글이 사라진다 — 사진 목록은 **먼저** 읽어 둔다(내 글만).
+    let target = crate::relay::query_local(&[json!({ "ids": [id], "limit": 1 })]).into_iter()
+        .find(|e| e.get("pubkey").and_then(Value::as_str) == Some(me.as_str()));
+    let files = target.as_ref().map(crate::talk_media::photo_files_of).unwrap_or_default();
+    let ev = crate::shopkey::sign_with(&sk, 5, delete_tags(&id, delete_kind(&id, kind)), "", now())?;
+    if let Err(e) = crate::nostrpub::nostr_publish(ev).await { crate::words::wipe_bytes(&mut sk); return Err(e); }
+    // 11-23 한 번에 지우기(폰 requestDelete 와 같게): 그 글 사진마다 사진 서버에 BUD-02 DELETE(사진 열쇠 → 안 되면 사람 열쇠).
+    let mut left = 0usize;
+    for (url, hash) in &files {
+        if !crate::talk_media::delete_my_photo(&sk, url, hash).await { left += 1; }
+    }
+    crate::words::wipe_bytes(&mut sk);
+    // 11-23 내 사진 사본: 이 글만 쓰던 사진은 이 컴퓨터 사진 폴더에서도 지운다(다른 글이 같은 사진을 쓰면 남긴다).
+    crate::my_photos::drop_sources(&std::collections::HashSet::from([id.clone()]));
+    Ok(json!({
+        "ok": true,
+        "photos": files.len(),
+        "photos_left": left,
+        // 🔴 이 말을 화면이 그대로 띄워야 한다 — 「완전히 지웠어요」라고 하지 않는다(폰 talkDeleteText.ts 와 같은 세 갈래).
+        "say": crate::talk_media::delete_outcome_text(files.len(), left),
+    }))
+}
+
 /// 지운 글의 종류(`k` 표). 이 컴퓨터 릴레이에 그 글이 있으면 그 종류, 없으면 화면이 준 종류, 그것도 없으면 방 글(42 · 폰 deleteDraft 기본값).
 fn delete_kind(id: &str, given: Option<i64>) -> i64 {
     crate::relay::query_local(&[json!({ "ids": [id], "limit": 1 })]).first()
@@ -1174,25 +1205,6 @@ fn delete_kind(id: &str, given: Option<i64>) -> i64 {
 /// 지우기 요청 표 — 폰 talkSession.ts requestDelete 와 같게: 글 번호 · 지운 글 종류 · 레이븐 이야기 표(데스크탑 릴레이도 받게).
 fn delete_tags(id: &str, kind: i64) -> Value {
     json!([["e", id], ["k", kind.to_string()], ["t", TAG]])
-}
-
-#[tauri::command]
-pub async fn talk_delete_request(id: String, kind: Option<i64>) -> Result<Value, String> {
-    if id.len() != 64 || !id.bytes().all(|b| b.is_ascii_hexdigit()) {
-        return Err("글 번호가 올바르지 않습니다.".into());
-    }
-    let id = id.to_ascii_lowercase();
-    let sk = key()?;
-    let ev = crate::shopkey::sign_with(&sk, 5, delete_tags(&id, delete_kind(&id, kind)), "", now())?;
-    crate::nostrpub::nostr_publish(ev).await?;
-    // 11-23 내 사진 사본: 이 글만 쓰던 사진은 이 컴퓨터 사진 폴더에서도 지운다(다른 글이 같은 사진을 쓰면 남긴다).
-    crate::my_photos::drop_sources(&std::collections::HashSet::from([id.clone()]));
-    Ok(json!({
-        "ok": true,
-        // 🔴 이 말을 화면이 그대로 띄워야 한다.
-        "say": "지워 달라고 요청했습니다. 따르는 릴레이에서는 사라지지만, \
-이미 본 사람의 화면과 따르지 않는 릴레이에는 남을 수 있습니다.",
-    }))
 }
 
 #[tauri::command]

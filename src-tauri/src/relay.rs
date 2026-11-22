@@ -658,7 +658,10 @@ fn store(e: Value) -> (bool, String) {
     // 11-08 쪽지 보관(docs/SYNC-ARCHIVE.md §1): 겉봉(1059)은 **주인에게 온 것만** 받는다. 남의 겉봉은 디스크를 채울 뿐이다.
     let me = owner();
     let wrap = owner_wrap(&e, me.as_deref());
-    if !wrap && !KINDS.contains(&e.get("kind").and_then(Value::as_i64).unwrap_or(-1)) && !node_keeper_badge(&e) {
+    // 11-23 비공개 글(4470)은 **주인 글만** 받는다(남의 비공개 글을 이 디스크에 쌓지 않는다).
+    let owner_private = e.get("kind").and_then(Value::as_i64) == Some(KIND_PRIVATE_NOTE)
+        && me.as_deref().is_some_and(|o| e.get("pubkey").and_then(Value::as_str) == Some(o));
+    if !wrap && !owner_private && !KINDS.contains(&e.get("kind").and_then(Value::as_i64).unwrap_or(-1)) && !node_keeper_badge(&e) {
         return (false, "이 릴레이는 가게 글만 받습니다".into());
     }
     if !verify(&e) {
@@ -875,8 +878,23 @@ pub(crate) fn events_of(pubkey: &str, kinds: &[i64]) -> (Vec<Value>, Vec<String>
     (out, deleted.into_iter().collect())
 }
 
-/// 지킬 내 글의 종류: 글·방·방 글·지우기 요청·이름표·팔로우·북마크.
-const MINE_KINDS: [i64; 8] = [1, 40, 41, 42, 5, 0, 3, 10003];
+/// 지킬 내 글의 종류: 글·방·방 글·지우기 요청·이름표·팔로우·북마크 · 11-23 「나만·친구만」 비공개 글(4470)·열쇠 꾸러미(30078).
+/// 비공개 글·꾸러미는 **암호문 그대로** 둔다(풀지 않는다) · 바깥(터널) REQ 에는 안 내준다(`private_event`).
+const MINE_KINDS: [i64; 10] = [1, 40, 41, 42, 5, 0, 3, 10003, KIND_PRIVATE_NOTE, 30078];
+
+/// 11-23 「나만·친구만」 비공개 글(폰 core/talk/private-note.ts KIND_PRIVATE_NOTE). 주인 글로만 받는다.
+pub(crate) const KIND_PRIVATE_NOTE: i64 = 4470;
+/// 11-23 「친구만」 열쇠 꾸러미 자리(kind 30078 의 d · 폰 core/talk/circle.ts).
+pub(crate) const CIRCLE_KEYS_D: &str = "ravenvault/circle-keys/v1";
+/// 바깥에 내주지 않는 비공개 글인가: 4470 · 열쇠 꾸러미(30078 d=ravenvault/circle-keys/v1).
+pub(crate) fn private_event(e: &Value) -> bool {
+    match e.get("kind").and_then(Value::as_i64) {
+        Some(KIND_PRIVATE_NOTE) => true,
+        Some(30078) => e.get("tags").and_then(Value::as_array).is_some_and(|t| t.iter().any(|x|
+            x.get(0).and_then(Value::as_str) == Some("d") && x.get(1).and_then(Value::as_str) == Some(CIRCLE_KEYS_D))),
+        _ => false,
+    }
+}
 /// 마지막으로 **끝까지** 모은 (주인 공개키, 시각). 주인이 바뀌면 처음부터 다시 모은다(GPT P2).
 static OWN_BACKUP: Mutex<Option<(String, i64)>> = Mutex::new(None);
 /// 마지막 시도의 문제(없으면 None) — 화면이 「지키는 중」이라고 거짓말하지 않게.
@@ -1195,8 +1213,14 @@ pub async fn serve(ws: WebSocket) {
     serve_from(ws, None).await
 }
 
-/// `ip` = client_ip 가 가린 상대(없으면 IP 상한을 안 건다).
-pub async fn serve_from(mut ws: WebSocket, ip: Option<std::net::IpAddr>) {
+/// `ip` = client_ip 가 가린 상대(없으면 IP 상한을 안 건다). 비공개 글(4470·열쇠 꾸러미)은 내주지 않는다.
+pub async fn serve_from(ws: WebSocket, ip: Option<std::net::IpAddr>) {
+    serve_with(ws, ip, false).await
+}
+
+/// `private_ok` = 이 컴퓨터 안에서 붙은 연결(터널·같은 와이파이 아님)이라 비공개 글도 내줘도 되나.
+/// 🔴 바깥(터널)에는 4470·열쇠 꾸러미를 **안 보인다** — 글 수·시각도 새지 않게 REQ 답과 실시간 밀어주기 모두에서 뺀다.
+pub async fn serve_with(mut ws: WebSocket, ip: Option<std::net::IpAddr>, private_ok: bool) {
     let _ip_slot = match ip {
         None => None,
         Some(ip) => match IpSlot::take(ip) {
@@ -1242,6 +1266,7 @@ pub async fn serve_from(mut ws: WebSocket, ip: Option<std::net::IpAddr>) {
             pushed = rx.recv() => {
                 match pushed {
                     Ok(e) => {
+                        if !private_ok && private_event(&e) { continue; }
                         let hits: Vec<String> = subs.iter().filter(|(_, fs)| fs.iter().any(|f| matches(&e, f))).map(|(id, _)| id.clone()).collect();
                         for id in hits {
                             // 읽지 않는 상대에게 밀다가 영영 멈추지 않게 10초 제한.
@@ -1328,7 +1353,13 @@ pub async fn serve_from(mut ws: WebSocket, ip: Option<std::net::IpAddr>) {
                     .unwrap_or(200)
                     .min(500) as usize;
                 // 11-12 부하 시험: 맞는 것을 다 복사하던 것을 — 가리키기만 해서 새것부터 cap 개만 복사한다(잠금 시간이 짧아진다).
-                let mut hits = peek(|v| top_matches(v, &filters, cap));
+                let mut hits = peek(|v| if private_ok { top_matches(v, &filters, cap) } else {
+                    // 비공개 글을 뺀 뒤에도 cap 개가 차게 — 가리키기만 하는 top_matches 와 같은 방식으로 거른다.
+                    let mut h: Vec<&Value> = v.iter().filter(|e| !private_event(e) && filters.iter().any(|f| matches(e, f))).collect();
+                    h.sort_unstable_by_key(|e| std::cmp::Reverse(e.get("created_at").and_then(Value::as_i64).unwrap_or(0)));
+                    h.truncate(cap);
+                    h.into_iter().cloned().collect()
+                });
                 {
                     let g = EPHEMERAL.lock().unwrap_or_else(|x| x.into_inner());
                     let cut = now_secs() - EPHEMERAL_TTL_SECS;
@@ -1623,6 +1654,54 @@ mod tests {
         assert_eq!(mine_n, MAX_EVENTS + 11, "주인 글이 밀려났다");
         assert!(has_old, "주인 옛 글이 밀려났다");
         assert_eq!(others_n, MAX_EVENTS, "남의 글 한도가 지켜지지 않았다");
+        *TEST_OWNER.lock().unwrap() = None;
+        *STORE.lock().unwrap() = None;
+    }
+
+    /// 11-23 「나만·친구만」: 주인 비공개 글(4470)·열쇠 꾸러미는 지켜 두되 바깥(터널) REQ 에는 안 내준다. 남의 4470 은 안 받는다.
+    #[tokio::test]
+    async fn private_notes_are_kept_but_never_served_outside() {
+        use super::*;
+        use futures_util::{SinkExt, StreamExt};
+        use tokio_tungstenite::tungstenite::Message as M;
+        let _g = OWNER_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let me_sk = [7u8; 32];
+        let me = crate::shopkey::pubkey_of(&me_sk).unwrap();
+        *TEST_OWNER.lock().unwrap() = Some(me.clone());
+        *STORE.lock().unwrap() = Some(vec![]);
+        assert!(MINE_KINDS.contains(&KIND_PRIVATE_NOTE) && MINE_KINDS.contains(&30078));
+        let t = now_secs();
+        let note = crate::shopkey::sign_with(&me_sk, KIND_PRIVATE_NOTE, json!([]), "{\"v\":1,\"a\":\"self\",\"c\":\"x\"}", t).unwrap();
+        let circle = crate::shopkey::sign_with(&me_sk, 30078, json!([["d", CIRCLE_KEYS_D]]), "{\"v\":1}", t).unwrap();
+        let public = crate::shopkey::sign_with(&me_sk, 1, json!([["t", "ravencoin"]]), "공개 글", t).unwrap();
+        for e in [&note, &circle, &public] { assert!(store(e.clone()).0, "주인 글을 버렸다: {e}"); }
+        let theirs = crate::shopkey::sign_with(&[9u8; 32], KIND_PRIVATE_NOTE, json!([]), "{}", t).unwrap();
+        assert!(!store(theirs).0, "남의 비공개 글을 받았다");
+        assert!(private_event(&note) && private_event(&circle) && !private_event(&public));
+        let backup = json!({ "kind": 30078, "tags": [["d", "ravenvault/backup/v1"]] });
+        assert!(!private_event(&backup), "다른 30078 은 그대로");
+
+        async fn ask(private_ok: bool, me: &str) -> Vec<i64> {
+            let app = axum::Router::new().route("/r", axum::routing::get(move |ws: axum::extract::ws::WebSocketUpgrade| async move {
+                ws.on_upgrade(move |s| serve_with(s, None, private_ok))
+            }));
+            let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = l.local_addr().unwrap();
+            let srv = tokio::spawn(async move { axum::serve(l, app).await.unwrap() });
+            let (mut a, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/r")).await.unwrap();
+            a.send(M::Text(json!(["REQ", "s", { "authors": [me], "limit": 50 }]).to_string().into())).await.unwrap();
+            let mut kinds = vec![];
+            while let Ok(Some(Ok(M::Text(t)))) = tokio::time::timeout(std::time::Duration::from_secs(3), a.next()).await {
+                let v: Value = serde_json::from_str(&t).unwrap();
+                if v[0] == "EOSE" { break; }
+                kinds.push(v[2]["kind"].as_i64().unwrap());
+            }
+            srv.abort();
+            kinds.sort();
+            kinds
+        }
+        assert_eq!(ask(false, &me).await, vec![1], "바깥 연결에 비공개 글이 나갔다");
+        assert_eq!(ask(true, &me).await, vec![1, KIND_PRIVATE_NOTE, 30078]);
         *TEST_OWNER.lock().unwrap() = None;
         *STORE.lock().unwrap() = None;
     }

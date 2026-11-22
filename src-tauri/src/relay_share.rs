@@ -1076,6 +1076,24 @@ pub fn relay_share_remove(url: String) -> Value {
 
 #[cfg(test)]
 mod tests {
+    /// 11-23 「나만·친구만」 비공개 글(4470)·열쇠 꾸러미(30078)는 이웃 전파·30일 다시 올리기에 절대 안 들어간다.
+    #[test]
+    fn private_notes_never_spread_or_republish() {
+        use super::*;
+        for k in [crate::relay::KIND_PRIVATE_NOTE, 30078] {
+            assert!(!SHARE_KINDS.contains(&k) && !REPUBLISH_KINDS.contains(&k), "{k}");
+        }
+        let me = "a".repeat(64);
+        let at = 1_800_000_000;
+        let mine = vec![
+            serde_json::json!({ "id": "1".repeat(64), "pubkey": me, "kind": 4470, "created_at": at, "tags": [], "content": "{}" }),
+            serde_json::json!({ "id": "2".repeat(64), "pubkey": me, "kind": 30078, "created_at": at, "tags": [["d", crate::relay::CIRCLE_KEYS_D]], "content": "{}" }),
+            serde_json::json!({ "id": "3".repeat(64), "pubkey": me, "kind": 1, "created_at": at, "tags": [], "content": "공개" }),
+        ];
+        let got = republish_candidates(&mine, &HashSet::new(), &me, at);
+        assert_eq!(got.iter().map(|e| e["kind"].as_i64().unwrap()).collect::<Vec<_>>(), vec![1]);
+    }
+
     use super::*;
 
     const SK: [u8; 32] = [0x21; 32];

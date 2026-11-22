@@ -2620,7 +2620,12 @@ async fn relay_upgrade(req: axum::extract::Request) -> axum::response::Response 
     let peer = parts.extensions.get::<axum::extract::ConnectInfo<std::net::SocketAddr>>().map(|c| c.0);
     let ip = crate::relay::client_ip(peer, &parts.headers);
     match axum::extract::ws::WebSocketUpgrade::from_request_parts(&mut parts, &()).await {
-        Ok(ws) => ws.max_message_size(512 * 1024).max_frame_size(512 * 1024).on_upgrade(move |s| crate::relay::serve_from(s, ip)).into_response(),
+        Ok(ws) => {
+            // 11-23 비공개 글(4470·열쇠 꾸러미)은 이 컴퓨터 안에서 붙은 연결에만 — 터널·같은 와이파이에는 안 내준다.
+            let private_ok = peer.is_some_and(|p| p.ip().is_loopback()) && !from_outside(&parts.headers)
+                && !parts.headers.contains_key("cf-connecting-ip") && !parts.headers.contains_key("x-forwarded-for");
+            ws.max_message_size(512 * 1024).max_frame_size(512 * 1024).on_upgrade(move |s| crate::relay::serve_with(s, ip, private_ok)).into_response()
+        }
         Err(e) => e.into_response(),
     }
 }

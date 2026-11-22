@@ -218,9 +218,55 @@ fn wanted(me: &str) -> (Vec<Want>, HashSet<String>) {
                 seen.insert(wid.to_string());
             }
         }
+        // 11-23 「나만·친구만」 비공개 글(4470)의 암호 사진도 — 속을 메모리에서만 풀어 주소·지문을 읽고, 받는 것은 암호문 그대로.
+        if crate::shopkey::pubkey_of(&sk).ok().as_deref() == Some(me) {
+            let (private, _) = crate::relay::events_of(me, &[crate::relay::KIND_PRIVATE_NOTE, 30078]);
+            let circle = private.iter().find(|e| e.get("kind").and_then(Value::as_i64) == Some(30078) && crate::relay::private_event(e))
+                .map(|e| circle_keys(&sk, me, e)).unwrap_or_default();
+            for e in private.iter().filter(|e| e.get("kind").and_then(Value::as_i64) == Some(crate::relay::KIND_PRIVATE_NOTE)) {
+                let id = e.get("id").and_then(Value::as_str).unwrap_or("");
+                if !is_hex64(id) { continue; }
+                for (url, x) in private_note_files(&sk, me, e, &circle) { out.push((url, x, "cipher", id.to_string())); }
+            }
+        }
         crate::words::wipe_bytes(&mut sk);
     }
     (out, deleted.into_iter().collect())
+}
+
+/// 내 열쇠 꾸러미(30078 d=ravenvault/circle-keys/v1)의 self 칸 → 세대별 서클 열쇠(메모리만 · 폰 core/talk/circle.ts).
+fn circle_keys(sk: &[u8; 32], me: &str, e: &Value) -> Vec<(i64, [u8; 32])> {
+    let Some(conv) = crate::wallet_link::conv_key(sk, me) else { return vec![] };
+    let outer: Value = serde_json::from_str(e.get("content").and_then(Value::as_str).unwrap_or("")).unwrap_or(Value::Null);
+    let Some(plain) = outer.get("self").and_then(Value::as_str).and_then(|c| crate::wallet_link::nip44_decrypt(c, &conv)) else { return vec![] };
+    let v: Value = serde_json::from_str(&plain).unwrap_or(Value::Null);
+    v.get("keys").and_then(Value::as_array).into_iter().flatten().filter_map(|k| {
+        let epoch = k.get(0)?.as_i64()?;
+        let b = hex::decode(k.get(1)?.as_str()?).ok().filter(|b| b.len() == 32)?;
+        let mut key = [0u8; 32];
+        key.copy_from_slice(&b);
+        Some((epoch, key))
+    }).collect()
+}
+
+/// 4470 글 하나 → 그 글 암호 사진들의 (주소, 암호문 지문). 「나만」은 나→나 NIP-44, 「친구만」은 그 세대 서클 열쇠(폰 core/talk/private-note.ts).
+/// 🔴 푼 속은 이 함수 안에서만 쓴다 — 디스크에 쓰지 않는다. 사진 열쇠(key·nonce)도 꺼내지 않는다.
+fn private_note_files(sk: &[u8; 32], me: &str, e: &Value, circle: &[(i64, [u8; 32])]) -> Vec<(String, String)> {
+    let env: Value = serde_json::from_str(e.get("content").and_then(Value::as_str).unwrap_or("")).unwrap_or(Value::Null);
+    if env.get("v").and_then(Value::as_i64) != Some(1) { return vec![]; }
+    let Some(c) = env.get("c").and_then(Value::as_str) else { return vec![] };
+    let conv = match env.get("a").and_then(Value::as_str) {
+        Some("self") => crate::wallet_link::conv_key(sk, me),
+        Some("friends") => env.get("e").and_then(Value::as_i64).and_then(|ep| circle.iter().find(|(n, _)| *n == ep).map(|(_, k)| *k)),
+        _ => None,
+    };
+    let Some(plain) = conv.and_then(|k| crate::wallet_link::nip44_decrypt(c, &k)) else { return vec![] };
+    let body: Value = serde_json::from_str(&plain).unwrap_or(Value::Null);
+    body.get("photos").and_then(Value::as_array).into_iter().flatten().take(4).filter_map(|f| {
+        let url = f.get("url")?.as_str()?.to_string();
+        let x = f.get("sha256")?.as_str()?.to_string();
+        (cipher_url_ok(&url) && hash_of_url(&url).as_deref() == Some(x.as_str())).then_some((url, x))
+    }).collect()
 }
 
 /// 한 번 돌기: 지운 글의 사진 지우기 → 새 사진 받기(이미 있으면 출처만 더함). 동시에 두 번 돌지 않는다.
@@ -309,6 +355,29 @@ mod tests {
         // imeta x 가 주소 지문과 다르면 버린다.
         let bad = json!({ "kind": 1, "content": "", "tags": [["imeta", format!("url https://blossom.nostr.build/{H}.jpg"), format!("x {}", "f".repeat(64))]] });
         assert!(photos_of_event(&bad).is_empty());
+    }
+
+    /// 11-23 「나만·친구만」 4470 글: 메모리에서만 풀어 암호 사진 주소·지문을 읽는다(열쇠는 안 꺼낸다).
+    #[test]
+    fn 비공개_글의_암호_사진도_사본_대상() {
+        use crate::wallet_link::{conv_key, nip44_encrypt};
+        let sk = [7u8; 32];
+        let me = crate::shopkey::pubkey_of(&sk).unwrap();
+        let body = json!({ "v": 1, "text": "나만", "photos": [{ "url": format!("https://nostr.download/{H}.bin"), "mime": "image/jpeg",
+            "key": "1".repeat(64), "nonce": "2".repeat(24), "sha256": H, "plainSha256": "", "size": 10, "width": 1, "height": 1 }] }).to_string();
+        let selfc = nip44_encrypt(&body, &conv_key(&sk, &me).unwrap(), [3u8; 32]).unwrap();
+        let e = json!({ "kind": 4470, "content": json!({ "v": 1, "a": "self", "c": selfc }).to_string() });
+        assert_eq!(private_note_files(&sk, &me, &e, &[]), vec![(format!("https://nostr.download/{H}.bin"), H.to_string())]);
+        // 「친구만」 — 꾸러미 self 칸에서 그 세대 열쇠를 찾아 연다.
+        let ck = [5u8; 32];
+        let fc = nip44_encrypt(&body, &ck, [4u8; 32]).unwrap();
+        let fe = json!({ "kind": 4470, "content": json!({ "v": 1, "a": "friends", "e": 2, "c": fc }).to_string() });
+        let selfslot = nip44_encrypt(&json!({ "v": 1, "epoch": 2, "friends": [], "keys": [[2, hex::encode(ck)]] }).to_string(), &conv_key(&sk, &me).unwrap(), [6u8; 32]).unwrap();
+        let bundle = json!({ "kind": 30078, "tags": [["d", crate::relay::CIRCLE_KEYS_D]], "content": json!({ "v": 1, "self": selfslot, "slots": [] }).to_string() });
+        let circle = circle_keys(&sk, &me, &bundle);
+        assert_eq!(circle.len(), 1);
+        assert_eq!(private_note_files(&sk, &me, &fe, &circle).len(), 1);
+        assert!(private_note_files(&sk, &me, &fe, &[]).is_empty(), "열쇠가 없으면 조용히 버린다");
     }
 
     #[test]

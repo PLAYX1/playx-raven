@@ -7724,7 +7724,7 @@ async function talkPaint(opts: { cached?: boolean; list?: any[] } = {}) {
           // 🔴 글을 화면에서 없애지 않는다. 없애면 지워진 줄 안다.
           setCopyText((b as HTMLElement), () => t("지우기 요청함"));
           (b as HTMLButtonElement).disabled = true;
-          if (note) note.textContent = String(r?.say || "");
+          if (note) note.textContent = t(String(r?.say || ""));
         } catch (e) {
           if (note) note.textContent = errText(e);
         }
