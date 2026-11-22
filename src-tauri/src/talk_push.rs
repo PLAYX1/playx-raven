@@ -138,6 +138,22 @@ async fn watch(url: String, tx: tokio::sync::mpsc::UnboundedSender<Value>) {
     }
 }
 
+/// 11-23 제미나이 D2: 폰 pokeNow(talkSession.ts) 와 같은 모양. 방금 올린 쪽지 겉봉(1059)·방 글(42)을
+/// 알림 창구 `/api/talk?op=now` 에 넘겨 받는 사람 알림이 1분 확인을 기다리지 않게 한다. 기다리지 않고, 실패는 조용히(1분 확인이 받쳐 준다).
+/// 이미 공개 릴레이에 올라간 글이고 서버가 서명을 다시 본다. 겉봉은 보낸 사람을 숨긴다 — 서버는 받는 사람만 안다.
+pub(crate) const NOW_URL: &str = "https://ravenvault.ex.erci.se/api/talk?op=now";
+pub(crate) fn now_batch(events: &[Value]) -> Vec<Value> {
+    events.iter().filter(|e| matches!(e.get("kind").and_then(Value::as_i64), Some(1059 | 42))).take(50).cloned().collect()
+}
+pub(crate) fn poke_now(events: &[Value]) {
+    let list = now_batch(events);
+    if list.is_empty() || cfg!(test) { return; }
+    tauri::async_runtime::spawn(async move {
+        let client = reqwest::Client::builder().timeout(Duration::from_secs(15)).build().unwrap_or_default();
+        let _ = client.post(NOW_URL).json(&json!({ "events": list })).send().await;
+    });
+}
+
 /// 모아서 넘긴다: 첫 글이 오고 200ms 동안 더 모으거나 50개가 차면 POST. 실패는 버린다.
 async fn forward(mut rx: tokio::sync::mpsc::UnboundedReceiver<Value>) {
     let client = reqwest::Client::builder().timeout(Duration::from_secs(5)).build().unwrap_or_default();
@@ -201,6 +217,11 @@ mod tests {
         assert_eq!(req[3]["#t"], json!(["ravencoin"]));
         assert_eq!(req[2]["since"], json!(100));
         assert!(NOTIFY_URL.starts_with("https://") && NOTIFY_URL.ends_with("/rv-talk/now"));
+        assert!(NOW_URL.ends_with("/api/talk?op=now"));
+        let evs = vec![json!({ "kind": 1059 }), json!({ "kind": 42 }), json!({ "kind": 1 }), json!({ "kind": 4470 })];
+        let b = now_batch(&evs);
+        assert_eq!(b.len(), 2, "겉봉·방 글만 넘긴다");
+        assert_eq!(now_batch(&vec![json!({ "kind": 1059 }); 80]).len(), 50);
     }
 
     #[test]

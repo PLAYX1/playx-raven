@@ -789,6 +789,8 @@ pub async fn talk_post(
     let tags = with_sticker_tags(tags, &text);
     let ev = crate::shopkey::sign_with(&sk, kind, tags, &text, now())?;
     let r = crate::nostrpub::nostr_publish(ev.clone()).await?;
+    // 방 글이면 받는 분들 폰 알림을 곧바로(제미나이 D2 · 폰 pokeNow 와 같다).
+    crate::talk_push::poke_now(std::slice::from_ref(&ev));
     Ok(json!({ "event": ev, "sent": r }))
 }
 

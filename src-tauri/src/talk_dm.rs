@@ -582,6 +582,10 @@ pub async fn talk_dm_send(to: Vec<String>, text: String, subject: Option<String>
     if total == 0 && results.iter().all(|(_, r)| r.is_err()) {
         return Err("쪽지를 올리지 못했습니다. 인터넷을 확인해 주세요.".into());
     }
+    // 받는 사람 폰 알림을 곧바로(제미나이 D2 · 폰 pokeNow 와 같다) — 올라간 남의 겉봉만, 내 사본은 빼고.
+    let sent_wraps: Vec<Value> = wraps.iter().zip(results.iter())
+        .filter(|((who, _), (_, r))| *who != me && r.is_ok()).map(|((_, w), _)| w.clone()).collect();
+    crate::talk_push::poke_now(&sent_wraps);
     let tags = rumor.get("tags").and_then(Value::as_array).cloned().unwrap_or_default();
     let mut members: Vec<String> = std::iter::once(me.clone())
         .chain(tags.iter().filter(|t| t.get(0).and_then(Value::as_str) == Some("p")).filter_map(|t| t.get(1).and_then(Value::as_str).map(str::to_string)))
