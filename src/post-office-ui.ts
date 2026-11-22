@@ -9,7 +9,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { copyHtml, setCopyText, t, tf } from "./i18n";
 import "./post-office.css";
 
-type State = { on: boolean; notice: boolean; count: number; bytes: number };
+type State = { on: boolean; notice: boolean; count: number; bytes: number; outside?: boolean; announced?: boolean };
 type Choose = (title: string, message: string, yes: string, alt: string) => Promise<"yes" | "alt" | null>;
 
 export const POST_OFFICE_CARD = "post-office-card";
@@ -25,6 +25,13 @@ export function heldLine(s: State): string {
   return tf("지금 맡은 글 {0}개 · {1}MB", s.count, mb >= 10 ? Math.round(mb) : Math.round(mb * 10) / 10);
 }
 
+/** 다른 분들이 이 우체국을 찾을 수 있나. */
+export function findLine(s: State): string {
+  if (!s.outside) return t("바깥 주소가 없어 이 컴퓨터 안에서만 우체국이에요. 바깥 연결을 받으면 다른 분들이 찾을 수 있어요.");
+  if (s.announced) return t("다른 분들이 찾을 수 있게 이 우체국을 알렸어요.");
+  return t("이 우체국을 알리는 중이에요…");
+}
+
 function ensureCard(): HTMLElement | null {
   const page = el("page-settings");
   if (!page) return null;
@@ -38,10 +45,13 @@ function ensureCard(): HTMLElement | null {
     <p class="po-what">${copyHtml(POST_OFFICE_TEXT)}</p>
     <label class="check po-switch"><span class="sx-txt"><b>${copyHtml("우체국 켜기")}</b></span><input type="checkbox" id="po-on" role="switch" /></label>
     <div class="po-status" id="po-status" role="status"></div>
-    <p class="meta">${copyHtml("다른 분들이 이 우체국을 찾으려면 「릴레이 나누기」로 바깥 주소를 알려야 해요.")}</p>`;
+    <p class="meta" id="po-find"></p>
+    <div class="row po-acts" id="po-outside" hidden><button class="ghost" type="button" id="po-outside-go">${copyHtml("바깥 연결 받기")}</button></div>`;
   const share = el("relay-share-card");
   if (share && share.parentElement === page) share.before(card); else page.append(card);
   (el("po-on") as HTMLInputElement).addEventListener("change", (e) => void setOn((e.target as HTMLInputElement).checked));
+  // 바깥 연결 화면(왼쪽 「바깥 연결」 표시등과 같은 곳)으로 데려간다 — 여기서 내려받거나 켜지 않는다.
+  el("po-outside-go")?.addEventListener("click", () => (document.getElementById("d-out-row") as HTMLButtonElement | null)?.click());
   return card;
 }
 
@@ -55,6 +65,13 @@ function paint(s: State) {
     setCopyText(status, () => heldLine(s));
     status.classList.toggle("ok", s.on);
   }
+  const find = el("po-find");
+  if (find) {
+    find.hidden = !s.on;
+    setCopyText(find, () => findLine(s));
+  }
+  const out = el("po-outside");
+  if (out) out.hidden = !(s.on && !s.outside);
 }
 
 async function refresh() {

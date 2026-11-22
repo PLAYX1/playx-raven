@@ -6,3 +6,4 @@
 #post-office-card .po-switch .sx-txt { display: flex; flex-direction: column; gap: 2px; white-space: nowrap; }
 #post-office-card .po-status { font-weight: 700; margin: 6px 0 2px; overflow-wrap: anywhere; }
 #post-office-card .po-status.ok { color: var(--ok, #1a7f37); }
+#post-office-card .po-acts button { min-height: 44px; white-space: nowrap; }

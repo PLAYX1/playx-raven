@@ -856,8 +856,10 @@ pub fn announce_plan(s: &Share, outside: Option<&str>, at: i64) -> Announce {
 }
 
 /// `post` = 지금 우체국이 켜져 있나. 켜고 끌 때 능력 표가 바뀌므로 다시 올린다.
+/// 11-23 결정 2: 우체국은 「릴레이 나누기(내 글 퍼뜨리기)」와 따로 — 우체국만 켜져 있어도 바깥 주소가 있고 스스로 들어와 보는 시험을
+/// 통과하면 10002(ravenvault-relay + rv-post-1)를 올린다. 이웃 찾기·퍼뜨리기는 여전히 릴레이 나누기를 켠 때만.
 pub fn announce_plan_with(s: &Share, outside: Option<&str>, at: i64, post: bool) -> Announce {
-    match (s.enabled, outside) {
+    match (s.enabled || post, outside) {
         (true, Some(u)) => {
             if s.announced_url.as_deref() != Some(u) || at - s.announced_at >= REANNOUNCE_SECS || s.problem.is_some() || s.announced_post != post {
                 Announce::TryWith(u.to_string())
@@ -1021,6 +1023,14 @@ pub fn start() {
             tokio::time::sleep(std::time::Duration::from_secs(TICK_SECS)).await;
         }
     });
+}
+
+/// 우체국 카드가 쓴다: (지금 바깥 주소가 있나, 그 주소로 우체국 능력 표를 알렸나).
+pub(crate) fn post_announce_state() -> (bool, bool) {
+    let s = current();
+    let outside = outside_url();
+    let announced = outside.is_some() && s.announced_url == outside && s.announced_post;
+    (outside.is_some(), announced)
 }
 
 /// 지금 알리고 있는 내 릴레이 주소 — 켜져 있고, 지금 바깥 주소로 스스로 들어와 본 뒤 그 주소를 알린 때만.
@@ -1459,6 +1469,14 @@ mod tests {
         s.announced_post = true;
         assert_eq!(announce_plan_with(&s, Some(u), 1_600, true), Announce::Nothing);
         assert_eq!(announce_plan_with(&s, Some(u), 1_600, false), Announce::TryWith(u.into()));
+        // 결정 2: 릴레이 나누기를 꺼도 우체국이 켜져 있으면 알린다 · 둘 다 끄면 내 주소를 뺀다 · 바깥 주소가 없으면 안 알린다.
+        let off = Share::default();
+        assert_eq!(announce_plan_with(&off, Some(u), 1_600, true), Announce::TryWith(u.into()));
+        assert_eq!(announce_plan_with(&off, None, 1_600, true), Announce::Nothing);
+        let was = Share { announced_url: Some(u.into()), announced_post: true, announced_at: 1_000, ..Share::default() };
+        assert_eq!(announce_plan_with(&was, Some(u), 1_600, true), Announce::Nothing);
+        assert_eq!(announce_plan_with(&was, Some(u), 1_600, false), Announce::Withdraw);
+        assert_eq!(announce_plan(&Share::default(), Some(u), 1_600), Announce::Nothing, "우체국·나누기 둘 다 꺼졌으면 그대로");
         // 4470 은 이웃 퍼뜨리기·다시 올리기에 넣지 않는다(gossip 금지).
         assert!(!SHARE_KINDS.contains(&4470) && !REPUBLISH_KINDS.contains(&4470) && !SHARE_KINDS.contains(&1059));
     }

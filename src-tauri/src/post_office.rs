@@ -507,7 +507,9 @@ pub fn ip_wrap_budget_ok(ip: std::net::IpAddr) -> bool {
 fn state_json() -> Value {
     let s = setting();
     let (n, bytes) = counts();
-    json!({ "on": s.on, "notice": s.notice, "count": n, "bytes": bytes, "max_count": MAX_TOTAL, "max_bytes": MAX_BYTES })
+    let (outside, announced) = if cfg!(test) { (false, false) } else { crate::relay_share::post_announce_state() };
+    json!({ "on": s.on, "notice": s.notice, "count": n, "bytes": bytes, "max_count": MAX_TOTAL, "max_bytes": MAX_BYTES,
+        "outside": outside, "announced": s.on && announced })
 }
 
 #[tauri::command(async)]

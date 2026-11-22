@@ -2841,7 +2841,10 @@ export const SETTINGS_TALK_090_COPY: Record<string, [string, string, string]> = 
   "우체국 — 이 컴퓨터가 다른 사람의 잠긴 글을 잠깐 맡았다가 전해 줘요. 내용은 이 컴퓨터도 못 읽어요. 사진·파일은 맡지 않아요. 끄면 맡은 글을 지우고, 내 글만 지켜요.": ["Post office — this computer briefly holds other people’s locked posts and passes them on. Even this computer can’t read them. It doesn’t hold photos or files. Turning it off deletes what it holds and keeps only your own posts.", "郵便局 — このコンピューターが他の人の鍵付き投稿を少しの間預かって届けます。中身はこのコンピューターにも読めません。写真やファイルは預かりません。オフにすると預かった投稿を消し、自分の投稿だけを守ります。", "邮局 — 这台电脑会暂时代管别人的加密帖子再转交。内容连这台电脑也读不了。不代管照片和文件。关闭后会删除代管的帖子，只保护你自己的帖子。"],
   "우체국 켜기": ["Turn on post office", "郵便局をオンにする", "开启邮局"],
   "지금 맡은 글 {0}개 · {1}MB": ["Holding {0} posts · {1} MB", "預かっている投稿 {0}件 · {1}MB", "正在代管 {0} 条 · {1}MB"],
-  "다른 분들이 이 우체국을 찾으려면 「릴레이 나누기」로 바깥 주소를 알려야 해요.": ["For others to find this post office, share its outside address with “Relay sharing”.", "他の人がこの郵便局を見つけるには、「リレー共有」で外部アドレスを知らせる必要があります。", "要让别人找到这个邮局，需要用“中继共享”公布外部地址。"],
+  "바깥 주소가 없어 이 컴퓨터 안에서만 우체국이에요. 바깥 연결을 받으면 다른 분들이 찾을 수 있어요.": ["No outside address, so this is a post office only inside this computer’s network. Accept outside connections so others can find it.", "外部アドレスがないため、このコンピューターのネットワーク内だけの郵便局です。外部からの接続を受け付けると、他の人が見つけられます。", "没有外部地址，所以只是本机网络内的邮局。接受外部连接后，别人就能找到它。"],
+  "다른 분들이 찾을 수 있게 이 우체국을 알렸어요.": ["This post office has been announced so others can find it.", "他の人が見つけられるように、この郵便局を知らせました。", "已公布这个邮局，别人可以找到它。"],
+  "이 우체국을 알리는 중이에요…": ["Announcing this post office…", "この郵便局を知らせています…", "正在公布这个邮局…"],
+  "바깥 연결 받기": ["Accept outside connections", "外部からの接続を受け付ける", "接受外部连接"],
   "끄기": ["Turn off", "オフにする", "关闭"],
 // 11-08 지킴이 고마움(src/keeper-thanks-ui.ts · relay-share-ui.ts 릴레이 지킴이 · docs/KEEPER-THANKS.md)
   "릴레이 지킴이": ["Relay keeper", "リレーキーパー", "中继守护者"],
