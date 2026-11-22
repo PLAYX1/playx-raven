@@ -347,7 +347,10 @@ pub fn list_tags(my_url: Option<&str>) -> Value {
     if let Some(u) = my_url {
         tags.push(json!(["r", u]));
     }
+    // 내 주소가 기본 릴레이(N100 = PLAY X 주소)와 같으면 두 번 적지 않는다 — 맨 앞 r 이 내 주소로 남는다
+    // (폰 core/talk/playx-post-office.ts 는 「맨 앞 r = PLAY X 주소」를 본다).
     for d in DEFAULT_RELAYS {
+        if my_url.is_some_and(|u| clean_relay_url(d).as_deref() == Some(u)) { continue; }
         tags.push(json!(["r", d]));
     }
     if my_url.is_some() {
@@ -932,7 +935,9 @@ async fn announce_step() {
                 return;
             };
             // 바깥 주소로 **스스로** 들어와 본다. 터널 주소는 cloudflare 이름이라 DNS 검사도 그대로 건다.
-            if !probe_inner(&url, true).await {
+            // 기본 릴레이와 같은 주소(N100 자기 주소)는 DNS 공개 검사를 건너뛴다 — N100 자신에게선 ts.net 이 100.x(MagicDNS)로 풀린다.
+            //   실제로 웹소켓으로 붙어 REQ→EOSE 가 오는지만 본다.
+            if !probe_inner(&url, !is_default(&url)).await {
                 // 옛 주소를 계속 알리면 이웃이 죽은 곳에 붙는다 — 뺀 목록으로 바꿔 둔다.
                 if s.announced_url.is_some() && publish_list(&sk, None, false).await {
                     update(|x| {
@@ -1127,9 +1132,7 @@ pub fn relay_share_set_own(url: Option<String>) -> Result<Value, String> {
         None => None,
         Some(raw) => {
             let Some(u) = clean_relay_url(raw) else { return Err("bad-url".into()) };
-            if is_default(&u) {
-                return Err("already".into());
-            }
+            // 11-23 페이블: N100 은 자기 주소가 곧 기본 릴레이(PLAY X)다 — 「이미 있음」으로 거절하면 우체국 신호를 낼 길이 없다.
             Some(u)
         }
     };
@@ -1435,6 +1438,30 @@ mod tests {
         // 남이 쓴 kind 5 로는 내 글이 지워진 것으로 치지 않는다.
         let fake = note(&other, 5, NOW, "", json!([["e", mine[2]["id"]]]));
         assert!(deleted_ids(&[fake], &me).is_empty());
+    }
+
+    /// 11-23 페이블: N100 은 자기 주소(= 기본 PLAY X 릴레이)를 own_url 로 적을 수 있고, 10002 맨 앞 r 이 그 주소이며 두 번 적지 않는다.
+    #[test]
+    fn n100_can_announce_itself_as_the_playx_relay() {
+        let _g = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
+        let home = crate::paths::test_fixture_root().join(format!("rs-own-n100-{}", std::process::id()));
+        std::fs::create_dir_all(&home).unwrap();
+        std::env::set_var("PLAYX_RAVEN_HOME", &home);
+        let playx = DEFAULT_RELAYS[0];
+        let r = relay_share_set_own(Some(playx.to_string())).expect("N100 자기 주소를 거절했다");
+        assert_eq!(r["own_url"], playx);
+        std::env::remove_var("PLAYX_RAVEN_HOME");
+        let tags = list_tags_with(Some(playx), true);
+        let rs: Vec<&str> = tags.as_array().unwrap().iter().filter(|t| t[0] == "r").map(|t| t[1].as_str().unwrap()).collect();
+        assert_eq!(rs[0], playx, "맨 앞 r 이 PLAY X 주소가 아니다");
+        assert_eq!(rs.iter().filter(|u| **u == playx).count(), 1, "PLAY X 주소를 두 번 적었다");
+        assert_eq!(rs.len(), DEFAULT_RELAYS.len());
+        let t: Vec<&str> = tags.as_array().unwrap().iter().filter(|t| t[0] == "t").map(|t| t[1].as_str().unwrap()).collect();
+        assert!(t.contains(&SHARE_TAG) && t.contains(&"rv-post-1"));
+        assert!(is_default(playx), "N100 주소는 DNS 공개 검사를 건너뛰는 기본 릴레이다");
+        // 다른 집 PC 는 예전대로 맨 앞 내 주소 + 기본 릴레이 넷.
+        let other = list_tags_with(Some("wss://a.trycloudflare.com/api/relay"), true);
+        assert_eq!(other.as_array().unwrap().iter().filter(|t| t[0] == "r").count(), DEFAULT_RELAYS.len() + 1);
     }
 
     #[test]
