@@ -979,6 +979,22 @@ pub(crate) fn private_event(e: &Value) -> bool {
         _ => false,
     }
 }
+/// 11-23 「사람을 적은 물음」인가(우체국·주인 비공개 글 공통 규칙): 1059 는 `#p` 를, 4470·열쇠 꾸러미는 `authors` 를 적어야 한다.
+/// 그 밖의 글은 따지지 않는다(true). 친구가 내 데스크탑에서 내 「친구만」 글을 받아 가려면 authors=[나] 로 물으면 된다 —
+/// 넓은 물음(사람을 안 적은 것)·그런 구독에는 안 나간다.
+pub(crate) fn named_for(e: &Value, f: &Value) -> bool {
+    let has = |k: &str| f.get(k).and_then(Value::as_array).is_some_and(|a| !a.is_empty());
+    match e.get("kind").and_then(Value::as_i64) {
+        Some(1059) => has("#p"),
+        _ if private_event(e) => has("authors"),
+        _ => true,
+    }
+}
+
+/// 바깥(터널) 연결에 이 글을 이 물음의 답으로 내줘도 되나. 주인 비공개 글(4470·꾸러미)은 authors 를 적은 물음에만.
+/// (주인에게 온 겉봉은 예전 그대로 — 여기서 막지 않는다.)
+fn outside_ok(e: &Value, f: &Value) -> bool { !private_event(e) || named_for(e, f) }
+
 /// 마지막으로 **끝까지** 모은 (주인 공개키, 시각). 주인이 바뀌면 처음부터 다시 모은다(GPT P2).
 static OWN_BACKUP: Mutex<Option<(String, i64)>> = Mutex::new(None);
 /// 마지막 시도의 문제(없으면 None) — 화면이 「지키는 중」이라고 거짓말하지 않게.
@@ -1323,13 +1339,14 @@ pub async fn serve(ws: WebSocket) {
     serve_from(ws, None).await
 }
 
-/// `ip` = client_ip 가 가린 상대(없으면 IP 상한을 안 건다). 비공개 글(4470·열쇠 꾸러미)은 내주지 않는다.
+/// `ip` = client_ip 가 가린 상대(없으면 IP 상한을 안 건다). 비공개 글(4470·열쇠 꾸러미)은 authors 를 적은 물음에만.
 pub async fn serve_from(ws: WebSocket, ip: Option<std::net::IpAddr>) {
     serve_with(ws, ip, false).await
 }
 
 /// `private_ok` = 이 컴퓨터 안에서 붙은 연결(터널·같은 와이파이 아님)이라 비공개 글도 내줘도 되나.
-/// 🔴 바깥(터널)에는 4470·열쇠 꾸러미를 **안 보인다** — 글 수·시각도 새지 않게 REQ 답과 실시간 밀어주기 모두에서 뺀다.
+/// 🔴 바깥(터널)에는 4470·열쇠 꾸러미를 **사람(authors)을 적은 물음·구독에만** 보인다(11-23 — 친구가 내 「친구만」 글을 받아 가게).
+///    넓은 물음·넓은 구독에는 REQ 답과 실시간 밀어주기 모두에서 뺀다.
 pub async fn serve_with(mut ws: WebSocket, ip: Option<std::net::IpAddr>, private_ok: bool) {
     let _ip_slot = match ip {
         None => None,
@@ -1379,8 +1396,8 @@ pub async fn serve_with(mut ws: WebSocket, ip: Option<std::net::IpAddr>, private
             pushed = rx.recv() => {
                 match pushed {
                     Ok(e) => {
-                        if !private_ok && private_event(&e) { continue; }
-                        let hits: Vec<String> = subs.iter().filter(|(_, fs)| fs.iter().any(|f| matches(&e, f))).map(|(id, _)| id.clone()).collect();
+                        // 주인 비공개 글은 바깥에 authors 를 적은 구독에만(넓은 구독에는 안 민다).
+                        let hits: Vec<String> = subs.iter().filter(|(_, fs)| fs.iter().any(|f| matches(&e, f) && (private_ok || outside_ok(&e, f)))).map(|(id, _)| id.clone()).collect();
                         for id in hits {
                             // 읽지 않는 상대에게 밀다가 영영 멈추지 않게 10초 제한.
                             let pushed = tokio::time::timeout(std::time::Duration::from_secs(10), ws.send(Message::Text(json!(["EVENT", id, e]).to_string().into()))).await;
@@ -1480,7 +1497,8 @@ pub async fn serve_with(mut ws: WebSocket, ip: Option<std::net::IpAddr>, private
                 // 11-12 부하 시험: 맞는 것을 다 복사하던 것을 — 가리키기만 해서 새것부터 cap 개만 복사한다(잠금 시간이 짧아진다).
                 let mut hits = peek(|v| if private_ok { top_matches(v, &filters, cap) } else {
                     // 비공개 글을 뺀 뒤에도 cap 개가 차게 — 가리키기만 하는 top_matches 와 같은 방식으로 거른다.
-                    let mut h: Vec<&Value> = v.iter().filter(|e| !private_event(e) && filters.iter().any(|f| matches(e, f))).collect();
+                    // 11-23: 주인 비공개 글(4470·꾸러미)도 남의 것(우체국)과 같은 규칙 — authors 를 적은 물음에만.
+                    let mut h: Vec<&Value> = v.iter().filter(|e| filters.iter().any(|f| matches(e, f) && outside_ok(e, f))).collect();
                     h.sort_unstable_by_key(|e| std::cmp::Reverse(e.get("created_at").and_then(Value::as_i64).unwrap_or(0)));
                     h.truncate(cap);
                     h.into_iter().cloned().collect()
@@ -1839,7 +1857,8 @@ mod tests {
         let backup = json!({ "kind": 30078, "tags": [["d", "ravenvault/backup/v1"]] });
         assert!(!private_event(&backup), "다른 30078 은 그대로");
 
-        async fn ask(private_ok: bool, me: &str) -> Vec<i64> {
+        async fn ask(private_ok: bool, me: &str) -> Vec<i64> { ask_f(private_ok, json!({ "authors": [me], "limit": 50 })).await }
+        async fn ask_f(private_ok: bool, filter: Value) -> Vec<i64> {
             let app = axum::Router::new().route("/r", axum::routing::get(move |ws: axum::extract::ws::WebSocketUpgrade| async move {
                 ws.on_upgrade(move |s| serve_with(s, None, private_ok))
             }));
@@ -1847,7 +1866,7 @@ mod tests {
             let addr = l.local_addr().unwrap();
             let srv = tokio::spawn(async move { axum::serve(l, app).await.unwrap() });
             let (mut a, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/r")).await.unwrap();
-            a.send(M::Text(json!(["REQ", "s", { "authors": [me], "limit": 50 }]).to_string().into())).await.unwrap();
+            a.send(M::Text(json!(["REQ", "s", filter]).to_string().into())).await.unwrap();
             let mut kinds = vec![];
             while let Ok(Some(Ok(M::Text(t)))) = tokio::time::timeout(std::time::Duration::from_secs(3), a.next()).await {
                 let v: Value = serde_json::from_str(&t).unwrap();
@@ -1858,7 +1877,9 @@ mod tests {
             kinds.sort();
             kinds
         }
-        assert_eq!(ask(false, &me).await, vec![1], "바깥 연결에 비공개 글이 나갔다");
+        // 11-23: 바깥에도 authors 를 적은 물음에는 준다(친구가 내 「친구만」 글을 받아 가게) · 넓은 물음에는 안 준다.
+        assert_eq!(ask(false, &me).await, vec![1, KIND_PRIVATE_NOTE, 30078], "authors 를 적은 바깥 물음에 비공개 글을 안 줬다");
+        assert_eq!(ask_f(false, json!({ "kinds": [1, KIND_PRIVATE_NOTE, 30078], "limit": 50 })).await, vec![1], "넓은 바깥 물음에 비공개 글이 나갔다");
         assert_eq!(ask(true, &me).await, vec![1, KIND_PRIVATE_NOTE, 30078]);
         *TEST_OWNER.lock().unwrap() = None;
         *STORE.lock().unwrap() = None;
@@ -1931,11 +1952,12 @@ mod tests {
         let (_, pushed) = ask(json!({ "#p": [bob] }), Some(wrap2.clone())).await;
         assert!(pushed.is_empty(), "맡은 글을 실시간으로 밀었다: {pushed:?}");
         assert_eq!(crate::post_office::counts().0, 4);
-        // 주인 글은 여전히 주인 칸(바깥에는 안 내준다 — 기존 규칙).
+        // 주인 글은 주인 칸 — 바깥에도 authors 를 적은 물음에는 준다(11-23 · 남의 것과 같은 규칙).
         let mine = crate::shopkey::sign_with(&[7u8; 32], KIND_PRIVATE_NOTE, json!([]), "{}", t).unwrap();
         assert_eq!(store(mine.clone()), (true, String::new()));
         assert!(peek(|v| v.iter().any(|x| x["id"] == mine["id"])));
-        assert!(ask(json!({ "authors": [me] }), None).await.0.is_empty());
+        assert_eq!(ask(json!({ "authors": [me] }), None).await.0, vec![id(&mine)]);
+        assert!(ask(json!({ "kinds": [4470] }), None).await.0.is_empty(), "넓은 물음에 주인 비공개 글이 나갔다");
         // 끄면 맡은 글을 지우고 예전처럼 거절한다. 내 글은 남는다.
         crate::post_office::set_on(false);
         assert_eq!(crate::post_office::counts().0, 0);
