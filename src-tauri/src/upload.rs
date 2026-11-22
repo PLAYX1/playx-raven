@@ -539,34 +539,57 @@ async fn capped_body(mut response: reqwest::Response, max: usize, image: bool) -
     Ok(bytes)
 }
 async fn download_photo(text: &str) -> Result<Vec<u8>, String> {
-    fetch_public(text, MAX_PHOTO_BYTES, true).await
+    // 장터 쪽은 예전 그대로 — 다시 보내기(redirect)를 따라가지 않는다.
+    fetch_public(text, MAX_PHOTO_BYTES, true, 0).await
 }
-/// 공개 HTTPS 주소 하나를 받는다 — DNS 결과를 모두 검사해 그 주소로만 붙고(사설·내부 IP 금지), 프록시·다시 보내기(redirect) 금지, 상한까지만.
-async fn fetch_public(text: &str, max: usize, image: bool) -> Result<Vec<u8>, String> {
-    let url = photo_url(text)?;
-    let host = url.host_str().ok_or("사진 서버 주소가 없습니다.")?;
-    let addresses = tokio::time::timeout(std::time::Duration::from_secs(5), tokio::net::lookup_host((host, 443)))
-        .await.map_err(|_| "사진 서버 주소 확인이 오래 걸립니다.")?
-        .map_err(|_| "사진 서버 주소를 확인하지 못했습니다.")?.collect();
-    let addresses = photo_addresses(addresses)?;
-    let client = reqwest::Client::builder().no_proxy()
-        .redirect(reqwest::redirect::Policy::none()).resolve_to_addrs(host, &addresses)
-        .timeout(std::time::Duration::from_secs(if max > MAX_PHOTO_BYTES { 60 } else { 30 })).connect_timeout(std::time::Duration::from_secs(5))
-        .build().map_err(|_| "안전한 사진 연결을 준비하지 못했습니다.")?;
-    let response = client.get(url).send().await.map_err(|_| "사진을 받지 못했습니다. 공개 HTTPS 직접 주소인지 확인해 주세요.")?;
-    capped_body(response, max, image).await
+/// 다시 보내기 최대 수(release-site/api/blob.mjs fetchFollow 와 같다).
+const MAX_HOPS: usize = 3;
+/// 다시 보내기 주소 검사: https·443·인증정보 없음(photo_url) + **이름 주소만**(IP 주소 금지 — blob.mjs 와 같다).
+fn hop_url(base: &reqwest::Url, location: &str) -> Result<reqwest::Url, String> {
+    let next = base.join(location).map_err(|_| "사진 서버가 이상한 곳으로 보냈습니다.".to_string())?;
+    let next = photo_url(next.as_str())?;
+    let host = next.host_str().unwrap_or("");
+    if host.starts_with('[') || host.parse::<std::net::IpAddr>().is_ok() { return Err("사진 서버가 IP 주소로 보냈습니다. 받지 않습니다.".into()); }
+    Ok(next)
+}
+/// 공개 HTTPS 주소 하나를 받는다 — 단계마다 DNS 결과를 모두 검사해 그 주소로만 붙고(사설·내부 IP 금지), 프록시 금지, 상한까지만.
+/// `hops` = 따라갈 다시 보내기 수(0 = 따라가지 않음). 따라갈 때도 매 단계 자동 따라가기는 끄고(Policy::none) Location 을 직접 검사한다.
+/// 🔴 진짜 안전장치는 부르는 쪽의 sha256 대조다(어디서 받았든 지문이 같아야 저장).
+async fn fetch_public(text: &str, max: usize, image: bool, hops: usize) -> Result<Vec<u8>, String> {
+    let mut url = photo_url(text)?;
+    for hop in 0..=hops {
+        let host = url.host_str().ok_or("사진 서버 주소가 없습니다.")?.to_string();
+        let addresses = tokio::time::timeout(std::time::Duration::from_secs(5), tokio::net::lookup_host((host.as_str(), 443)))
+            .await.map_err(|_| "사진 서버 주소 확인이 오래 걸립니다.")?
+            .map_err(|_| "사진 서버 주소를 확인하지 못했습니다.")?.collect();
+        let addresses = photo_addresses(addresses)?;
+        let client = reqwest::Client::builder().no_proxy()
+            .redirect(reqwest::redirect::Policy::none()).resolve_to_addrs(&host, &addresses)
+            .timeout(std::time::Duration::from_secs(if max > MAX_PHOTO_BYTES { 60 } else { 30 })).connect_timeout(std::time::Duration::from_secs(5))
+            .build().map_err(|_| "안전한 사진 연결을 준비하지 못했습니다.")?;
+        let response = client.get(url.clone()).send().await.map_err(|_| "사진을 받지 못했습니다. 공개 HTTPS 직접 주소인지 확인해 주세요.")?;
+        if hops > 0 && response.status().is_redirection() {
+            if hop == hops { return Err("사진 서버가 너무 여러 번 다른 곳으로 보냈습니다.".into()); }
+            let location = response.headers().get(reqwest::header::LOCATION).and_then(|h| h.to_str().ok())
+                .ok_or("사진 서버가 보낸 곳을 알 수 없습니다.")?;
+            url = hop_url(&url, location)?;
+            continue;
+        }
+        return capped_body(response, max, image).await;
+    }
+    Err("사진 서버가 너무 여러 번 다른 곳으로 보냈습니다.".into())
 }
 
 /// 11-23 이야기 사진 한 장(공용 사진 서버 Blossom 은 한 장 20MiB 까지 — 폰 core/talk/photo.ts MAX_PHOTO_BYTES).
 /// 장터 쪽 12MB(`download_photo`)는 그대로 둔다.
 pub(crate) const MAX_TALK_PHOTO_BYTES: usize = 20 * 1024 * 1024;
-/// 이야기 사진(내 글의 사진) 받기 — 사진 종류·매직바이트까지 본다.
+/// 이야기 사진(내 글의 사진) 받기 — 사진 종류·매직바이트까지 본다. 공용 사진 서버는 지문 주소에서 307 로 넘기므로 3번까지 따라간다(11-23 실측).
 pub(crate) async fn download_talk_photo(text: &str) -> Result<Vec<u8>, String> {
-    fetch_public(text, MAX_TALK_PHOTO_BYTES, true).await
+    fetch_public(text, MAX_TALK_PHOTO_BYTES, true, MAX_HOPS).await
 }
 /// 쪽지 사진 **암호문** 받기 — 암호문은 사진처럼 생기지 않았으니 종류·매직바이트는 안 본다(지문은 부르는 쪽이 맞춘다).
 pub(crate) async fn download_talk_cipher(text: &str) -> Result<Vec<u8>, String> {
-    fetch_public(text, MAX_TALK_PHOTO_BYTES, false).await
+    fetch_public(text, MAX_TALK_PHOTO_BYTES, false, MAX_HOPS).await
 }
 #[cfg(test)]
 mod photo_security_tests {
@@ -583,6 +606,27 @@ mod photo_security_tests {
         assert!(public_photo_ip("8.8.8.8".parse().unwrap()));
         assert!(public_photo_ip("2606:4700:4700::1111".parse().unwrap()));
         assert!(photo_addresses(vec!["8.8.8.8:443".parse().unwrap(), "127.0.0.1:443".parse().unwrap()]).is_err());
+    }
+    #[test]
+    fn redirects_go_only_to_https_names() {
+        let base = reqwest::Url::parse("https://blossom.nostr.build/a.png").unwrap();
+        assert_eq!(hop_url(&base, "https://i.nostr.build/resp/orig/x.png").unwrap().as_str(), "https://i.nostr.build/resp/orig/x.png");
+        assert_eq!(hop_url(&base, "/resp/orig/x.png").unwrap().as_str(), "https://blossom.nostr.build/resp/orig/x.png");
+        for bad in ["http://i.nostr.build/x.png", "https://127.0.0.1/x.png", "https://[::1]/x.png", "https://8.8.8.8/x.png", "https://a.example:8443/x", "https://u:p@a.example/x", "file:///etc/passwd"] {
+            assert!(hop_url(&base, bad).is_err(), "{bad}");
+        }
+    }
+    /// 실제 공용 사진 서버(307 → i.nostr.build)에서 받아 지문이 맞는지. 네트워크가 필요해 손으로 돌린다:
+    /// `cargo test --lib real_blossom_redirect -- --ignored`
+    #[tokio::test]
+    #[ignore]
+    async fn real_blossom_redirect_follows_and_hash_matches() {
+        use sha2::{Digest, Sha256};
+        let h = "435f767d626e896c7bf1615e1313a2a25c32085ab353cf1c711561478a999fce";
+        let url = format!("https://blossom.nostr.build/{h}.png");
+        assert!(fetch_public(&url, MAX_TALK_PHOTO_BYTES, true, 0).await.is_err(), "따라가지 않으면 307 에서 멈춘다(장터 쪽 동작)");
+        let bytes = download_talk_photo(&url).await.expect("다시 보내기를 따라가 받는다");
+        assert_eq!(hex::encode(Sha256::digest(&bytes)), h);
     }
     #[tokio::test]
     async fn streaming_size_mime_and_magic_are_checked_without_length() {
