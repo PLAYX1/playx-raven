@@ -566,7 +566,40 @@ fn lan_from_outside(headers: &HeaderMap) -> bool {
     true
 }
 
+/// 가게로 쓰는 컴퓨터인가 — 가게 정보(이름·자산·메뉴)를 저장해 둔 적이 있다.
+/// 바깥(터널)에서 온 요청일 때만 읽는다(가게 안 요청마다 파일을 읽지 않게).
+pub(crate) fn shop_mode() -> bool {
+    // 기존 시험은 가게 컴퓨터를 전제로 쓰였다 — 시험 안에서는 실 단위로 가게 아님을 고른다(TEST_NOT_SHOP).
+    #[cfg(test)]
+    if !TEST_NOT_SHOP.with(|c| c.get()) { return true; }
+    let Some(v) = std::fs::read_to_string(crate::paths::app_file("shop.json")).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()) else { return false };
+    let s = |k: &str| v.get(k).and_then(Value::as_str).is_some_and(|x| !x.trim().is_empty());
+    s("name") || s("asset") || s("chain_asset") || v.get("menu").and_then(Value::as_array).is_some_and(|m| !m.is_empty())
+}
+
+#[cfg(test)]
+thread_local! { pub(crate) static TEST_NOT_SHOP: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
+
+/// 11-23 우체국(제미나이 E1): 터널은 8790 **전체**를 내준다. 가게가 아닌 컴퓨터에서 우체국을 기본으로 켜면
+/// 손님 길(/api/nostr/publish·order·ask·chain/*·/ipfs/* …)까지 바깥에 열린다 — 손님이 없는 컴퓨터에 그럴 까닭이 없다.
+/// 그래서 가게가 아니고 원격 관리도 끈 컴퓨터는 바깥에서 **릴레이(우체국) 한 길만** 연다. 나머지는 404(없는 길).
+/// 가게 컴퓨터·원격 관리를 켠 컴퓨터는 예전 그대로(customer_path).
+pub(crate) fn relay_only_blocks(outside: bool, shop: bool, remote_admin: bool, path: &str) -> bool {
+    outside && !shop && !remote_admin && path != "/api/relay"
+}
+
+fn relay_only_blocked(state: &ServerState, headers: &HeaderMap, path: &str) -> bool {
+    if path == crate::chain_sales::SALES_PATH || !from_outside(headers) {
+        return false;
+    }
+    let remote = state.remote_admin.lock().map(|v| *v).unwrap_or(false);
+    relay_only_blocks(true, shop_mode(), remote, path)
+}
+
 fn outside_blocked(state: &ServerState, headers: &HeaderMap, path: &str) -> bool {
+    if relay_only_blocked(state, headers, path) {
+        return true;
+    }
     // 체인 POS ③ 매장 → 본점 매출 받기. 터널로도 받는다 — 처리기가 **본점 자신의 끊기 목록으로** 매장 증서를 판정하고
     // (끊김·만료·모양·서명이면 거절·기록), 봉함은 그 매장 데이터 열쇠로만 열린다. 본점 PC 가 아니면 처리기가 404.
     if path == crate::chain_sales::SALES_PATH {
@@ -3722,6 +3755,9 @@ async fn outside_gate(
     req: axum::extract::Request,
     next: axum::middleware::Next,
 ) -> axum::response::Response {
+    if relay_only_blocked(&state, req.headers(), req.uri().path()) {
+        return (StatusCode::NOT_FOUND, "").into_response();
+    }
     if outside_blocked(&state, req.headers(), req.uri().path()) {
         // 폰 앱·직원 웹은 `/api/*` 의 401 REMOTE_OFF JSON 으로 「원격 관리 꺼짐」을 안내한다.
         // 화면 길(HTML)은 사람이 읽는 글로 막는다.
@@ -6621,6 +6657,40 @@ mod lan_mount_in_phone_router {
         let app = super::build_phone_router(super::ServerState::default());
         let (s, _) = post(&app, "192.168.0.10:8790", "/lan/pull", &pull_body()).await;
         assert_eq!(s, StatusCode::NOT_FOUND, "기본 꺼짐 = 경로 자체가 없다");
+    }
+
+    /// 11-23 우체국(제미나이 E1): 가게가 아닌 컴퓨터는 바깥(터널)에서 릴레이 한 길만 연다 — 나머지는 404.
+    /// 가게 안(같은 와이파이·이 컴퓨터)·가게 컴퓨터·원격 관리를 켠 컴퓨터는 예전 그대로.
+    #[tokio::test]
+    async fn a_non_shop_computer_opens_only_the_relay_to_the_tunnel() {
+        let _home = super::order_persistence_tests::TestHome::new();
+        assert!(super::relay_only_blocks(true, false, false, "/api/nostr/publish"));
+        assert!(!super::relay_only_blocks(true, false, false, "/api/relay"));
+        assert!(!super::relay_only_blocks(true, true, false, "/api/order"), "가게 컴퓨터는 그대로");
+        assert!(!super::relay_only_blocks(true, false, true, "/api/order"), "원격 관리를 켰으면 그대로");
+        assert!(!super::relay_only_blocks(false, false, false, "/api/order"), "가게 안은 그대로");
+        super::TEST_NOT_SHOP.with(|c| c.set(true));
+        let st = super::ServerState::default();
+        let app = super::build_phone_router(st.clone());
+        let get = |host: &'static str, path: &'static str, cf: bool| {
+            let app = app.clone();
+            async move {
+                let mut r = axum::http::Request::get(path).header("host", host);
+                if cf { r = r.header("cf-connecting-ip", "198.51.100.7"); }
+                app.oneshot(r.body(axum::body::Body::empty()).unwrap()).await.unwrap().status()
+            }
+        };
+        for path in ["/api/nostr/query", "/api/shop", "/api/chain/history", "/ipfs/abc", "/api/network", "/"] {
+            assert_eq!(get("abc.trycloudflare.com", path, true).await, StatusCode::NOT_FOUND, "{path} 가 바깥에 열렸다");
+        }
+        // 릴레이는 문 앞을 지난다(웹소켓이 아닌 GET 이라 처리기가 거절할 뿐, 404 가 아니다).
+        assert_ne!(get("abc.trycloudflare.com", "/api/relay", true).await, StatusCode::NOT_FOUND);
+        // 가게 안에서는 그대로 열린다.
+        assert_ne!(get("192.168.0.10:8790", "/api/shop", false).await, StatusCode::NOT_FOUND);
+        // 원격 관리를 켜면 예전 규칙(customer_path).
+        *st.remote_admin.lock().unwrap() = true;
+        assert_ne!(get("abc.trycloudflare.com", "/api/shop", true).await, StatusCode::NOT_FOUND);
+        super::TEST_NOT_SHOP.with(|c| c.set(false));
     }
 
     #[tokio::test]
