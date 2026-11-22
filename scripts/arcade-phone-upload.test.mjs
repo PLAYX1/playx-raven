@@ -58,6 +58,18 @@ test('일반 판매자 일감: 받은 폴더를 붙잡고 화면과 같은 길�
   assert.equal(d.store.get(), seller, '판매 주소를 기억한다(화면과 같은 칸)');
 });
 
+test('11-22 첫 판 무료: 폰이 켠 유료 게임만 상품 문서 x.arcade.firstFree · 무료·끔이면 칸 없음', async () => {
+  const docOf = async (m) => {
+    const d = fakeDesk(), docs = [];
+    const inv = async (cmd, a) => { if (cmd === 'ipfs_add_file') docs.push(JSON.parse(Buffer.from(a.file.bytes).toString('utf8'))); return d.invoke(cmd, a); };
+    assert.equal(await P.processPhoneJob({ invoke: inv, sellerStore: d.store }, { id: 'ff', status: 'queued', meta: m, scan }), 'done');
+    return docs[0];
+  };
+  assert.equal((await docOf({ ...meta, firstFree: true })).x.arcade.firstFree, true);
+  assert.ok(!('firstFree' in (await docOf(meta)).x.arcade), '옛 폰(칸 없음)은 예전 문서 그대로');
+  assert.ok(!('firstFree' in (await docOf({ ...meta, priceSats: '0', firstFree: true })).x.arcade), '무료 게임에는 두지 않는다');
+});
+
 test('폴더 검사에 걸리면 올리지 않고 rejected · 지갑이 잠겼으면 needs-desktop 에서 기다린다', async () => {
   const bad = { ...scan, htmlTexts: { 'index.html': '<script>alert(1)</script>' } };
   const d = fakeDesk();

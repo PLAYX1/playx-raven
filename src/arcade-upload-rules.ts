@@ -124,6 +124,8 @@ export type DraftInput = {
   entry: string; cid: string; files: ArcadeFile[]; minutes: number; genre: ArcadeGenre;
   /** 확인 판매자(RVLT 자산) 이름. 빈 글 = 일반 판매자 문서(assetName 칸 없음 — core arcade-listing.ts). */
   assetName: string;
+  /** 11-22 「첫 판 무료」(유료 게임만 → x.arcade.firstFree: true). 무료 게임·끔이면 칸을 두지 않는다(옛 문서와 같은 바이트). */
+  firstFree?: boolean;
 };
 /** 상품 문서 본문(서명 전). core validateArcadeProduct 로 모양을 확인하고, 틀리면 그 오류를 던진다. */
 export function buildBody(d: DraftInput): ArcadeProductBody {
@@ -133,7 +135,7 @@ export function buildBody(d: DraftInput): ArcadeProductBody {
     format: "rv-arcade-product", v: 1, kind: "arcade-game", id: d.id, version: d.version, title: d.title.trim(), description: d.description,
     priceSats: d.priceSats, seller: d.seller, payTo: d.payTo, feeBps: ARCADE_FEE_BPS, entry: d.entry, cid: d.cid,
     files: [...d.files].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)).map((f) => ({ path: f.path, sha256: f.sha256, size: f.size })),
-    ...(d.assetName ? { assetName: d.assetName } : {}), x: { arcade: { mode: "solo", network: "none", minutes: d.minutes, genre: d.genre } },
+    ...(d.assetName ? { assetName: d.assetName } : {}), x: { arcade: { mode: "solo", network: "none", minutes: d.minutes, genre: d.genre, ...(d.firstFree === true && d.priceSats !== "0" ? { firstFree: true as const } : {}) } },
   };
   validateArcadeProduct({ ...body, sig: "" });
   return body;

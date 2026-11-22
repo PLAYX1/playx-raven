@@ -130,6 +130,8 @@ pub fn check_meta(m: &Value) -> Result<(), &'static str> {
     if !m["minutes"].as_u64().is_some_and(|n| (1..=240).contains(&n)) { return Err("한 판 시간은 1~240분이에요."); }
     if !m["tag"].as_str().is_some_and(|t| !t.is_empty() && t.len() <= 20 && t.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')) { return Err("꼬리표는 영문·숫자·밑줄로 적어 주세요."); }
     if !m["entry"].is_null() && !m["entry"].as_str().is_some_and(crate::arcade_upload::safe_path) { return Err("시작 파일 이름이 올바르지 않아요."); }
+    // 11-22 「첫 판 무료」: 없거나 참/거짓만(문서에 넣을지는 TS buildBody 가 유료일 때만 정한다).
+    if !m["firstFree"].is_null() && !m["firstFree"].is_boolean() { return Err("첫 판 무료 칸이 올바르지 않아요."); }
     match m["mode"].as_str() {
         Some("open") => {}
         Some("shop") => if !m["shop"].as_str().is_some_and(|s| !s.is_empty() && s.len() <= 30 && s.bytes().all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'.' || b == b'_')) { return Err("가게 이름이 올바르지 않아요."); },
@@ -344,6 +346,8 @@ pub(crate) mod tests {
         }
         let mut shop = meta(); shop["mode"] = json!("shop"); shop["shop"] = json!("PLAYX");
         assert!(check_meta(&shop).is_ok());
+        assert!(check_meta(&with("firstFree", json!(true))).is_ok() && check_meta(&with("firstFree", json!(false))).is_ok());
+        assert!(check_meta(&with("firstFree", json!("yes"))).is_err(), "첫 판 무료는 참/거짓만");
     }
 
     fn make_zip(path: &Path, entries: &[(&str, &[u8])], symlink: Option<&str>) {

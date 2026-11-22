@@ -33,6 +33,8 @@ export async function publishListing(invoke: Invoke, f: Omit<ArcadeListingFields
 export type OpenUploadInput = {
   files: ArcadeFile[]; id: string; version: number; title: string; description: string; priceSats: string;
   seller: string; payTo: string; entry: string; minutes: number; genre: ArcadeGenre;
+  /** 11-22 「첫 판 무료」(유료만 · buildBody 가 x.arcade.firstFree 로). */
+  firstFree?: boolean;
 };
 export type OpenUploadResult = { key: string; docCid: string; docHash: string; folderCid: string; listing: ArcadeListingFields };
 

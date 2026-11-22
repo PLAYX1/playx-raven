@@ -16,7 +16,8 @@ import { runOpenUpload, type OpenStep } from "./arcade-open";
 import type { ArcadeGenre } from "../core/creator/arcade-product";
 
 type Invoke = <T = any>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
-export type PhoneMeta = { title: string; description?: string; genre: ArcadeGenre; priceSats: string; minutes: number; tag: string; mode: "open" | "shop"; shop?: string; entry?: string };
+/** firstFree = 11-22 폰이 고른 「첫 판 무료」(유료 게임만 문서에 들어간다 · 옛 폰은 칸이 없다). */
+export type PhoneMeta = { title: string; description?: string; genre: ArcadeGenre; priceSats: string; minutes: number; tag: string; mode: "open" | "shop"; shop?: string; entry?: string; firstFree?: boolean };
 export type PhoneJob = { id: string; status: "queued" | "needs-desktop"; meta: PhoneMeta; scan: unknown };
 export type PhoneDeps = {
   invoke: Invoke;
@@ -72,7 +73,7 @@ export async function processPhoneJob(deps: PhoneDeps, job: PhoneJob): Promise<"
     const m = job.meta;
     const r = await runOpenUpload(invoke, {
       files: c.scan.files, id: idFromTag(m.tag), version: 1, title: m.title.trim(), description: m.description ?? "", priceSats: m.priceSats,
-      seller, payTo: seller, entry: c.entry, minutes: m.minutes, genre: m.genre,
+      seller, payTo: seller, entry: c.entry, minutes: m.minutes, genre: m.genre, firstFree: m.firstFree === true,
     }, (st) => { if (STEP_SAY[st]) void report(invoke, job.id, "working", st, STEP_SAY[st]); });
     await report(invoke, job.id, "done", "done", "올렸어요. 몇 분 안에 장터에 「일반 판매자」로 보여요.", { docCid: r.docCid, key: r.key, id: r.listing.id });
     deps.onDone?.(job, r.docCid);
