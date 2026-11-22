@@ -181,6 +181,7 @@ mod node_keeper;
 // 11-08 — 릴레이 나누기: 레이븐볼트 데스크탑끼리 서로 릴레이가 된다(켠 사람만). 규약 docs/RELAY-SHARE.md.
 mod relay_share;
 mod post_office;
+mod talk_live;
 mod relay_keeper;
 mod text_zoom;
 mod talk_notify;
@@ -794,6 +795,7 @@ pub fn run() {
             relay_share::relay_share_set_own,
             post_office::post_office_get,
             post_office::post_office_set,
+            talk_live::talk_live_status,
             relay_keeper::relay_keeper_get,
             relay_keeper::relay_keeper_check,
             relay_keeper::relay_keeper_awards,
@@ -971,6 +973,8 @@ pub fn run() {
             tauri::async_runtime::spawn(async { nostrpub::warm_all() });
             // 11-12 알림 지킴이(기본 꺼짐 · 켠 컴퓨터만): 바깥 릴레이의 새 쪽지·방 글을 알림 서버에 곧바로 넘긴다.
             talk_push::start();
+            // 11-23 제미나이 D1: 새 쪽지·방 글을 화면에 곧바로(talk_live.rs) — 화면의 묻기 바퀴는 끊겼을 때 대비로만.
+            talk_live::start(app.handle().clone());
             relay_keeper::start();
             use tauri::Manager;
             ravi_companion::setup(app)?;

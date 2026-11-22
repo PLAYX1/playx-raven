@@ -9,6 +9,7 @@
  * 🔴 글자는 전부 escape 해서 넣는다(쪽지는 남이 쓴 글이다). 본문은 main 의 noteBodyHtml(이모티콘·링크)을 쓴다.
  * 🔴 먼저 그리기: 이 컴퓨터 저장분(local)으로 곧바로 → 바깥 답으로 다시.
  */
+import { debounce as liveDebounce, liveUp, onTalkLive } from "./talk-live";
 import { avatarImgHtml, fillPreviews, roomPictureSrc, setAvatarPicture } from "./talk-media";
 import "./talk-dm.css";
 import { copyHtml, setCopyText, t, tf } from "./i18n";
@@ -448,8 +449,12 @@ export function wireTalkDm(d: DmDeps) {
     // 이야기 화면이 보이면 15초, 아니면 60초 — 바깥은 늘 이틀 창만 다시 묻는다(NIP-59 시각 흐림).
     const onTalk = () => document.getElementById("page-talk")?.classList.contains("on") === true;
     let n = 0;
-    tick = window.setInterval(() => { n++; if (onTalk() || n % 4 === 0) void refresh(false, !onTalk()); }, 15_000);
+    // 11-23 제미나이 D1: 실시간 구독이 살아 있으면 새 쪽지는 곧바로 온다 — 바퀴는 끊겼을 때 대비로만(1분 · 숨었으면 4분).
+    tick = window.setInterval(() => { n++; const every = liveUp() ? 4 : 1; if ((onTalk() && n % every === 0) || n % (4 * every) === 0) void refresh(false, !onTalk()); }, 15_000);
   }
+  // 새 쪽지가 오면 곧바로 읽는다(세 릴레이가 같은 글을 줘도 한 번).
+  const liveNow = liveDebounce(() => void refresh(false, !(document.getElementById("page-talk")?.classList.contains("on") === true)), 400);
+  onTalkLive((ev) => { if (ev.kind === 1059) liveNow(); });
 
   // ── 묶기 ──────────────────────────────────────────────────────────
   for (const s of ["friends", "chats", "square"] as Side[]) {

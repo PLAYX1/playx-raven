@@ -7,6 +7,7 @@
 //  - 좋아요 수·리포스트·알고리즘은 넣지 않는다(대표 결정). 알림도 「누가 무엇을」만.
 //  - 「다른 Nostr 앱에서 보기」·내보내기는 공개 주소(npub)만. 비밀 열쇠는 보이지도 담지도 않는다.
 //  - 아이콘은 SVG(이모지 금지) · 모양은 src/talk-social.css(style="" 은 CSP 가 막는다).
+import { debounce as liveDebounce, liveUp, onTalkLive } from "./talk-live";
 import { fillPreviews, linkifyHtml, previewSlotHtml } from "./talk-media";
 import { copyHtml, t, tf } from "./i18n";
 import {
@@ -565,7 +566,10 @@ export function wireTalkSocial(h: TalkSocialHost) {
   for (const [id, icon] of [["tk-bell-ico", ICON_BELL], ["tk-search-ico", ICON_SEARCH]] as const) { const s = $(id); if (s) s.innerHTML = icon; }
   paintBell();
   // 11-10: 「연락이 왔어요」 — 어느 화면에 있든 2분마다(이야기 화면이면 1분 반) 알림을 묻는다. 창이 숨어 있으면 쉬고, 다시 보이면 곧바로 한 번.
-  setInterval(() => { if (!document.hidden && (host?.active() || Date.now() - noticeAt >= 120_000)) void refreshNotices(); }, 30_000);
+  setInterval(() => { const live = liveUp(); if (!document.hidden && ((host?.active() && (!live || Date.now() - noticeAt >= 90_000)) || Date.now() - noticeAt >= (live ? 300_000 : 120_000))) void refreshNotices(); }, 30_000);
+  // 11-23 제미나이 D1: 나를 부른 글·반응·쪽지가 오면 곧바로 알림을 묻는다(묻기 바퀴는 끊겼을 때 대비).
+  const noticeNow = liveDebounce(() => void refreshNotices(true), 1000);
+  onTalkLive((n) => { if (n.kind === 1 || n.kind === 7 || n.kind === 1059) noticeNow(); });
   document.addEventListener("visibilitychange", () => { if (!document.hidden) void refreshNotices(); });
 }
 

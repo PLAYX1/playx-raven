@@ -101,6 +101,7 @@ import { wirePairing } from "./pairing-ui";
 import { wireNodeKeeper, openNodeKeeper } from "./node-keeper-ui";
 import { wireRelayShare } from "./relay-share-ui";
 import { wirePostOffice } from "./post-office-ui";
+import { debounce as liveDebounce, liveUp, onTalkLive } from "./talk-live";
 import { endTip, mountCertShare, startTip, tipButtonHtml, wireKeeperThanks } from "./keeper-thanks-ui"; // 11-08 지킴이 고마움(docs/KEEPER-THANKS.md §2·§3)
 import { FINGERPRINT_GUESS, wireCreate, type CreateApi } from "./create-page";
 import { readItemName, verifyLink } from "./easy-create";
@@ -19395,9 +19396,19 @@ function 대화알림배선() {
   setTimeout(() => void 대화지킴이(), 6000);
   // 11-03 감사 B2: 이야기 화면을 보고 있으면 5초, 아니면 예전처럼 45초마다.
   //    11-10: 5초 바퀴는 연 방 하나만, 다른 방은 45초마다 모두.
+  //    11-23 제미나이 D1: 새 방 글은 실시간 구독(talk-live.ts)이 곧바로 알린다 — 연 방이면 그 방만, 아니면 모두 읽는다.
+  //    구독이 살아 있는 동안 묻기 바퀴는 끊겼을 때 대비로만(연 방 30초 · 모두 2분).
+  const 모두지금 = liveDebounce(() => void 대화지킴이(), 800);
+  const 연방지금 = liveDebounce(() => void 대화지킴이(true), 300);
+  onTalkLive((n) => {
+    if (n.kind !== 42) return;
+    if (currentPage === "talk" && n.room && n.room === tkRoom) 연방지금(); else 모두지금();
+  });
+  let 연방바퀴 = 0;
   setInterval(() => {
-    if (Date.now() - 대화지킴이마지막 >= 45000) void 대화지킴이();
-    else if (currentPage === "talk" && !document.hidden) void 대화지킴이(true);
+    const live = liveUp();
+    if (Date.now() - 대화지킴이마지막 >= (live ? 120_000 : 45000)) void 대화지킴이();
+    else if (currentPage === "talk" && !document.hidden && (!live || ++연방바퀴 % 6 === 0)) void 대화지킴이(true);
   }, 5000);
 }
 
