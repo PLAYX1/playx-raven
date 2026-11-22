@@ -925,6 +925,11 @@ async fn tick() {
     BUSY.store(false, Ordering::SeqCst);
 }
 
+/// 우체국을 켜고 끌 때 — 10002 를 곧바로 다시 올리게.
+pub(crate) fn kick_now() {
+    if !cfg!(test) { kick(); }
+}
+
 fn kick() {
     tauri::async_runtime::spawn(async {
         tick().await;

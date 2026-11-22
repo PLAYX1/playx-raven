@@ -61,7 +61,8 @@ use std::sync::Mutex;
 /// 그렇다고 대화를 안 받으면 세계와 안 이어진다.
 ///
 /// 답은 「전부냐 아무것도 아니냐」가 아니었다. **레이븐 이야기만 남긴다.**
-/// 그 밖의 글은 지나가게 두되(중계는 한다) 디스크에 안 쓴다.
+/// 그 밖의 글은 받지 않는다 — 디스크에 안 쓰고, 열린 구독에 넘겨 주지도 않는다(새로 저장한 글만 밀어 준다, serve_with).
+/// 보낸 쪽에는 「OK false」로 돌려보낸다. 그 글은 다른 릴레이에 있다.
 /// 우리가 세상의 저장소일 이유는 없지만, 레이븐 이야기의 저장소일 이유는 있다.
 ///       5 — 지우기 요청(NIP-09). ravencoin 표가 있는 것만(폰·데스크탑이 단다).
 ///  0·3·10003 — 이름표·팔로우·북마크(NIP-01/02/51). **사람마다 하나만** 남는 글이다.
@@ -95,8 +96,8 @@ fn owner_wrap(e: &Value, me: Option<&str>) -> bool {
 /// 가게 계산대는 서버가 아니다. 디스크가 차서 장사가 멈추면 그건 우리 잘못이다.
 const MAX_EVENTS: usize = 5_000;
 
-/// 글 하나의 최대 크기. 가게 정보를 다 합쳐도 몇 KB 다.
-const MAX_EVENT_BYTES: usize = 32 * 1024;
+/// 글 하나의 최대 크기. 가게 정보를 다 합쳐도 몇 KB 다. 우체국(post_office.rs)도 같은 한도.
+pub(crate) const MAX_EVENT_BYTES: usize = 32 * 1024;
 
 static STORE: Mutex<Option<Vec<Value>>> = Mutex::new(None);
 /// 저장할 것이 쌓였나. 글 하나마다 파일을 쓰지 않기 위한 표시.
@@ -115,6 +116,8 @@ pub fn start_saver() {
     tauri::async_runtime::spawn(async {
         loop {
             tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            // 우체국 맡은 글은 바뀐 줄만 덧붙여 쓴다(post_office.rs · 제미나이 E2).
+            crate::post_office::flush();
             if !DIRTY.swap(false, std::sync::atomic::Ordering::Relaxed) {
                 continue;
             }
@@ -274,6 +277,8 @@ pub(crate) fn note_deletions(dels: &[Value]) -> bool {
         }
         changed.then(|| m.iter().map(|(a, b)| (a.clone(), b.clone())).collect::<Vec<_>>())
     });
+    // 우체국이 맡은 그 사람의 「나만·친구만」 글도 뺀다.
+    crate::post_office::forget(&fresh);
     let Some(all) = changed else { return false };
     let _ = std::fs::write(gone_file(), serde_json::to_vec(&all).unwrap_or_default());
     // 방 만들기 글(40)은 묘비 규칙(store 안 rooms_deleted_by)이 지운다 — 여기서 먼저 빼면 묘비가 안 적힌다.
@@ -377,6 +382,9 @@ pub(crate) fn verify(e: &Value) -> bool {
         .verify_schnorr(&s, &msg, &xpk)
         .is_ok()
 }
+
+/// 우체국(post_office.rs)이 같은 필터 뜻을 쓴다.
+pub(crate) fn filter_matches(e: &Value, f: &Value) -> bool { matches(e, f) }
 
 /// 이 글이 걸러진 조건에 맞나. NIP-01 의 필터 중 **우리가 쓰는 것만.**
 fn matches(e: &Value, f: &Value) -> bool {
@@ -657,6 +665,10 @@ fn looks_like_asset(d: &str) -> bool {
 fn store(e: Value) -> (bool, String) {
     // 11-08 쪽지 보관(docs/SYNC-ARCHIVE.md §1): 겉봉(1059)은 **주인에게 온 것만** 받는다. 남의 겉봉은 디스크를 채울 뿐이다.
     let me = owner();
+    // 11-23 우체국: 남의 겉봉·「나만·친구만」 글·열쇠 꾸러미는 따로 센 「맡은 글」 칸으로(post_office.rs). 꺼져 있으면 예전처럼 거절.
+    if let Some(k) = crate::post_office::classify(&e, me.as_deref()) {
+        return crate::post_office::take(e, k);
+    }
     let wrap = owner_wrap(&e, me.as_deref());
     // 11-23 비공개 글(4470)은 **주인 글만** 받는다(남의 비공개 글을 이 디스크에 쌓지 않는다).
     let owner_private = e.get("kind").and_then(Value::as_i64) == Some(KIND_PRIVATE_NOTE)
@@ -1311,6 +1323,10 @@ pub async fn serve_with(mut ws: WebSocket, ip: Option<std::net::IpAddr>, private
                     pair_times.len() > PAIR_PER_MINUTE
                 } else {
                     sent += 1;
+                    // 우체국: 겉봉 글쓴이는 1회용 열쇠라 열쇠별 예산이 안 든다 → 바깥 IP 마다 한 시간 예산(post_office.rs).
+                    let wrap_over = e.get("kind").and_then(Value::as_i64) == Some(crate::post_office::KIND_WRAP)
+                        && ip.is_some_and(|ip| !crate::post_office::ip_wrap_budget_ok(ip));
+                    wrap_over ||
                     // 열쇠별 예산은 **서명이 맞는 글만** 센다(11-07 재검사: 남의 공개키를 적은 가짜 글로 그 사람을 막을 수 있었다).
                     sent > 200 || (verify(&e) && !author_budget_ok(e.get("pubkey").and_then(Value::as_str).unwrap_or("")))
                 };
@@ -1360,6 +1376,8 @@ pub async fn serve_with(mut ws: WebSocket, ip: Option<std::net::IpAddr>, private
                     h.truncate(cap);
                     h.into_iter().cloned().collect()
                 });
+                // 우체국 맡은 글 — 사람을 적은 물음(4470·꾸러미=authors, 1059=#p)에만. 넓은 물음에는 안 섞인다.
+                hits.extend(crate::post_office::answer(&filters, cap));
                 {
                     let g = EPHEMERAL.lock().unwrap_or_else(|x| x.into_inner());
                     let cut = now_secs() - EPHEMERAL_TTL_SECS;
@@ -1422,6 +1440,9 @@ pub fn relay_status() -> Value {
         // 세 번 속아서 멀쩡한 코드를 고장 났다고 판단했다.
         "running": crate::server::relay_live(),
         "events": n,
+        // 11-23 우체국 맡은 글(내 글·남의 공개 글과 따로 센다).
+        "post_count": crate::post_office::counts().0,
+        "post_bytes": crate::post_office::counts().1,
         // 바깥에서 붙을 수 있는 주소. 터널이 꺼져 있으면 가게 안에서만이다.
         "url": crate::tunnel::tunnel_status()["url"]
             .as_str()
@@ -1702,6 +1723,87 @@ mod tests {
         }
         assert_eq!(ask(false, &me).await, vec![1], "바깥 연결에 비공개 글이 나갔다");
         assert_eq!(ask(true, &me).await, vec![1, KIND_PRIVATE_NOTE, 30078]);
+        *TEST_OWNER.lock().unwrap() = None;
+        *STORE.lock().unwrap() = None;
+    }
+
+    /// 11-23 우체국: 켜면 남의 겉봉·「나만·친구만」·꾸러미를 맡되(남의 글 한도와 따로) 사람을 적은 물음에만 내주고,
+    /// 넓은 물음·열린 구독에는 안 섞는다. 주인 글 지키기는 그대로. 끄면 예전처럼 거절한다.
+    #[tokio::test]
+    async fn post_office_holds_locked_mail_and_hands_it_only_to_named_questions() {
+        use super::*;
+        use futures_util::{SinkExt, StreamExt};
+        use tokio_tungstenite::tungstenite::Message as M;
+        let _g = OWNER_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _p = crate::post_office::TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let me = crate::shopkey::pubkey_of(&[7u8; 32]).unwrap();
+        *TEST_OWNER.lock().unwrap() = Some(me.clone());
+        *STORE.lock().unwrap() = Some(vec![]);
+        crate::post_office::set_on(true);
+        let t = now_secs();
+        let friend_sk = [0x41u8; 32];
+        let friend = crate::shopkey::pubkey_of(&friend_sk).unwrap();
+        let bob = crate::shopkey::pubkey_of(&[0x42u8; 32]).unwrap();
+        let note = crate::shopkey::sign_with(&friend_sk, KIND_PRIVATE_NOTE, json!([]), "{\"v\":1}", t).unwrap();
+        let circle = crate::shopkey::sign_with(&friend_sk, 30078, json!([["d", CIRCLE_KEYS_D]]), "{\"v\":1}", t).unwrap();
+        let wrap = crate::shopkey::sign_with(&[0x43u8; 32], 1059, json!([["p", bob.clone()]]), "sealed", t).unwrap();
+        for e in [&note, &circle, &wrap] {
+            assert_eq!(store(e.clone()), (true, crate::post_office::TOOK.to_string()), "우체국이 안 맡았다: {e}");
+        }
+        assert_eq!(peek(|v| v.len()), 0, "맡은 글이 남의 글 칸에 섞였다");
+        assert_eq!(crate::post_office::counts().0, 3);
+
+        async fn ask(filter: Value, push: Option<Value>) -> (Vec<String>, Vec<String>) {
+            let app = axum::Router::new().route("/r", axum::routing::get(|ws: axum::extract::ws::WebSocketUpgrade| async move {
+                ws.on_upgrade(|s| serve_with(s, None, false))
+            }));
+            let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = l.local_addr().unwrap();
+            let srv = tokio::spawn(async move { axum::serve(l, app).await.unwrap() });
+            let (mut a, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/r")).await.unwrap();
+            a.send(M::Text(json!(["REQ", "s", filter]).to_string().into())).await.unwrap();
+            let mut ids = vec![];
+            while let Ok(Some(Ok(M::Text(x)))) = tokio::time::timeout(std::time::Duration::from_secs(3), a.next()).await {
+                let v: Value = serde_json::from_str(&x).unwrap();
+                if v[0] == "EOSE" { break; }
+                ids.push(v[2]["id"].as_str().unwrap().to_string());
+            }
+            let mut pushed = vec![];
+            if let Some(e) = push {
+                let (mut b, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/r")).await.unwrap();
+                b.send(M::Text(json!(["EVENT", e]).to_string().into())).await.unwrap();
+                let ok = tokio::time::timeout(std::time::Duration::from_secs(3), b.next()).await.unwrap().unwrap().unwrap();
+                assert!(ok.to_string().contains("true"), "{ok}");
+                while let Ok(Some(Ok(M::Text(x)))) = tokio::time::timeout(std::time::Duration::from_millis(300), a.next()).await {
+                    let v: Value = serde_json::from_str(&x).unwrap();
+                    pushed.push(v[2]["id"].as_str().unwrap_or("").to_string());
+                }
+            }
+            srv.abort();
+            ids.sort();
+            (ids, pushed)
+        }
+        let id = |e: &Value| e["id"].as_str().unwrap().to_string();
+        let mut want = vec![id(&note), id(&circle)];
+        want.sort();
+        assert_eq!(ask(json!({ "authors": [friend] }), None).await.0, want, "authors 를 적은 물음에 맡은 글을 안 줬다");
+        assert_eq!(ask(json!({ "#p": [bob] }), None).await.0, vec![id(&wrap)]);
+        assert!(ask(json!({ "kinds": [1059, 4470, 30078] }), None).await.0.is_empty(), "넓은 물음에 맡은 글이 나갔다");
+        // 열린 구독(받는 사람을 적었어도)에는 밀어 주지 않는다 — 다음 물음에서 꺼낸다.
+        let wrap2 = crate::shopkey::sign_with(&[0x44u8; 32], 1059, json!([["p", bob.clone()]]), "sealed-2", t).unwrap();
+        let (_, pushed) = ask(json!({ "#p": [bob] }), Some(wrap2.clone())).await;
+        assert!(pushed.is_empty(), "맡은 글을 실시간으로 밀었다: {pushed:?}");
+        assert_eq!(crate::post_office::counts().0, 4);
+        // 주인 글은 여전히 주인 칸(바깥에는 안 내준다 — 기존 규칙).
+        let mine = crate::shopkey::sign_with(&[7u8; 32], KIND_PRIVATE_NOTE, json!([]), "{}", t).unwrap();
+        assert_eq!(store(mine.clone()), (true, String::new()));
+        assert!(peek(|v| v.iter().any(|x| x["id"] == mine["id"])));
+        assert!(ask(json!({ "authors": [me] }), None).await.0.is_empty());
+        // 끄면 맡은 글을 지우고 예전처럼 거절한다. 내 글은 남는다.
+        crate::post_office::set_on(false);
+        assert_eq!(crate::post_office::counts().0, 0);
+        assert!(!store(note).0, "끈 뒤에도 맡았다");
+        assert!(peek(|v| v.iter().any(|x| x["id"] == mine["id"])), "끄면서 내 글을 지웠다");
         *TEST_OWNER.lock().unwrap() = None;
         *STORE.lock().unwrap() = None;
     }
