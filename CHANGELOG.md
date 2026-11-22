@@ -1,5 +1,27 @@
 # 변경 기록
 
+## 0.9.44
+
+### 한국어
+
+- **레이븐볼트를 켠 컴퓨터가 서로의 우체국이 됩니다:** 다른 사람의 잠긴 쪽지와 「나만·친구만」 글을 잠긴 채로 잠깐 맡았다가 받을 사람에게 전해 줍니다. 내용은 이 컴퓨터도 읽을 수 없고, 사진·파일은 맡지 않습니다. 설정에서 끌 수 있고, 끄면 맡은 글을 지웁니다. 이미 쓰던 컴퓨터는 한 번 알려 드린 뒤 켭니다.
+- **내 사진은 내 컴퓨터에:** 폰에서 올린 내 사진도 이 컴퓨터 폴더에 사본을 받아 둡니다.
+- **「나만」·「친구만」 글:** 데스크탑에서도 나만 보는 글, 고른 친구만 보는 글을 쓰고 읽고 지울 수 있습니다.
+- **한 번에 지우기:** 글을 지우면 내 컴퓨터·우리 쪽 릴레이에서는 지우고, 사진 서버와 다른 곳에는 지워 달라고 요청합니다. 이미 본 사람이 저장한 것은 지울 수 없습니다.
+- **더 빠른 이야기:** 새 쪽지·방 글이 오면 기다리지 않고 바로 보입니다. 보낸 뒤 알림도 곧바로 갑니다.
+- **더 안전하게:** 가게가 아닌 컴퓨터는 바깥에서 릴레이 길 하나만 엽니다. 연결 수·물음 수를 제한합니다.
+- **오락실:** 폰에서 고른 「첫 판 무료」가 상품에 들어갑니다. 손님 화면 이름이 「PLAY X 장터」로 바뀝니다.
+
+### English
+
+- **Computers running RavenVault become each other's post office:** They briefly hold other people's locked messages and "Only me / Friends only" posts, still locked, and pass them on. This computer cannot read them, and it never holds photos or files. You can turn it off in Settings, which deletes what it holds. Existing installs are told once before it turns on.
+- **Your photos on your computer:** Photos you post from your phone are also copied to a folder on this computer.
+- **"Only me" and "Friends only" posts:** Write, read and delete them on desktop too.
+- **Delete in one go:** Deleting removes the post from your computer and our relay, and asks photo servers and other relays to delete it. Copies others already saved cannot be removed.
+- **Faster talk:** New messages and room posts appear right away, and notifications go out as soon as you send.
+- **Safer:** Non-shop computers open only the relay path to the outside, with connection and query limits.
+- **Arcade:** "First game free" chosen on the phone is added to the product. The customer screen is now called "PLAY X Market".
+
 ## 0.9.43
 
 ### 한국어
