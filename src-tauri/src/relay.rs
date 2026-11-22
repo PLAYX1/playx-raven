@@ -1220,13 +1220,41 @@ static OPEN_CONNS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsi
 const MAX_CONNS_PER_IP: usize = 20;
 static IP_CONNS: Mutex<Option<std::collections::HashMap<std::net::IpAddr, usize>>> = Mutex::new(None);
 
+/// 11-23 제미나이 E3: 우체국을 기본으로 켜면 보통 집 PC·노트북도 릴레이가 된다 — 2000 연결은 과하다.
+/// 큰 릴레이(가게 컴퓨터 · 고정 바깥 주소를 적은 컴퓨터 · 알림 지킴이를 켠 늘 켜 둔 컴퓨터, 예: N100)만 2000·IP 당 20,
+/// 나머지는 128·IP 당 10.
+const SMALL_CONNS: usize = 128;
+const SMALL_CONNS_PER_IP: usize = 10;
+fn big_relay() -> bool {
+    #[cfg(test)]
+    { return crate::server::shop_mode(); }
+    #[allow(unreachable_code)]
+    static CACHE: Mutex<(bool, i64)> = Mutex::new((true, 0));
+    let now = now_secs();
+    let mut g = CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    if g.1 == 0 || now - g.1 >= 60 {
+        let own = crate::relay_share::load_from(&crate::paths::app_file("relay-share.json")).own_url.is_some_and(|u| !u.trim().is_empty());
+        let push = std::fs::read_to_string(crate::paths::app_file("talk-push.json")).ok()
+            .and_then(|t| serde_json::from_str::<Value>(&t).ok()).and_then(|v| v["enabled"].as_bool()).unwrap_or(false);
+        *g = (crate::server::shop_mode() || own || push, now);
+    }
+    g.0
+}
+/// (전체 연결 상한, IP 당 상한).
+fn conn_caps() -> (usize, usize) {
+    if big_relay() { (MAX_CONNS, MAX_CONNS_PER_IP) } else { (SMALL_CONNS, SMALL_CONNS_PER_IP) }
+}
+/// 한 연결이 1분에 보낼 수 있는 물음(REQ) 수와 받아 갈 수 있는 답 크기.
+const REQ_PER_MINUTE: usize = 120;
+const OUT_BYTES_PER_MINUTE: usize = 16 * 1024 * 1024;
+
 /// IP 한 자리. 끊길 때 돌려준다.
 struct IpSlot(std::net::IpAddr);
 impl IpSlot {
     fn take(ip: std::net::IpAddr) -> Option<Self> {
         let mut g = IP_CONNS.lock().unwrap_or_else(|e| e.into_inner());
         let n = g.get_or_insert_with(Default::default).entry(ip).or_insert(0);
-        if *n >= MAX_CONNS_PER_IP { return None; }
+        if *n >= conn_caps().1 { return None; }
         *n += 1;
         Some(IpSlot(ip))
     }
@@ -1256,7 +1284,7 @@ impl ConnSlot {
     fn take() -> Option<Self> {
         use std::sync::atomic::Ordering::SeqCst;
         OPEN_CONNS
-            .fetch_update(SeqCst, SeqCst, |n| (n < MAX_CONNS).then_some(n + 1))
+            .fetch_update(SeqCst, SeqCst, |n| (n < conn_caps().0).then_some(n + 1))
             .ok()
             .map(|_| ConnSlot)
     }
@@ -1330,6 +1358,9 @@ pub async fn serve_with(mut ws: WebSocket, ip: Option<std::net::IpAddr>, private
     let mut sent = 0usize;
     let mut pair_times: std::collections::VecDeque<std::time::Instant> = Default::default();
     let mut subs: Vec<(String, Vec<Value>)> = Vec::new();
+    // 제미나이 E3: 연결마다 1분 물음 수·답 크기.
+    let mut req_times: std::collections::VecDeque<std::time::Instant> = Default::default();
+    let mut out_window = (std::time::Instant::now(), 0usize);
     let mut rx = live().subscribe();
     let mut heard = std::time::Instant::now();
     let mut ping = tokio::time::interval(std::time::Duration::from_secs(PING_EVERY_SECS));
@@ -1430,6 +1461,14 @@ pub async fn serve_with(mut ws: WebSocket, ip: Option<std::net::IpAddr>, private
             "REQ" => {
                 let Some(sub) = a.get(1).and_then(Value::as_str) else { continue };
                 let sub = sub.chars().take(64).collect::<String>();
+                let now_i = std::time::Instant::now();
+                while req_times.front().is_some_and(|t| now_i.duration_since(*t).as_secs() >= 60) { req_times.pop_front(); }
+                req_times.push_back(now_i);
+                if now_i.duration_since(out_window.0).as_secs() >= 60 { out_window = (now_i, 0); }
+                if req_times.len() > REQ_PER_MINUTE || out_window.1 > OUT_BYTES_PER_MINUTE {
+                    let _ = ws.send(Message::Text(json!(["CLOSED", sub, "rate-limited: 잠시 뒤에 다시 물어 주세요"]).to_string().into())).await;
+                    continue;
+                }
                 // 걸러 낼 조건이 여럿 올 수 있다. 하나라도 맞으면 보낸다.
                 let filters: Vec<Value> = a.as_array().map(|x| x.iter().skip(2).take(10).cloned().collect()).unwrap_or_default();
                 let cap = filters
@@ -1463,10 +1502,9 @@ pub async fn serve_with(mut ws: WebSocket, ip: Option<std::net::IpAddr>, private
                 hits.truncate(cap);
                 // 11-12 부하 시험: 글마다 내보내기(flush)하지 않고 쌓았다가 EOSE 와 함께 한 번에 내보낸다.
                 for e in hits {
-                    let _ = futures_util::SinkExt::feed(&mut ws, Message::Text(
-                        json!(["EVENT", sub, e]).to_string().into(),
-                    ))
-                    .await;
+                    let line = json!(["EVENT", sub, e]).to_string();
+                    out_window.1 += line.len();
+                    let _ = futures_util::SinkExt::feed(&mut ws, Message::Text(line.into())).await;
                 }
                 // 🔴 EOSE 를 안 보내면 부르는 쪽이 **영원히 기다린다.**
                 let _ = ws
@@ -1544,6 +1582,35 @@ mod tests {
         assert_eq!(client_ip(Some(lo), &h), Some("198.51.100.9".parse().unwrap()), "터널 머리말");
         assert_eq!(client_ip(Some(lo), &axum::http::HeaderMap::new()), None, "앱 자신은 IP 상한 밖");
         assert!(MAX_CONNS >= 1000 && MAX_SUBS <= 16);
+    }
+
+    /// 11-23 제미나이 E3: 보통 PC 는 128 연결·IP 당 10, 큰 릴레이(가게 등)는 2000·20. 물음은 연결마다 1분 120번까지.
+    #[tokio::test]
+    async fn small_computers_get_small_caps_and_req_floods_are_closed() {
+        use super::*;
+        use futures_util::{SinkExt, StreamExt};
+        use tokio_tungstenite::tungstenite::Message as M;
+        assert_eq!(conn_caps(), (MAX_CONNS, MAX_CONNS_PER_IP));
+        crate::server::TEST_NOT_SHOP.with(|c| c.set(true));
+        assert_eq!(conn_caps(), (SMALL_CONNS, SMALL_CONNS_PER_IP));
+        let ip: std::net::IpAddr = "203.0.113.77".parse().unwrap();
+        let held: Vec<IpSlot> = (0..SMALL_CONNS_PER_IP).map(|_| IpSlot::take(ip).expect("자리")).collect();
+        assert!(IpSlot::take(ip).is_none(), "보통 PC 에서 IP 당 10 을 넘었다");
+        drop(held);
+        crate::server::TEST_NOT_SHOP.with(|c| c.set(false));
+        let app = axum::Router::new().route("/r", axum::routing::get(|ws: axum::extract::ws::WebSocketUpgrade| async move { ws.on_upgrade(|s| serve_with(s, None, false)) }));
+        let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = l.local_addr().unwrap();
+        let srv = tokio::spawn(async move { axum::serve(l, app).await.unwrap() });
+        let (mut a, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/r")).await.unwrap();
+        let mut closed = 0;
+        for i in 0..(REQ_PER_MINUTE + 3) {
+            a.send(M::Text(json!(["REQ", format!("q{i}"), { "kinds": [7777], "limit": 1 }]).to_string().into())).await.unwrap();
+            let v: Value = serde_json::from_str(&a.next().await.unwrap().unwrap().into_text().unwrap()).unwrap();
+            if v[0] == "CLOSED" { closed += 1; }
+        }
+        assert_eq!(closed, 3, "1분 120번을 넘은 물음을 닫지 않았다");
+        srv.abort();
     }
 
     /// 11-12 부하 시험(손으로 돌린다): 이 컴퓨터 릴레이에 소켓 1000개를 **한꺼번에** 붙여 두고 동시에 REQ → EOSE 시간 p50/p95.
