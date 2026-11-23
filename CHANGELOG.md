@@ -1,5 +1,21 @@
 # 변경 기록
 
+## 0.9.45
+
+### 한국어
+
+- **피드에서 답글이 보입니다:** 글 아래 「답글」 단추에 답글 수가 붙고, 글을 누르면 바로 아래에 답글이 펼쳐집니다. 답글에 단 답글도 함께 보입니다. 다시 누르면 접힙니다. 펼친 답글마다 「답글」을 눌러 그 사람에게 답할 수 있습니다.
+- **「내 말로」 → 「번역」:** 하는 일 그대로의 이름으로 바꿨습니다. 저장이 아니라 내 언어로 옮겨 보여 주는 단추입니다.
+- **내 글은 저절로 이 컴퓨터에:** 내 글에 「이 컴퓨터에 보관됨」 표시가 붙습니다. 따로 누를 것은 없습니다.
+- **「간직」 → 「공개 주소로 굳히기」:** 공개 파일창고에 올리는 일이라 ⋯ 메뉴 맨 끝으로 옮기고 이름을 바꿨습니다.
+
+### English
+
+- **Replies show in the feed:** The "Reply" button now shows how many replies a post has, and tapping a post opens its replies right below it, including replies to replies. Tap again to close. Each reply has its own "Reply" button.
+- **"In my language" → "Translate":** Renamed to say what it does. It translates, it does not save.
+- **Your posts stay on this computer automatically:** Your posts now show "Saved on this computer". Nothing to press.
+- **"Keep" → "Pin to a public address":** It publishes a copy to the public file store, so it moved to the end of the ⋯ menu with a clearer name.
+
 ## 0.9.44
 
 ### 한국어
