@@ -285,7 +285,7 @@ test('카톡 PC 결: 줄 64~72px · 46px 동그라미 · Ctrl/⌘+F 찾기 · �
   } finally { await page.close(); }
 });
 
-test('말풍선 오른쪽 클릭: 방은 답장·복사·내 말로…(있는 단추를 대신 누른다) · 쪽지는 복사·신고 · Esc 로 메뉴만 닫힘', async () => {
+test('말풍선 오른쪽 클릭: 방은 답장·복사·번역…(있는 단추를 대신 누른다) · 쪽지는 복사·신고 · Esc 로 메뉴만 닫힘', async () => {
   const { page, errors } = await open(1440, 900);
   try {
     await page.evaluate(() => { window.__copied = []; navigator.clipboard.writeText = async (s) => { window.__copied.push(s); }; });
@@ -314,7 +314,7 @@ test('말풍선 오른쪽 클릭: 방은 답장·복사·내 말로…(있는 �
     await page.waitForFunction(() => !document.getElementById('tk-ctx').hidden);
     const roomItems = await page.$$eval('#tk-ctx button', (b) => b.map((x) => x.textContent.trim()));
     assert.deepEqual(roomItems.slice(0, 2), ['답장', '복사']);
-    assert.ok(roomItems.includes('내 말로') && roomItems.includes('안 보기'), roomItems.join());
+    assert.ok(roomItems.includes('번역') && roomItems.includes('안 보기'), roomItems.join());
     await shot(page, 'desk-roommenu-1440.png');
     await page.click('#tk-ctx button');
     await page.waitForFunction(() => !document.getElementById('tk-replybar').hidden);

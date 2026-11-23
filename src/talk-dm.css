@@ -247,3 +247,15 @@ main:has(> #page-talk.on) { padding:0 !important; }
 #page-talk #tk-rooms .room:not([data-room=""])::before { background:hsl(var(--h,260) 35% 42%); }
 #page-talk:not(.feedon) .tk-new-messages { bottom:80px; }
 #page-talk .composer :is(#tk-photo, #tk-stk), #page-talk .chathead .tk-headbtn { overflow:visible; white-space:normal; } /* 보이는 글자가 없는 그림 단추 — 숨긴 글자 상자가 「넘침」으로 세이지 않게 */
+
+/* 11-23 피드 답글 펼침 · 「이 컴퓨터에 보관됨」 */
+#page-talk #tk-list.feedcards .fkept { margin-left:6px; font-size:12px; color:var(--muted); white-space:nowrap; }
+#page-talk #tk-list.feedcards .fkept::before { content:"· "; }
+#page-talk #tk-list.feedcards .fr-n { margin-left:-3px; font-variant-numeric:tabular-nums; }
+#page-talk #tk-list.feedcards .fthread { margin:6px 0 4px; padding:4px 0 4px 14px; border-left:2px solid var(--ravi-tint); display:flex; flex-direction:column; gap:10px; }
+#page-talk #tk-list.feedcards .fthread[hidden] { display:none; }
+#page-talk #tk-list.feedcards .fthread .meta { margin:4px 0; font-size:14px; }
+#page-talk #tk-list.feedcards .trow .thead { font-size:14px; }
+#page-talk #tk-list.feedcards .trow .ttext { font-size:15px; line-height:1.55; margin-top:2px; overflow-wrap:anywhere; }
+#page-talk #tk-list.feedcards .trow .treply { margin:2px 0 0 -8px; min-height:32px !important; height:32px; padding:0 8px !important; border:0 !important; background:transparent !important; box-shadow:none !important; color:var(--muted); font-size:13px !important; font-weight:500; white-space:nowrap; flex-shrink:0; border-radius:16px; }
+#page-talk #tk-list.feedcards .trow .treply:hover { background:var(--ravi-tint) !important; color:var(--ravi); }

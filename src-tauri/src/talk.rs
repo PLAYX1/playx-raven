@@ -1465,6 +1465,34 @@ pub(crate) async fn room_notes(room: &Option<String>, limit: i64, local: bool, s
     Ok(list)
 }
 
+/// 이 답글을 어느 글(들) 아래에 놓을지.
+///
+/// 🔴 11-23 대표 「답글 쓰면 그 글 눌러도 답글이 안 보임」 — 예전에는 바로 위
+///    글(`reply` 표)로만 묶어서, **답글에 단 답글**은 맨 위 글 아래에서 빠졌다.
+///    이제 맨 위 글(`root` 표)이 물은 목록에 있으면 거기에도 놓는다(폰 loadThread 와 같다).
+///    같은 답글이 두 곳에 갈 수는 있어도 한 곳에 두 번 가지는 않는다.
+fn reply_keys(tags: &[Value], ids: &[String]) -> Vec<String> {
+    let is_e = |t: &&Value| t.get(0).and_then(Value::as_str) == Some("e") && t.get(3).and_then(Value::as_str) != Some("mention");
+    let parent = tags
+        .iter()
+        .filter(is_e)
+        .find(|t| t.get(3).and_then(Value::as_str) == Some("reply"))
+        .or_else(|| tags.iter().find(is_e))
+        .and_then(|t| t.get(1).and_then(Value::as_str));
+    let root = tags
+        .iter()
+        .filter(is_e)
+        .find(|t| t.get(3).and_then(Value::as_str) == Some("root"))
+        .and_then(|t| t.get(1).and_then(Value::as_str));
+    let mut keys: Vec<String> = Vec::new();
+    for k in [root, parent].into_iter().flatten() {
+        if ids.iter().any(|i| i == k) && !keys.iter().any(|x| x == k) {
+            keys.push(k.to_string());
+        }
+    }
+    keys
+}
+
 /// 이 글들에 달린 답글을 한꺼번에 가져온다.
 ///
 /// 🔴 글마다 따로 물으면 스무 번을 왕복한다. 한 번에 여덟 개까지 묶어
@@ -1479,7 +1507,7 @@ pub async fn talk_replies(ids: Vec<String>) -> Result<Value, String> {
         vec![KIND_NOTE, KIND_ROOM_MSG],
         "e".into(),
         ids.clone(),
-        100,
+        200,
     )
     .await?;
 
@@ -1489,25 +1517,12 @@ pub async fn talk_replies(ids: Vec<String>) -> Result<Value, String> {
         let Some(tags) = e.get("tags").and_then(Value::as_array) else {
             continue;
         };
-        // 방 표(`root`)가 앞에 올 수 있어서, 가리키는 글은 `reply` 표를 먼저 찾는다.
-        // 11-09: 「mention」 표(인용한 글)는 답글 표시가 아니다(폰 noteOf 와 같다).
-        let is_e = |t: &&Value| t.get(0).and_then(Value::as_str) == Some("e") && t.get(3).and_then(Value::as_str) != Some("mention");
-        let Some(parent) = tags
-            .iter()
-            .filter(is_e)
-            .find(|t| t.get(3).and_then(Value::as_str) == Some("reply"))
-            .or_else(|| tags.iter().find(is_e))
-            .and_then(|t| t.get(1).and_then(Value::as_str))
-        else {
-            continue;
-        };
-        if !ids.iter().any(|i| i == parent) {
-            continue;
+        for key in reply_keys(tags, &ids) {
+            out.entry(key)
+                .or_insert_with(|| json!([]))
+                .as_array_mut()
+                .map(|a| a.push(e.clone()));
         }
-        out.entry(parent.to_string())
-            .or_insert_with(|| json!([]))
-            .as_array_mut()
-            .map(|a| a.push(e.clone()));
     }
     // 오래된 것이 위로. 답글은 시간 순서가 곧 대화다.
     for (_, v) in out.iter_mut() {
@@ -1995,6 +2010,26 @@ where
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn reply_keys_puts_deep_replies_under_the_top_post() {
+        let ids = vec!["top1".to_string(), "mid1".to_string()];
+        // 맨 위 글에 바로 단 답글 — 표가 root 하나.
+        let direct = vec![json!(["e", "top1", "", "root"])];
+        assert_eq!(crate::talk::reply_keys(&direct, &ids), vec!["top1".to_string()]);
+        // 답글에 단 답글 — 맨 위 글과 바로 위 글 둘 다 아래에 보인다.
+        let deep = vec![json!(["e", "top1", "", "root"]), json!(["e", "mid1", "", "reply"])];
+        assert_eq!(crate::talk::reply_keys(&deep, &ids), vec!["top1".to_string(), "mid1".to_string()]);
+        // 맨 위 글만 물었어도 깊은 답글이 빠지지 않는다(11-23 고장).
+        let only_top = vec!["top1".to_string()];
+        assert_eq!(crate::talk::reply_keys(&deep, &only_top), vec!["top1".to_string()]);
+        // 인용(mention)은 답글이 아니다.
+        let mention = vec![json!(["e", "top1", "", "mention"])];
+        assert!(crate::talk::reply_keys(&mention, &ids).is_empty());
+        // 표 표시 없는 옛 글 — 첫 e 를 바로 위 글로 본다.
+        let old = vec![json!(["e", "mid1"])];
+        assert_eq!(crate::talk::reply_keys(&old, &ids), vec!["mid1".to_string()]);
+    }
+
     #[test]
     fn 지우기_요청에_폰과_같은_t_k_표() {
         let id = "a".repeat(64);

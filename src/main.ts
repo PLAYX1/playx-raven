@@ -7500,23 +7500,29 @@ async function talkPaint(opts: { cached?: boolean; list?: any[] } = {}) {
         `<span class="fav" style="--h:${tkHue(who)}" aria-hidden="true">${escapeHtml((tkNames.get(who)?.name || "레").slice(0, 1))}${avatarImgHtml(personPictureSrc(tkNames.get(who)?.picture))}</span>` +
         `<div class="fbody"><div class="fhead"><span class="fname" data-person="${escapeHtml(who)}">${이름}${nip05Slot(who)}</span>` +
         `<span class="tk-badges" data-badges-for="${escapeHtml(who)}"></span>` + privateBadgeHtml(e) +
-        `<span class="fmeta" translate="no">· …${escapeHtml(who.slice(-4))} · <time class="tstamp" title="${escapeHtml(new Date(ms).toLocaleString())}">${escapeHtml(tkAgo(ms))}</time></span></div>` +
+        `<span class="fmeta" translate="no">· …${escapeHtml(who.slice(-4))} · <time class="tstamp" title="${escapeHtml(new Date(ms).toLocaleString())}">${escapeHtml(tkAgo(ms))}</time></span>` +
+        // 11-23 대표 「말없이 자동저장되는 게 좋지 않나」 — 내 글은 이미 이 컴퓨터 릴레이가 지킨다(relay.rs MINE_KINDS). 표시만 없었다.
+        (mine ? `<span class="fkept" title="${escapeHtml(t("내 글은 따로 누르지 않아도 이 컴퓨터에 저절로 남습니다."))}">${copyHtml("이 컴퓨터에 보관됨")}</span>` : "") + `</div>` +
         `<div class="bub${!인용 && !pic && noteStickerOnly(본문) ? " stk" : ""}" data-say="${escapeHtml(id)}" data-author="${escapeHtml(who)}">${인용}${noteBodyHtml(본문)}${pic ? tkPicHtml(pic) : ""}${priv ? privatePhotosHtml(e) : ""}</div>` +
         조심 +
         // 11-23 「나만」·「친구만」: 답글·저장·공유·「내 말로」·간직 없음(고른 사람 밖으로 새는 길을 안 만든다) · 내 글이면 지우기.
         (priv ? `<div class="facts"><button type="button" data-more="${escapeHtml(id)}" aria-label="${escapeHtml(t("더 보기"))}" title="${escapeHtml(t("더 보기"))}">⋯</button></div>` +
           `<div class="bubacts" data-acts="${escapeHtml(id)}">${mine ? `<button data-pdel="${escapeHtml(id)}">${copyHtml("지우기 요청")}</button>` : ""}<span class="meta" data-note="${escapeHtml(id)}"></span></div></div></article>` : "") +
-        (priv ? "" : `<div class="facts"><button type="button" data-reply="${escapeHtml(id)}">${TK_ICON_REPLY}${copyHtml("답글")}</button>` +
+        (priv ? "" : `<div class="facts"><button type="button" data-reply="${escapeHtml(id)}">${TK_ICON_REPLY}${copyHtml("답글")}<span class="fr-n" data-rcount="${escapeHtml(id)}">${tkReplyCountText(id)}</span></button>` +
         (hex ? `<button type="button" data-bm="${id}">${TK_ICON_BM}<span class="bmtxt">${copyHtml(tkBm?.has(id) ? "저장됨" : "저장")}</span></button>` : "") +
         (hex ? `<button type="button" class="fshare" data-sharepop="${id}">${TK_ICON_SHARE}${copyHtml("공유")}</button>` : "") +
         `<button type="button" data-more="${escapeHtml(id)}" aria-label="${escapeHtml(t("더 보기"))}" title="${escapeHtml(t("더 보기"))}">⋯</button></div>` +
-        `<div class="bubacts" data-acts="${escapeHtml(id)}"><button data-tr="${escapeHtml(id)}">${copyHtml("내 말로")}</button><button data-keep="${escapeHtml(id)}">${copyHtml("간직")}</button>` +
+        `<div class="bubacts" data-acts="${escapeHtml(id)}"><button data-tr="${escapeHtml(id)}">${copyHtml("번역")}</button>` +
         (!mine && /^[0-9a-f]{64}$/.test(who) ? `<button data-follow="${escapeHtml(who)}">${copyHtml(tkFollows?.has(who) ? "팔로우 중" : "팔로우")}</button>` : "") +
         (mine ? "" : `<button data-mute="${escapeHtml(who)}">${copyHtml("안 보기")}</button>`) +
         (!mine && /^R[1-9A-HJ-NP-Za-km-z]{33}$/.test(String(tkNames.get(who)?.rvn_address || ""))
           ? `<button data-pay="${escapeHtml(String(tkNames.get(who).rvn_address))}" data-payname="${escapeHtml(tkNameText(who))}" data-paywho="${escapeHtml(who)}">${copyHtml("응원 보내기")}</button>` : "") +
         (mine ? `<button data-del="${escapeHtml(id)}">${copyHtml("지우기 요청")}</button>` : "") +
-        `<span class="meta" data-note="${escapeHtml(id)}"></span></div></div></article>`);
+        // 11-23 「간직」은 공개 파일창고(IPFS)에 올리는 일이라 맨 끝에, 하는 일 그대로의 이름으로(페이블 안).
+        `<button data-keep="${escapeHtml(id)}">${copyHtml("공개 주소로 굳히기")}</button>` +
+        `<span class="meta" data-note="${escapeHtml(id)}"></span></div>` +
+        // 11-23 대표 「답글 쓰면 그 글 눌러도 답글이 안 보임」 — 글 바로 아래에 답글을 펼친다(화면 이동 없음).
+        `<div class="fthread" data-thread="${escapeHtml(id)}" hidden></div></div></article>`);
     };
     box.innerHTML = 피드
       ? asc.map((_, i) => asc.length - 1 - i).map((i) => 피드카드(asc[i], i)).join("") + hidNote
@@ -7572,8 +7578,7 @@ async function talkPaint(opts: { cached?: boolean; list?: any[] } = {}) {
           `
            <div class="bubacts${mine ? " r" : ""}" data-acts="${id}">
              <button data-reply="${id}">${copyHtml("답장")}</button>
-             <button data-tr="${id}">${copyHtml("내 말로")}</button>
-             <button data-keep="${id}">${copyHtml("간직")}</button>` +
+             <button data-tr="${id}">${copyHtml("번역")}</button>` +
           // 11-06: 모두에게 글만 — 북마크(폰·웹과 같은 목록)·공유 링크(ravenvault.ex.erci.se/n/…, 서명 확인 페이지).
           (!읽은방 && /^[0-9a-f]{64}$/.test(id)
             ? `<button data-bm="${id}">${copyHtml(tkBm?.has(id) ? "저장됨" : "저장")}</button><button data-share="${id}">${copyHtml("링크 복사")}</button>`
@@ -7593,6 +7598,7 @@ async function talkPaint(opts: { cached?: boolean; list?: any[] } = {}) {
             //    전부다 — Nostr 의 지움은 **부탁**이지 명령이 아니고, 릴레이가
             //    따를 의무가 없다. 「삭제」라 적으면 지워졌다고 믿는데 안 지워진다.
             (mine ? `<button data-del="${id}">${copyHtml("지우기 요청")}</button>` : "") +
+          `<button data-keep="${id}">${copyHtml("공개 주소로 굳히기")}</button>` +
           `<span class="meta" data-note="${id}"></span>
            </div>`
         );
@@ -7627,6 +7633,13 @@ async function talkPaint(opts: { cached?: boolean; list?: any[] } = {}) {
     //    영영 멈춰 있고, 그건 못 받았다는 말을 안 하는 것과 같다.
     tkWatchPics(box);
     fillPrivatePhotos(box, invoke);
+    if (피드) {
+      for (const gid of tkOpenThreads) {
+        const el = box.querySelector<HTMLElement>(`[data-thread="${CSS.escape(gid)}"]`);
+        if (el) tkPaintThread(el, gid, list); else tkOpenThreads.delete(gid);
+      }
+      void tkLoadReplyCounts(box, asc.filter((e) => !isPrivate(e)).map((e) => String(e.id || "")).filter((x) => /^[0-9a-f]{64}$/.test(x)), list);
+    }
     box.querySelectorAll<HTMLElement>("[data-pdel]").forEach((b) => {
       b.onclick = async (ev) => {
         ev.stopPropagation();
@@ -7658,8 +7671,15 @@ async function talkPaint(opts: { cached?: boolean; list?: any[] } = {}) {
     //       「지우기 요청」이 전부 그대로 있고, 꺼내는 법은 입력칸 위에
     //       한 줄로 적어 뒀다(`.talkhint`). 숨긴 기능은 안 적으면 없앤 기능이다.
     box.querySelectorAll<HTMLElement>("[data-say]").forEach((b) => {
-      b.onclick = () => {
+      b.onclick = (ev) => {
         const gid = String(b.dataset.say || "");
+        // 11-23 피드 카드는 글을 누르면 **답글이 펼쳐진다**(카톡·인스타처럼). 단추 줄은 ⋯ 에 있다.
+        //   링크·사진을 누른 것은 그쪽 일이다.
+        if (피드 && box.querySelector(`[data-thread="${CSS.escape(gid)}"]`)) {
+          if ((ev.target as HTMLElement | null)?.closest("a,img,video,button")) return;
+          void tkToggleThread(box, gid, list);
+          return;
+        }
         const acts = box.querySelector(`[data-acts="${gid}"]`) as HTMLElement | null;
         const 이미열림 = acts?.classList.contains("on") === true;
         box.querySelectorAll(".bubacts.on").forEach((x) => x.classList.remove("on"));
@@ -7733,6 +7753,8 @@ async function talkPaint(opts: { cached?: boolean; list?: any[] } = {}) {
         const 맨위쓴이 = 맨위 ? String(list.find((x) => String(x.id || "") === 맨위)?.pubkey || "") : "";
         tkSetReply({ id: gid, pub, room: 읽은방, who: tkNameText(pub), snip: tkSnip(String(target.content || "")), root: 맨위 || undefined, rootPub: 맨위쓴이 || undefined, risky: looksRisky(String(target.content || "")) });
         box.querySelectorAll(".bubacts.on").forEach((x) => x.classList.remove("on"));
+        // 11-23 답글 단추를 누르면 이미 달린 답글도 같이 펼친다 — 무슨 말이 오갔는지 보고 쓴다.
+        if (피드 && !tkOpenThreads.has(gid)) void tkToggleThread(box, gid, list);
       };
     });
     box.querySelectorAll("[data-tr]").forEach((b) => {
@@ -7955,6 +7977,127 @@ async function talkTranslate(id: string, list: any[]) {
  * 「신뢰를 저해하는 행위는 용납하지 않는다」가 이 자리에서 뜻하는 것은
  * 금지가 아니라 **모르고 하지 않게 하는 것**이다.
  */
+// ── 11-23 피드 답글 펼침 ─────────────────────────────────────────────
+// 대표 「피드에서 답글 쓰면 그 글 클릭해 봐도 답글이 안 보임」. 답글을 모으는 노드 쪽
+// `talk_replies` 는 있었는데 화면이 한 번도 안 불렀다. 이제 카드마다 「답글 N」을 달고,
+// 글을 누르면 바로 아래에 펼친다(오른쪽 칸·새 화면 없음 — 페이블·제미나이 합의).
+const TK_THREAD_TTL = 60_000;
+const tkThreadCache = new Map<string, { at: number; replies: any[] }>();
+const tkOpenThreads = new Set<string>();
+let tkReplyLoading = false;
+
+function tkReplyCountText(id: string): string {
+  const n = tkThreadCache.get(id)?.replies.length || 0;
+  return n ? ` ${n}` : "";
+}
+
+function tkThreadAdd(keys: string[], ev: any) {
+  const eid = String(ev?.id || "");
+  for (const k of keys) {
+    if (!k) continue;
+    const c = tkThreadCache.get(k) ?? { at: Date.now(), replies: [] };
+    if (!c.replies.some((x) => String(x.id || "") === eid)) c.replies.push(ev);
+    c.replies.sort((a, b) => Number(a.created_at || 0) - Number(b.created_at || 0));
+    tkThreadCache.set(k, c);
+  }
+}
+
+/** 지금 목록에 이미 있는 답글(내가 방금 쓴 것 포함)을 먼저 붙인다 — 릴레이를 안 기다린다. */
+function tkThreadFromList(id: string, list: any[]): any[] {
+  return list.filter((e) => {
+    const tags = Array.isArray(e?.tags) ? e.tags : [];
+    return tags.some((x: any) => Array.isArray(x) && x[0] === "e" && x[1] === id && x[3] !== "mention");
+  });
+}
+
+function tkThreadReplies(id: string, list: any[]): any[] {
+  const got = [...(tkThreadCache.get(id)?.replies ?? [])];
+  for (const e of tkThreadFromList(id, list)) if (!got.some((x) => String(x.id || "") === String(e.id || ""))) got.push(e);
+  return got
+    .filter((e) => !tkMuted[String(e.pubkey || "")])
+    .sort((a, b) => Number(a.created_at || 0) - Number(b.created_at || 0));
+}
+
+async function tkLoadReplyCounts(box: HTMLElement, ids: string[], list: any[]) {
+  if (tkReplyLoading) return;
+  const now = Date.now();
+  const need = ids.filter((id) => { const c = tkThreadCache.get(id); return !c || now - c.at > TK_THREAD_TTL; });
+  if (!need.length) return;
+  tkReplyLoading = true;
+  try {
+    // 노드가 한 번에 여덟 개까지 묶어 묻는다. 여덟 개씩 차례로 — 릴레이를 한꺼번에 두드리지 않는다.
+    for (let i = 0; i < need.length && i < 80; i += 8) {
+      const part = need.slice(i, i + 8);
+      let r: Record<string, any[]> = {};
+      try { r = (await invoke<any>("talk_replies", { ids: part })) || {}; } catch { continue; }
+      for (const id of part) tkThreadCache.set(id, { at: Date.now(), replies: Array.isArray(r[id]) ? r[id] : [] });
+      for (const id of part) {
+        const n = tkThreadReplies(id, list).length;
+        const el = box.querySelector<HTMLElement>(`[data-rcount="${CSS.escape(id)}"]`);
+        if (el) el.textContent = n ? ` ${n}` : "";
+        const th = tkOpenThreads.has(id) ? box.querySelector<HTMLElement>(`[data-thread="${CSS.escape(id)}"]`) : null;
+        if (th) tkPaintThread(th, id, list);
+      }
+    }
+  } finally { tkReplyLoading = false; }
+}
+
+async function tkToggleThread(box: HTMLElement, id: string, list: any[]) {
+  const el = box.querySelector<HTMLElement>(`[data-thread="${CSS.escape(id)}"]`);
+  if (!el) return;
+  if (tkOpenThreads.has(id)) { tkOpenThreads.delete(id); el.hidden = true; el.innerHTML = ""; return; }
+  tkOpenThreads.add(id);
+  tkPaintThread(el, id, list);
+  const c = tkThreadCache.get(id);
+  if (c && Date.now() - c.at < TK_THREAD_TTL) return;
+  try {
+    const r = (await invoke<any>("talk_replies", { ids: [id] })) || {};
+    tkThreadCache.set(id, { at: Date.now(), replies: Array.isArray(r[id]) ? r[id] : [] });
+  } catch (e) {
+    if (!tkThreadReplies(id, list).length) { el.innerHTML = `<p class="meta">${escapeHtml(errText(e))}</p>`; return; }
+  }
+  if (!tkOpenThreads.has(id)) return;
+  const rep = tkThreadReplies(id, list);
+  await tkLoadNames(rep.map((e) => String(e.pubkey || "")));
+  tkPaintThread(el, id, list);
+  const cnt = box.querySelector<HTMLElement>(`[data-rcount="${CSS.escape(id)}"]`);
+  if (cnt) cnt.textContent = rep.length ? ` ${rep.length}` : "";
+}
+
+function tkPaintThread(el: HTMLElement, id: string, list: any[]) {
+  const rep = tkThreadReplies(id, list);
+  const c = tkThreadCache.get(id);
+  el.hidden = false;
+  if (!rep.length) {
+    el.innerHTML = `<p class="meta">${copyHtml(c ? "아직 답글이 없어요. 첫 답글을 남겨 보세요." : "답글을 불러오는 중…")}</p>`;
+    return;
+  }
+  const top = list.find((x) => String(x.id || "") === id) ?? rep[0];
+  // 맨 위 글: 이 글이 답글이면 그 글의 맨 위 글을 이어 받는다(NIP-10).
+  const topRoot = String((Array.isArray(top?.tags) ? top.tags : []).find((x: any) => Array.isArray(x) && x[0] === "e" && x[3] === "root")?.[1] || "") || id;
+  const topPub = topRoot === id ? String(top?.pubkey || "") : String(list.find((x) => String(x.id || "") === topRoot)?.pubkey || "");
+  el.innerHTML = rep.map((e) => {
+    const who = String(e.pubkey || "");
+    const eid = String(e.id || "");
+    const ms = Number(e.created_at || 0) * 1000;
+    const name = who === tkMine ? escapeHtml(String(tkNames.get(who)?.name || t("나"))) : tkWho(who);
+    return `<div class="trow${who === tkMine ? " me" : ""}" data-tid="${escapeHtml(eid)}">` +
+      `<div class="thead"><span class="fname" data-person="${escapeHtml(who)}">${name}</span>` +
+      `<span class="fmeta" translate="no"> · <time class="tstamp" title="${escapeHtml(new Date(ms).toLocaleString())}">${escapeHtml(tkAgo(ms))}</time></span></div>` +
+      `<div class="ttext">${noteBodyHtml(String(e.content || ""))}</div>` +
+      `<button type="button" class="ghost treply" data-treply="${escapeHtml(eid)}" data-tpub="${escapeHtml(who)}">${copyHtml("답글")}</button></div>`;
+  }).join("");
+  el.querySelectorAll<HTMLElement>("[data-treply]").forEach((b) => {
+    b.onclick = (ev) => {
+      ev.stopPropagation();
+      const eid = String(b.dataset.treply || "");
+      const pub = String(b.dataset.tpub || "");
+      const e = rep.find((x) => String(x.id || "") === eid);
+      tkSetReply({ id: eid, pub, room: "", who: tkNameText(pub), snip: tkSnip(String(e?.content || "")), root: topRoot !== eid ? topRoot : undefined, rootPub: topRoot !== eid ? (topPub || undefined) : undefined, risky: looksRisky(String(e?.content || "")) });
+    };
+  });
+}
+
 async function talkKeep(id: string, list: any[]) {
   const note = document.querySelector(`[data-note="${id}"]`) as HTMLElement | null;
   const ev = list.find((e) => String(e.id) === id);
@@ -8171,6 +8314,7 @@ async function talkSend() {
   $("tk-note").textContent = "";
   try {
     const 보낸방 = tkRoom;
+    const 답할곳 = tkReply;
     const sent = await invoke<any>("talk_post", { text: mentionText(text), room: tkRoom || null, replyTo: tkReply?.id ?? null, replyPub: tkReply?.pub ?? null, replyRoot: tkReply?.root ?? null, replyRootPub: tkReply?.rootPub ?? null });
     clearMentions();
     tkSetReply(null);
@@ -8181,6 +8325,7 @@ async function talkSend() {
     void showBackupReminder();
     // 11-12 받은 글(서명된 원본)을 바로 목록에 넣고 다시 그린다 — 릴레이 답을 기다리지 않는다.
     //   🔴 그 뒤에도 두 번 다시 읽는다(새 글만). 그 사이 온 남의 글·지운 글을 맞춘다.
+    if (!보낸방 && 답할곳 && sent?.event) tkThreadAdd([답할곳.id, 답할곳.root || ""], sent.event);
     const 바로 = 보낸방 === tkRoom ? tkLiveAdd(보낸방, sent?.event) : null;
     if (바로) void talkPaint({ list: 바로 });
     setTimeout(() => void talkPaint(), 1500);

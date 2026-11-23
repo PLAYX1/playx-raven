@@ -180,8 +180,8 @@ export function wireTalkDesk(d: DeskDeps) {
       void navigator.clipboard.writeText(text).then(() => say(t("복사했어요")), () => say(text));
     } });
     proxy("[data-share]", "링크 복사", ICON.link);
-    proxy("[data-tr]", "내 말로", ICON.tr);
-    proxy("[data-keep]", "간직", ICON.keep);
+    proxy("[data-tr]", "번역", ICON.tr);
+    proxy("[data-keep]", "공개 주소로 굳히기", ICON.keep);
     const harmStart = items.length;
     proxy("[data-mute]", "안 보기", ICON.mute, true);
     proxy("[data-del]", "지우기 요청", ICON.del, true);
