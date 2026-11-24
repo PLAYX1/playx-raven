@@ -22,7 +22,9 @@ function greetingWillPlay(): boolean {
 }
 export function installFirstRunBarrier(): void {
   // 0.9.46: 인사가 꺼져 있으면(기본) 첫 화면 클릭을 한 번도 붙잡지 않는다.
-  if (!greetingWillPlay()) { landed = true; return; }
+  // 🔴 index.html 은 <html data-ravi-arriving> 로 시작한다 — 표시만 세우고 떼지 않으면 CSS(ravi-home.css)가
+  //    #ravi-panel·#askwrap 을 영영 숨기고, sure()/ask() 는 afterRaviLanding 으로 자기 자신을 끝없이 다시 부른다.
+  if (!greetingWillPlay()) { finishRaviLanding(); return; }
   document.documentElement.setAttribute('data-ravi-arriving', 'true');
   // Capture before handlers (including native file/microphone dialogs) can run.
   // Keep only the target/action, never a form value or typed secret.

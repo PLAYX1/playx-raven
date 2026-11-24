@@ -5444,6 +5444,9 @@ function showPage(id: string) {
     void paintEasySetup();
     void paintSweepKrw();
     wireCloudKey();
+    // 0.9.46: USB 백업 잠금 스위치는 「열쇠 보기 → 다시 감추기」를 거쳐야만 손잡이가 붙었다(wireCloudKey 안 엉뚱한 자리) —
+    //         그 전엔 꺼도 묻지도 저장하지도 않았다. 설정을 열 때 붙인다.
+    void wireUsbLock();
     // 🔴 「내 이름」은 **열 때마다** 다시 본다. 다른 창에서 이름을 바꿨거나
     //    지갑을 열었을 수 있고, 그러면 아까 본 판정이 이미 거짓이다.
     void idLoad();
@@ -20752,6 +20755,12 @@ window.addEventListener("DOMContentLoaded", async () => {
     purchase: nodePurchase((cmd, args) => invoke(cmd, args), () => ask("지갑 비밀번호", "이 결제를 서명한 뒤 지갑을 바로 잠가요.", { password: true })),
     openExternal: (url) => openUrl(url) });
   $("market-open").onclick = () => { showPage("market"); void market.load(); };
+  // 0.9.46: 다른 판매자 게임 함께 보관하기(돕기) — 화면(게임 페이지)과 30분 반복을 붙인다. 사람이 켜기 전엔 설정만 읽고 끝난다.
+  void import("./arcade-keep").then(({ startArcadeShare, paintShareCard }) => {
+    startArcadeShare((cmd, args) => invoke(cmd, args));
+    const box = document.getElementById("ar-share-box");
+    if (box) paintShareCard(box, (cmd, args) => invoke(cmd, args), errText);
+  }).catch(() => {});
   const sellerBox = $("seller-mode") as HTMLInputElement;
   sellerBox.onchange = () => {
     try { if (sellerBox.checked) localStorage.setItem(SELLER_MODE_KEY, "1"); else localStorage.removeItem(SELLER_MODE_KEY); } catch { sellerBox.checked = false; }
