@@ -1,5 +1,31 @@
 # 변경 기록
 
+## 0.9.46
+
+### 한국어
+
+- **조용한 첫 화면:** 켤 때마다 나오던 라비 인사는 기본으로 꺼집니다. 설정에서 직접 켠 경우에만 나옵니다. 90초 쉬면 덮던 「잠시 쉬고 있어요」 화면도 기본으로 꺼집니다.
+- **라비 한 줄이 바로 열립니다:** 지갑 화면의 라비 한 줄을 눌러도 입력이 안 되던 문제를 고쳤습니다.
+- **확인 창이 제대로 뜹니다:** 지우기·끊기·끄기 같은 단추에서 확인 창이 안 뜨고 그냥 지나가던 곳 10곳을 앱 안 확인 창으로 바꿨습니다.
+- **소리 정리:** 쪽지 소리와 컴퓨터 알림이 「대화 알림 소리」 설정을 따릅니다. 방·광장 새 글 소리는 새 스위치를 켤 때만 울립니다.
+- **AI 열쇠 칸이 지워지지 않습니다:** 열쇠를 입력하는 도중 칸이 비워지던 문제를 고쳤습니다.
+- **USB 백업 잠금 스위치:** 꺼도 저장되지 않던 문제를 고쳤습니다.
+- **오락실 게임 표지:** 게임에 표지 그림이 있으면 장터 카드와 게임 페이지에 보입니다.
+- **다른 판매자 게임 함께 보관하기:** 게임 화면에서 고르면 이 컴퓨터가 다른 판매자의 게임도 함께 지켜 줍니다. 기본은 꺼짐입니다.
+- **더 안정적으로:** 대화 준비 중 앱이 멈출 수 있던 문제를 고쳤습니다.
+
+### English
+
+- **Quieter start:** Ravi's greeting is now off by default and only plays if you turn it on. The "Resting" screen after 90 seconds idle is also off by default.
+- **The Ravi bar opens right away:** Fixed the wallet-screen Ravi bar not accepting text.
+- **Confirmations work:** Ten delete/disconnect/turn-off buttons now show an in-app confirmation instead of silently skipping it.
+- **Sound cleanup:** Message sounds and desktop notifications follow the "Chat sound" setting. Room and square posts only make a sound if you turn on the new switch.
+- **AI key field no longer clears itself** while you type.
+- **USB backup lock switch** now saves when turned off.
+- **Arcade covers:** Games with a cover image show it on market cards and the game page.
+- **Help keep other sellers' games:** Opt in from the games page to let this computer keep other sellers' games too. Off by default.
+- **More stable:** Fixed a possible freeze while preparing chat.
+
 ## 0.9.45
 
 ### 한국어

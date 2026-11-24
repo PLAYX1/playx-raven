@@ -1,7 +1,7 @@
 {
   "name": "playx-raven",
   "private": true,
-  "version": "0.9.45",
+  "version": "0.9.46",
   "license": "PolyForm-Shield-1.0.0",
   "type": "module",
   "scripts": {
