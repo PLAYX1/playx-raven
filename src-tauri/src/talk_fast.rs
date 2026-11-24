@@ -87,8 +87,10 @@ pub async fn talk_view(
 }
 
 /// 이야기 화면을 열 때 부른다 — 기본 릴레이에 미리 붙어 둔다(이미 열려 있으면 아무것도 안 한다).
+/// 🔴 0.9.46: 동기 명령은 메인 스레드에서 돌아 Tokio 실행기 밖이다 — 새로 붙어야 할 때 relay_pool 이 tokio::spawn 하다
+/// 「no reactor running」으로 앱이 통째로 꺼졌다(새 사용자·연결 끊긴 뒤 이야기 열기). async 명령은 실행기 안에서 돈다.
 #[tauri::command]
-pub fn talk_warm() {
+pub async fn talk_warm() {
     crate::nostrpub::warm_all();
 }
 
@@ -101,5 +103,16 @@ mod tests {
         let ok = ("a".repeat(64), "b".repeat(64));
         let got = clean_known(Some(vec![ok.clone(), ("x".into(), "b".repeat(64)), ("A".repeat(64), "b".repeat(64))]));
         assert_eq!(got, vec![ok]);
+    }
+}
+
+#[cfg(test)]
+mod warm_runtime_guard {
+    /// 0.9.46: relay_pool::warm 은 tokio::spawn 을 부른다 — 이 명령이 동기(메인 스레드)면 앱이 통째로 꺼진다.
+    #[test]
+    fn talk_warm_은_실행기_안에서_돈다() {
+        let src = include_str!("talk_fast.rs");
+        assert!(src.contains("pub async fn talk_warm()"), "talk_warm 은 async 명령이어야 한다");
+        assert!(!src.contains(concat!("pub fn ", "talk_warm()")));
     }
 }

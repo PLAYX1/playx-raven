@@ -99,6 +99,16 @@ export function gameUrl(p: Pick<ArcadeProduct, "docCid" | "entry" | "locked">): 
   return href.startsWith(ARCADE_LINK_BASE) ? href : null;
 }
 
+/** 표지 그림 — 게임 폴더 맨 위의 cover.png/jpg/webp(파일 목록에 있고 잠기지 않은 것만). 없으면 null(색 칸 그대로). */
+export const COVER_FILES = ["cover.png", "cover.webp", "cover.jpg"] as const;
+export function coverUrl(p: Pick<ArcadeProduct, "docCid" | "doc">): string | null {
+  if (!/^[A-Za-z0-9]{46,100}$/.test(p.docCid)) return null;
+  const files = Array.isArray((p.doc as { files?: unknown })?.files) ? (p.doc as { files: { path?: unknown }[] }).files : [];
+  const locked = new Set(Array.isArray(p.doc?.lock?.paths) ? p.doc.lock!.paths : []);
+  const hit = COVER_FILES.find((name) => files.some((f) => f?.path === name) && !locked.has(name));
+  return hit ? `${ARCADE_LINK_BASE}${p.docCid}/${hit}` : null;
+}
+
 /** 무료 게임만 결제 없이 연다. 한 판마다 내는 게임이라 「이미 산 게임」은 없다(폰과 같은 규칙, 대표 11-03). */
 export const playsWithoutPay = (p: Pick<ArcadeProduct, "priceSats">) => p.priceSats === 0;
 

@@ -18,7 +18,7 @@ import { fmtRvn } from "./amount-ui";
 import type { ArcadeGenre } from "../core/creator/arcade-product";
 import { creditGate, creditMessage, denyMessage, newPlayId, parseGameMessage } from "../core/creator/arcade-credit";
 import {
-  ArcadeDocError, atomsToRvn, filterByGenre, filterProducts, gameUrl, genreLabel, genresPresent, isResting, noteReach, playsWithoutPay, prepareArcadePay,
+  ArcadeDocError, atomsToRvn, coverUrl, filterByGenre, filterProducts, gameUrl, genreLabel, genresPresent, isResting, noteReach, playsWithoutPay, prepareArcadePay,
   productsFromSources, sortProducts, type ArcadeProduct, type ReachLog,
 } from "./arcade-model";
 
@@ -70,9 +70,15 @@ export function addKey(k: string, id: string): void { try { localStorage.setItem
 export const needsOpenNotice = (p: Pick<ArcadeProduct, "id" | "verified" | "priceSats">, noticed: readonly string[]) => !p.verified && p.priceSats > 0 && !noticed.includes(p.id);
 const REPORT_REASONS: [string, string][] = [["scam", "사기·돈만 받고 안 됨"], ["harmful", "나쁜 내용"], ["copy", "남의 게임을 베낌"], ["other", "기타"]];
 
+/** 표지 그림(있으면). 못 받으면 그림만 숨기고 색 칸·아이콘 자리는 그대로 둔다. */
+const coverImg = (p: ArcadeProduct): string => {
+  const u = coverUrl(p);
+  return u ? `<img class="ar-cover-img" src="${esc(u)}" alt="" loading="lazy" decoding="async">` : "";
+};
+
 export function cardHtml(p: ArcadeProduct, resting = false): string {
   return `<li><button type="button" class="ar-card" data-ar-open="${esc(p.id)}" aria-label="${esc(cardLabel(p))}">` +
-    `<span class="ar-cover ar-tone${toneOf(p.id)}">${ICON_PAD}</span>` +
+    `<span class="ar-cover ar-tone${toneOf(p.id)}">${coverImg(p) || ICON_PAD}</span>` +
     `<span class="ar-cbody">` +
     `<span class="ar-price">${esc(priceText(p))}</span>` +
     `<span class="ar-title" translate="no">${esc(p.title)}</span>` +
@@ -196,7 +202,7 @@ export function mountArcade(page: HTMLElement, host: HTMLElement, deps: ArcadeDe
     host.innerHTML =
       `<div class="ar-head"><button type="button" class="ghost ar-back" data-ar-back="1">${copyHtml(cameFromAll ? "목록으로" : "장터로")}</button></div>` +
       `<article class="ar-page">` +
-      `<div class="ar-hero ar-tone${toneOf(p.id)}">${ICON_PAD}</div>` +
+      `<div class="ar-hero ar-tone${toneOf(p.id)}">${coverImg(p) || ICON_PAD}</div>` +
       `<div class="ar-info">` +
       `<div class="ar-big">${esc(priceText(p))}${free ? "" : ` <span class="ar-per">${copyHtml("한 판")}</span>`}</div>` +
       `<h3 translate="no">${esc(p.title)}</h3>` +
