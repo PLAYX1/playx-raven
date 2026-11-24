@@ -15,7 +15,14 @@ export function finishRaviLanding(): void {
   document.documentElement.removeAttribute('data-ravi-arriving');
   for (const run of waiting.splice(0)) queueMicrotask(run);
 }
+/** 시작 인사를 직접 켠 사람(rv-ravi-start-off="0")이 이번 실행에서 아직 인사를 못 봤을 때만 막는다. */
+function greetingWillPlay(): boolean {
+  try { return localStorage.getItem('rv-ravi-start-off') === '0' && sessionStorage.getItem('rv-ravi-start-seen') !== '1'; }
+  catch { return false; }
+}
 export function installFirstRunBarrier(): void {
+  // 0.9.46: 인사가 꺼져 있으면(기본) 첫 화면 클릭을 한 번도 붙잡지 않는다.
+  if (!greetingWillPlay()) { landed = true; return; }
   document.documentElement.setAttribute('data-ravi-arriving', 'true');
   // Capture before handlers (including native file/microphone dialogs) can run.
   // Keep only the target/action, never a form value or typed secret.

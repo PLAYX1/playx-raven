@@ -88,17 +88,26 @@ export function createRaviHome(api: { afterLanding?(run: () => void): void; wake
   }) : undefined;
   function stopVoice() { microphone?.stop(); voice.stop(); }
   let readEnabled = false;
-  read.onclick = () => {
-    readEnabled = !readEnabled;
+  // 0.9.46: 「답 읽어 주기」를 기억한다(옛 판은 켤 때마다 꺼짐으로 돌아갔다). 기본 꺼짐.
+  const readKey = "rv-ravi-read-aloud";
+  const applyRead = (on: boolean) => {
+    readEnabled = on;
     read.setAttribute("aria-pressed", String(readEnabled));
     read.textContent = t(readEnabled ? "답 읽어 주기 켜짐" : "답 읽어 주기 꺼짐");
     voice.setEnabled(readEnabled);
   };
+  read.onclick = () => {
+    applyRead(!readEnabled);
+    try { localStorage.setItem(readKey, readEnabled ? "1" : "0"); } catch { /* 이번 실행만 */ }
+    void pack?.then(p => p?.setWant(wantRavi));
+  };
+  try { if (localStorage.getItem(readKey) === "1") applyRead(true); } catch { /* 기본 꺼짐 */ }
   // 설정 「라비 목소리」: 라비 목소리(기본) / 기기 목소리. 기존 읽어 주기 켜짐·꺼짐과 따로 저장한다.
   const kind = byId("ravi-voice-kind") as HTMLSelectElement, kindNote = byId("ravi-voice-kind-note");
   try { kind.value = localStorage.getItem("rv-ravi-voice") === "device" ? "device" : "ravi"; } catch { kind.value = "ravi"; }
   // 라비 목소리 받기(모델은 설치 파일에 없다): 설정 카드 + 말풍선 옆 안내. 끝나면 합성 엔진을 새로 만든다.
-  const wantRavi = () => kind.value === "ravi";
+  // 380MB 받기 안내(말풍선 옆)는 「답 읽어 주기」를 켠 사람에게만.
+  const wantRavi = () => readEnabled && kind.value === "ravi";
   const laterKey = "rv-ravi-pack-later";
   const pack = api.invoke ? import("./ravi-voice-pack").then(m => m.mountVoicePack({
     invoke: api.invoke!,

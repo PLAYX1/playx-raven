@@ -8,7 +8,8 @@ type State={lock:'locked'|'open'|'unencrypted'|'unknown';active:number;tray:bool
 type Invoke=<T=any>(name:string,args?:Record<string,unknown>)=>Promise<T>;
 export const IDLE_MS=90_000;
 export const lockCopy=(lock:State['lock'])=>lock==='locked'?"지갑이 잠겨 있어요.":lock==='open'?"종료하면 지갑을 잠가요.":lock==='unencrypted'?"이 지갑에는 암호 잠금이 설정되지 않았어요.":"지갑 잠금을 확인하지 못했어요.";
-export function mountRaviLifecycle(api:{invoke:Invoke;pending():boolean; idleMs?:number}) {
+/** 0.9.46: 90초 쉬거나 창을 가리면 화면 전체를 덮던 「잠시 쉬고 있어요」는 기본 꺼짐(autoRest:true 일 때만). */
+export function mountRaviLifecycle(api:{invoke:Invoke;pending():boolean; idleMs?:number; autoRest?:boolean}) {
   const dialog=document.createElement('dialog');dialog.className='ravi-lifecycle';
   dialog.setAttribute('aria-labelledby','ravi-lifecycle-title');dialog.setAttribute('aria-describedby','ravi-lifecycle-note');
   dialog.innerHTML='<div class="ravi-lifecycle-card"><div class="ravi-lifecycle-rig" aria-hidden="true"></div><p class="ravi-lifecycle-eyebrow">RAVENVAULT</p><h2 id="ravi-lifecycle-title"></h2><p id="ravi-lifecycle-note" role="status" aria-live="polite"></p><p class="ravi-lifecycle-detail"></p><div class="ravi-lifecycle-actions"></div></div>';
@@ -18,7 +19,7 @@ export function mountRaviLifecycle(api:{invoke:Invoke;pending():boolean; idleMs?
   const rig=mountRaviRig(dialog.querySelector<HTMLElement>('.ravi-lifecycle-rig')!);
   const reduced=matchMedia('(prefers-reduced-motion: reduce)');
   let mode:'closed'|'idle'|'wake'|'quit'|'farewell'='closed',since=0,battery=false,saver=false,working=false,epoch=0;
-  let lastInput=Date.now(),wakeTimer=0,suppressUntil=0,previous:HTMLElement|null=null;
+  let lastInput=Date.now(),wakeTimer=0,previous:HTMLElement|null=null;
   let checking=false, retryAfter=0;
   let state:State={lock:'unknown',active:0,tray:false};
   const loop=createFrameLoop({now:()=>performance.now(),raf:requestAnimationFrame,cancelRaf:cancelAnimationFrame,
@@ -71,24 +72,20 @@ export function mountRaviLifecycle(api:{invoke:Invoke;pending():boolean; idleMs?
   }
   function wake(){
     if(mode!=='idle')return;
-    mode='wake';title.textContent=t('다시 만나 반가워요');note.textContent=t('이제 함께할게요.');detail.textContent='';
-    start();suppressUntil=performance.now()+650;
-    wakeTimer=window.setTimeout(close,reduced.matches?180:550);
+    // 0.9.46: 돌아오면 바로 걷는다 — 기다리게 하거나 첫 클릭을 삼키지 않는다.
+    close();
   }
-  function activity(e:Event){
+  function activity(){
     lastInput=Date.now();
-    if(mode==='idle'||mode==='wake'){
-      if(e.type!=='pointermove'){e.preventDefault();e.stopImmediatePropagation();}
-      wake();
-    }else if(e.type==='click'&&performance.now()<suppressUntil){e.preventDefault();e.stopImmediatePropagation();}
+    if(mode==='idle')wake();
   }
   const events=['pointermove','pointerdown','click','keydown','wheel','touchstart'];
   events.forEach(name=>document.addEventListener(name,activity,{capture:true,passive:false}));
   dialog.addEventListener('cancel',e=>{e.preventDefault();if(mode==='idle')wake();else if(!working)close();});
-  const visibility=()=>{loop.stop();if(document.hidden){if(mode==='closed')rest();}else if(mode!=='closed')loop.start();};
+  const visibility=()=>{loop.stop();if(document.hidden){if(mode==='closed'&&api.autoRest)rest();}else if(mode!=='closed')loop.start();};
   document.addEventListener('visibilitychange',visibility);
   const timer=window.setInterval(()=>{
-    if(mode==='closed'&&Date.now()-lastInput>=(api.idleMs??IDLE_MS))rest();
+    if(api.autoRest&&mode==='closed'&&Date.now()-lastInput>=(api.idleMs??IDLE_MS))rest();
     if(mode==='quit'&&!working)void refresh();
   },1000);
   type Battery={charging:boolean;addEventListener(name:string,fn:()=>void):void;removeEventListener(name:string,fn:()=>void):void};

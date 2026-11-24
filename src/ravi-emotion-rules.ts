@@ -116,7 +116,8 @@ export const RULES: Record<RaviEventName, Rule> = {
 
   // ── 일상 ───────────────────────────────────────────────────
   idle_long:         { emotion: "sleepy", priority: "ambient", slot: "idle", holdMs: 0, mergeMs: 0, cooldownMs: 0, copy: null, sound: null, motion: "none" },
-  user_return:       { emotion: "welcome", priority: "ambient", slot: "idle", holdMs: 3 * S, mergeMs: 0, cooldownMs: 10 * M, copy: "다시 만나서 반가워요.", sound: null, motion: "nod", clears: ["idle"] },
+  // 0.9.46: 10분 쉬고 돌아올 때 저절로 뜨던 「다시 만나서 반가워요」 말풍선은 뺐다 — 라비는 알릴 것이 있을 때만 말한다. 얼굴만 깬다.
+  user_return:       { emotion: "welcome", priority: "ambient", slot: "idle", holdMs: 3 * S, mergeMs: 0, cooldownMs: 10 * M, copy: null, sound: null, motion: "none", clears: ["idle"] },
   night_start:       { emotion: "sleepy", priority: "ambient", slot: "night", holdMs: 0, mergeMs: 0, cooldownMs: 0, copy: null, sound: null, motion: "none" },
   night_end:         { emotion: "neutral", priority: "ambient", slot: null, holdMs: 0, mergeMs: 0, cooldownMs: 0, copy: null, sound: null, motion: "none", clears: ["night"] },
   ai_thinking:       { emotion: "thinking", priority: "ambient", slot: "ai", holdMs: 0, mergeMs: 0, cooldownMs: 0, copy: null, sound: null, motion: "none" },

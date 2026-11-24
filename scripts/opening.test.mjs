@@ -31,14 +31,21 @@ test('opening completion and skip paint before exactly-once barrier release; hid
 });
 test('landing barrier drains queued input once, after state changes',async()=>{
   let arriving=false;const calls=[];
-  const gate=load('firstrun',{queueMicrotask,document:{documentElement:{setAttribute(){arriving=true;},removeAttribute(){arriving=false;}},addEventListener(){}}});
+  const store=v=>({getItem:k=>v[k]??null});
+  const gate=load('firstrun',{queueMicrotask,localStorage:store({'rv-ravi-start-off':'0'}),sessionStorage:store({}),document:{documentElement:{setAttribute(){arriving=true;},removeAttribute(){arriving=false;}},addEventListener(){}}});
   gate.installFirstRunBarrier();gate.afterRaviLanding(()=>calls.push(arriving));assert.deepEqual(calls,[]);
   gate.finishRaviLanding();gate.finishRaviLanding();await Promise.resolve();assert.deepEqual(calls,[false]);
   assert.equal(gate.deferUntilRaviLanding(()=>{}),false);
 });
+test('0.9.46: greeting off (default) never blocks first-screen input',()=>{
+  let set=false,listened=0;const ran=[];
+  const gate=load('firstrun',{queueMicrotask,localStorage:{getItem:()=>null},sessionStorage:{getItem:()=>null},document:{documentElement:{setAttribute(){set=true;},removeAttribute(){}},addEventListener(){listened++;}}});
+  gate.installFirstRunBarrier();assert.equal(set,false);assert.equal(listened,0);
+  gate.afterRaviLanding(()=>ran.push(1));assert.deepEqual(ran,[1]);assert.equal(gate.deferUntilRaviLanding(()=>{}),false);
+});
 test('hidden and battery frame budgets match existing physics rules',()=>{const {frameRate}=load('ravi-physics');assert.equal(frameRate(true,false,false),60);assert.equal(frameRate(true,true,false),24);assert.equal(frameRate(false,true,false),15);assert.equal(frameRate(true,false,true),0);});
 
-function lifecycleFixture({pending=false,fail=false,reduced=false}={}) {
+function lifecycleFixture({pending=false,fail=false,reduced=false,autoRest=false}={}) {
   let now=0,serial=0;const timers=new Map(),listeners=new Map(),calls=[];
   class Node {
     constructor(tag='div'){this.tagName=tag;this.open=false;this.disabled=false;this.hidden=false;this.children=[];this.isConnected=true;this.style={};const classes=new Set();this.classList={add:n=>classes.add(n),remove:n=>classes.delete(n),contains:n=>classes.has(n)};}
@@ -50,16 +57,19 @@ function lifecycleFixture({pending=false,fail=false,reduced=false}={}) {
   const schedule=(f,ms,interval=false)=>{const id=++serial;timers.set(id,{f,at:now+ms,ms,interval});return id;};
   const module=load('ravi-lifecycle',{...c,t:x=>x,document,navigator:{},Event,Date:{now:()=>now},performance:{now:()=>now},matchMedia:()=>({matches:reduced}),requestAnimationFrame:()=>0,cancelAnimationFrame(){},clearTimeout:id=>timers.delete(id),clearInterval:id=>timers.delete(id),window:{setTimeout:(f,ms)=>schedule(f,ms),setInterval:(f,ms)=>schedule(f,ms,true)},frameRate:()=>15,createFrameLoop:()=>({start(){},stop(){}}),mountRaviRig:()=>({renderFrame(){},destroy(){}})});
   const state={lock:'open',active:pending?1:0,tray:true};
-  const api=module.mountRaviLifecycle({idleMs:2000,pending:()=>false,invoke:async name=>{calls.push(name);if(name==='ravi_lifecycle_status')return {...state};if(name==='ravi_prepare_quit'){if(fail)throw Error('synthetic');return {lock:'locked'};}}});
+  const api=module.mountRaviLifecycle({idleMs:2000,autoRest,pending:()=>false,invoke:async name=>{calls.push(name);if(name==='ravi_lifecycle_status')return {...state};if(name==='ravi_prepare_quit'){if(fail)throw Error('synthetic');return {lock:'locked'};}}});
   const dialog=document.body.children[0],actions=dialog.querySelector('.ravi-lifecycle-actions');
   const flush=async()=>{for(let i=0;i<12;i++)await Promise.resolve();};
   const advance=async ms=>{const end=now+ms;for(;;){const next=[...timers].filter(([,t])=>t.at<=end).sort((a,b)=>a[1].at-b[1].at)[0];if(!next)break;const [id,timer]=next;timers.delete(id);now=timer.at;if(timer.interval)timers.set(id,{...timer,at:now+timer.ms});timer.f();await flush();}now=end;await flush();};
   return {api,state,calls,dialog,actions,document,listeners,advance,flush};
 }
-test('idle timer masks content, consumes wake input and never unlocks a wallet',async()=>{
-  const f=lifecycleFixture();await f.advance(1999);assert.equal(f.dialog.open,false);await f.advance(1);assert.equal(f.dialog.open,true);assert.equal(f.document.body.classList.contains('ravi-private'),true);
-  let consumed=0;f.listeners.get('keydown')({type:'keydown',preventDefault(){consumed++;},stopImmediatePropagation(){consumed++;}});assert.equal(consumed,2);
-  await f.advance(549);assert.equal(f.document.body.classList.contains('ravi-private'),true);await f.advance(1);assert.equal(f.dialog.open,false);assert.equal(f.document.body.classList.contains('ravi-private'),false);assert.deepEqual(f.calls,['companion_settings']);f.api.destroy();
+test('0.9.46: idle cover is off by default',async()=>{
+  const f=lifecycleFixture();await f.advance(10000);assert.equal(f.dialog.open,false);assert.equal(f.document.body.classList.contains('ravi-private'),false);f.api.destroy();
+});
+test('opt-in idle timer masks content, wakes at once without eating input and never unlocks a wallet',async()=>{
+  const f=lifecycleFixture({autoRest:true});await f.advance(1999);assert.equal(f.dialog.open,false);await f.advance(1);assert.equal(f.dialog.open,true);assert.equal(f.document.body.classList.contains('ravi-private'),true);
+  let consumed=0;f.listeners.get('keydown')({type:'keydown',preventDefault(){consumed++;},stopImmediatePropagation(){consumed++;}});assert.equal(consumed,0);
+  assert.equal(f.dialog.open,false);assert.equal(f.document.body.classList.contains('ravi-private'),false);assert.deepEqual(f.calls,['companion_settings']);f.api.destroy();
 });
 test('quit blocks active transfers, defaults focus to continue, and prepares before exit',async()=>{
   const f=lifecycleFixture({pending:true});await f.api.requestClose();assert.equal(f.actions.children[2].disabled,true);assert.equal(f.document.activeElement,f.actions.children[0]);

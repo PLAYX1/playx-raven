@@ -420,7 +420,7 @@ export function createAssetKeep(deps: KeepDeps) {
 
   const dismissKey = "playx-raven-keep-ask-dismissed";
   function dismissedCount(): number {
-    try { return Number(sessionStorage.getItem(dismissKey) ?? "-1"); } catch { return -1; }
+    try { return Number(localStorage.getItem(dismissKey) ?? "-1"); } catch { return -1; }
   }
 
   async function onBarClick(e: Event) {
@@ -438,10 +438,10 @@ export function createAssetKeep(deps: KeepDeps) {
       deps.renderList();
     } else if (act === "ask-each") {
       document.querySelector<HTMLElement>('[data-afilter="got"]')?.click();
-      try { sessionStorage.setItem(dismissKey, String(undecidedReceived(allRows()).length)); } catch { /* 없어도 된다 */ }
+      try { localStorage.setItem(dismissKey, String(undecidedReceived(allRows()).length)); } catch { /* 없어도 된다 */ }
       deps.renderList();
     } else if (act === "ask-dismiss") {
-      try { sessionStorage.setItem(dismissKey, String(undecidedReceived(allRows()).length)); } catch { /* 없어도 된다 */ }
+      try { localStorage.setItem(dismissKey, String(undecidedReceived(allRows()).length)); } catch { /* 없어도 된다 */ }
       paintBar();
     }
   }

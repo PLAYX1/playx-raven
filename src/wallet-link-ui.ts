@@ -77,7 +77,7 @@ function paintMatchSymbols(code: string) {
   box.setAttribute("aria-label", syms.map(m => `${t(MATCH_COLOR_NAME[m.color])} ${t(MATCH_SHAPE_NAME[m.shape])}`).join(", "));
 }
 /** 연결이 끝난 순간 — 라비가 폴짝 뛰어 폰으로 건너가고, 작은 소리. 확인(러스트 저장)이 끝난 뒤에만 부른다. */
-function celebrateLinked() {
+function celebrateLinked(invoke: Invoke) {
   const card = document.getElementById("wl-card");
   if (!card) return;
   document.getElementById("wl-done")?.remove();
@@ -86,7 +86,9 @@ function celebrateLinked() {
   const text = document.createElement("p"); text.textContent = t("폰과 이어졌어요. 라비가 폰으로 건너갔어요.");
   done.append(img, text);
   card.querySelector("h3")?.after(done);
-  if (!calmMotion()) {
+  // 0.9.46: 세 음 소리는 「라비 소리」(기본 꺼짐)를 켠 사람에게만.
+  if (!calmMotion()) void invoke<{ settings?: { sound?: boolean } }>("companion_settings").then(v => {
+    if (v?.settings?.sound !== true) return;
     try {
       const ac = new AudioContext(), now = ac.currentTime;
       [659.25, 987.77, 1318.5].forEach((f, i) => { const o = ac.createOscillator(), g = ac.createGain(); o.type = "sine"; o.frequency.value = f;
@@ -94,11 +96,11 @@ function celebrateLinked() {
         o.connect(g).connect(ac.destination); o.start(now + i * .09); o.stop(now + i * .09 + 1); });
       setTimeout(() => { void ac.close(); }, 2000);
     } catch { /* 소리는 덤 */ }
-  }
+  }).catch(() => {});
   setTimeout(() => done.classList.add("wl-done-rest"), 2400);
 }
 
-export function wireWalletLink(deps: { invoke: Invoke; ask: (why: "link" | "limit" | "sell" | "unsell") => Promise<string | null>; onState?: (s: WalletLinkState) => void }) {
+export function wireWalletLink(deps: { invoke: Invoke; ask: (why: "link" | "limit" | "sell" | "unsell") => Promise<string | null>; onState?: (s: WalletLinkState) => void; sure?: (title: string, message?: string, ok?: string) => Promise<boolean> }) {
   const { invoke } = deps;
   let offer: Offer | null = null, offerTimer: ReturnType<typeof setInterval> | undefined;
   let pollTimer: ReturnType<typeof setTimeout> | undefined, polling = false, links: LinkRow[] = [], pending: Pending[] = [], sells: SellRow[] = [];
@@ -176,7 +178,7 @@ export function wireWalletLink(deps: { invoke: Invoke; ask: (why: "link" | "limi
       stopOffer(); agree.checked = false; make.disabled = true; $("wl-agree-hint").hidden = false;
       const same = talkLine(done?.talkSame);
       msg(t("연결했어요. 폰에서 이 컴퓨터 지갑의 잔액과 받는 주소를 볼 수 있어요.") + (same ? ` ${same}` : ""));
-      celebrateLinked();
+      celebrateLinked(invoke);
       await refresh();
     } catch (e) { msg(errOf(e), true); }
   };
@@ -210,6 +212,8 @@ export function wireWalletLink(deps: { invoke: Invoke; ask: (why: "link" | "limi
     const cut = document.createElement("button"); cut.className = "ghost"; cut.type = "button"; cut.textContent = t("끊기");
     lim.onclick = () => openLimit(l, txt, btns);
     cut.onclick = async () => {
+      // 0.9.46: 끊기는 되돌릴 수 없다(폰을 다시 이어야 한다) — 확인 창에서 한 번 더 누를 때만.
+      if (deps.sure && !(await deps.sure(tf("「{0}」 연결을 끊을까요?", l.name), t("기다리던 요청도 모두 버려요. 다시 쓰려면 폰과 새로 이어야 해요."), t("끊기")))) return;
       cut.disabled = true;
       try { await invoke("wallet_link_revoke", { linkId: l.linkId }); msg(tf("「{0}」 연결을 끊었어요. 기다리던 요청도 모두 버렸어요.", l.name)); await refresh(); }
       catch (e) { msg(errOf(e), true); cut.disabled = false; }

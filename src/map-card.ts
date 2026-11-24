@@ -100,7 +100,9 @@ export type MapCard = {
   useFreeLink(): Promise<string>;
 };
 
-export function wireMapCard(deps: { invoke: Invoke; showShop: () => void; onTemporary?: () => void }): MapCard {
+export function wireMapCard(deps: { invoke: Invoke; showShop: () => void; onTemporary?: () => void; sure?: (title: string, message?: string, ok?: string) => Promise<boolean> }): MapCard {
+  // 0.9.46: confirm() 은 WKWebView 에서 묻지도 않고 「아니오」였다 — 앱 안 확인 창(sure)으로 묻는다.
+  const sure = (title: string, ok: string) => deps.sure ? deps.sure(title, "", ok) : Promise.resolve(false);
   const $ = (id: string) => document.getElementById(id);
   const card = $("mp-card");
   const nameEl = $("mp-name") as HTMLInputElement | null;
@@ -348,7 +350,7 @@ export function wireMapCard(deps: { invoke: Invoke; showShop: () => void; onTemp
       }
     });
     $("mp-down")?.addEventListener("click", async () => {
-      if (!confirm(t("지도에서 내릴까요? 손님 지도에서 가게와 「영업 중」 표시가 사라집니다."))) return;
+      if (!(await sure(t("지도에서 내릴까요? 손님 지도에서 가게와 「영업 중」 표시가 사라집니다."), t("내리기")))) return;
       try {
         await deps.invoke("map_unpublish");
         say("mp-state", () => t("지도에서 내렸어요."));
@@ -435,7 +437,7 @@ export function wireMapCard(deps: { invoke: Invoke; showShop: () => void; onTemp
       if (tsOpen) void deps.invoke("tailscale_open", { target: tsOpen.target }).catch((e) => paintTsStep(String((e as Error)?.message ?? e), "bad"));
     });
     $("mp-ts-off")?.addEventListener("click", async () => {
-      if (!confirm(t("테일스케일 가게 문을 닫을까요? 이 주소로는 손님이 못 들어와요."))) return;
+      if (!(await sure(t("테일스케일 가게 문을 닫을까요? 이 주소로는 손님이 못 들어와요."), t("닫기")))) return;
       await fixedOff();
     });
   }

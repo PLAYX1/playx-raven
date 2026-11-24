@@ -120,8 +120,10 @@ export function createRaviAgentUI(api: { invoke: Invoke; keyed(): string | null;
     })(); }); tools.append(b);
   }
   tools.append(result); document.getElementById("ravi-tools")!.append(tools);
-  // 대화 속 제안 카드는 한 번에 하나, 「지금은 취소」를 누르면 이번 실행 동안 다시 내밀지 않는다.
-  let offer: HTMLElement | null = null, declined = false, onSaved: (() => void) | null = null;
+  // 대화 속 제안 카드는 한 번에 하나, 「지금은 취소」를 누르면 7일 동안 다시 내밀지 않는다(0.9.46 — 옛 판은 이번 실행 동안만).
+  const DECLINED_KEY = "rv-ravi-consent-declined-at", DECLINE_MS = 7 * 86_400_000;
+  const declinedRecently = () => { try { const at = Number(localStorage.getItem(DECLINED_KEY) || 0); return at > 0 && Date.now() - at < DECLINE_MS; } catch { return false; } };
+  let offer: HTMLElement | null = null, declined = declinedRecently(), onSaved: (() => void) | null = null;
   return {
     /** 저장된 선택. 읽지 못하면 null — 부르는 쪽은 개인 정보 없는 일반 대화로 간다. */
     async consentState(): Promise<Consent | null> {
@@ -140,7 +142,7 @@ export function createRaviAgentUI(api: { invoke: Invoke; keyed(): string | null;
         offer = privacyForm(consent, async value => {
           await api.invoke("ravi_consent_save", { consent: value }); consent = value;
           offer?.remove(); offer = null; void renderSettings(); onSaved?.();
-        }, () => { declined = true; offer?.remove(); offer = null; }, CONSENT_OFFER_LEAD);
+        }, () => { declined = true; try { localStorage.setItem(DECLINED_KEY, String(Date.now())); } catch { /* 이번 실행만 */ } offer?.remove(); offer = null; }, CONSENT_OFFER_LEAD);
         offer.setAttribute("data-ravi-consent-offer", "1");
       }
       log.append(offer); // 이미 있으면 맨 아래로 옮길 뿐, 쌓지 않는다
@@ -156,9 +158,9 @@ export function createRaviAgentUI(api: { invoke: Invoke; keyed(): string | null;
       const title = document.createElement("strong"); title.textContent = t("짜잔! 오늘 어땠어요?");
       const summary = document.createElement("p"); summary.textContent = t("오늘의 로컬 정보를 확인하고 있어요…");
       const natural = document.createElement("p"); natural.setAttribute("aria-live", "polite");
-      let timer = 0, closed = false;
-      const dismiss = () => { if (closed) return; closed = true; clearTimeout(timer); document.removeEventListener("keydown", onEscape); overlay.classList.add("docking"); window.setTimeout(() => { opening.destroy(); overlay.remove(); }, 360); };
-      // The landed bubble covers home controls for up to 8s; Escape and a close button release them without opening the chat.
+      let closed = false;
+      const dismiss = () => { if (closed) return; closed = true; document.removeEventListener("keydown", onEscape); overlay.classList.add("docking"); window.setTimeout(() => { opening.destroy(); overlay.remove(); }, 360); };
+      // The landed bubble stays until dismissed; Escape and a close button release them without opening the chat.
       // 돈 확인 창(holdBeforeDoing)이 뜨면 인사는 비킨다 — 덮개가 확인 창을 가리면 안 된다(11-07).
       window.addEventListener("rv-confirm-open", () => dismiss(), { once: true });
       // 대표 11-14 「화면이 깨진다」: 인사가 메뉴를 옮겨도 18초 동안 카드·단추를 덮고 있었다(페이블 검진).
@@ -178,7 +180,7 @@ export function createRaviAgentUI(api: { invoke: Invoke; keyed(): string | null;
       const land = () => {
         if (landed) return;
         landed = true; skip.hidden = true; bird.setAttribute("aria-label", t("라비와 이야기하기")); bubble.hidden = false; api.landed?.();
-        timer = window.setTimeout(dismiss, 8000);
+        // 0.9.46: 저절로 사라지지 않는다 — 닫기·바깥 누르기·Esc 로만 비킨다.
         document.addEventListener("keydown", onEscape);
       };
       const opening = mountRaviOpening(bird, land);
@@ -187,7 +189,6 @@ export function createRaviAgentUI(api: { invoke: Invoke; keyed(): string | null;
         await settingsReady;
         if (closed) return;
         summary.textContent = todayLines(data).join("\n"); key.hidden = !!api.keyed();
-        if (landed) { clearTimeout(timer); timer = window.setTimeout(dismiss, 8000); }
         // No consent means no automatic provider call, even when a key exists.
         if (api.keyed() && consent.reviewed) {
           try { const line = await api.invoke<string>("ravi_greeting", { provider: api.keyed(), tz: api.tz() }); if (!closed && !containsRaviSecret(line)) natural.textContent = line; } catch { /* Fixed greeting and local numbers stay visible. */ }

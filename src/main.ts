@@ -1904,11 +1904,13 @@ async function wireUsbLock(): Promise<void> {
   box.onchange = async () => {
     // ⚠️ 끄기는 되돌릴 수 있지만, 끈 뒤에 만든 USB 는 벗은 채로 남는다.
     // 그 사실을 그 자리에서 말한다.
-    if (!box.checked && !confirm(
-      "USB 백업을 잠그지 않으시겠습니까?\n\n" +
-      "그 USB 를 주운 사람이 가게 돈을 가져갈 수 있습니다.\n" +
-      "이미 만들어진 잠긴 백업은 그대로 남습니다.",
-    )) {
+    // 0.9.46: confirm() 은 WKWebView 에서 아무것도 묻지 않는다 — 앱 안 확인 창으로 묻는다.
+    if (!box.checked && !(await sure(
+      t("USB 백업을 잠그지 않으시겠습니까?"),
+      t("그 USB 를 주운 사람이 가게 돈을 가져갈 수 있습니다.") + "\n" +
+      t("이미 만들어진 잠긴 백업은 그대로 남습니다."),
+      t("잠그지 않기"),
+    ))) {
       box.checked = true;
       return;
     }
@@ -2403,7 +2405,8 @@ async function paintStatusDots() {
   paintDotSum();
   // 노드 상태가 바뀌면 라비 얼굴도 따라 바뀐다.
   paintRaviFace();
-  void invoke("ai_models_refresh").catch(() => {}).then(() => refreshKeys()).catch(() => {});
+  // 0.9.46: 10초마다 ai_models_refresh → refreshKeys 가 #keyrows 를 다시 그려 치던 열쇠·모델 칸을 지웠다.
+  //         모델 다시 고르기는 앱 시작과 열쇠 저장·지우기 때만 한다.
 
   try {
     const i = await invoke<any>("ipfs_status");
@@ -2473,11 +2476,13 @@ async function checkNow() {
   const nag = document.getElementById("upnag") as HTMLButtonElement | null;
   // 🔴 판 번호 글자는 그대로 둔다. 번호가 「확인 중…」으로 바뀌면 사장은
   //    자기가 쓰는 판이 무엇인지 그 순간 못 본다. 아래 단추가 답한다.
+  // 0.9.46: 평소에는 숨어 있다. 판 번호를 눌러 직접 확인할 때만 잠깐 「확인 중…」→「지금이 최신입니다.」를 보이고 접는다.
   if (nag) {
     nag.classList.remove("new");
+    nag.hidden = false;
     setCopyText(nag, () => t("확인 중…"));
   }
-  await checkForUpdate(true);
+  await checkForUpdate(true, true);
   // 새 버전이 있으면 설치 칸으로 데려간다. 없으면 단추가 「최신 버전」이라
   // 적혀 있고, 그게 답이다.
   if (nag?.classList.contains("new")) {
@@ -2486,14 +2491,21 @@ async function checkNow() {
   }
 }
 
-async function checkForUpdate(quiet = true) {
+let 최신안내접기 = 0;
+async function checkForUpdate(quiet = true, manual = false) {
   const nag = document.getElementById("upnag") as HTMLButtonElement | null;
   const note = document.getElementById("up-note");
   try {
     const update = await invoke<{ version: string | null; manual?: boolean }>("check_update");
     if (!update.version) {
       // 🔴 「확인 중…」이 영영 안 풀렸다(0.8.4 에서 신고) — 새 버전이 없을 때 단추 글자를 되돌리지 않았다.
-      if (nag) { nag.hidden = false; nag.classList.remove("new"); setCopyText(nag, () => t("지금이 최신입니다.")); nag.onclick = () => void checkNow(); }
+      // 0.9.46: 새 판이 없으면 위 단추는 숨긴다(「확인 중…/지금이 최신입니다」가 늘 자리를 차지했다). 직접 눌렀을 때만 4초 보인다.
+      if (nag) {
+        nag.classList.remove("new"); setCopyText(nag, () => t("지금이 최신입니다.")); nag.onclick = () => void checkNow();
+        clearTimeout(최신안내접기);
+        if (manual) { nag.hidden = false; 최신안내접기 = window.setTimeout(() => { if (!nag.classList.contains("new")) nag.hidden = true; }, 4000); }
+        else nag.hidden = true;
+      }
       if (note) note.textContent = "새 버전이 없습니다.";
       return;
     }
@@ -4694,7 +4706,7 @@ async function paintPartBody(): Promise<void> {
             sw.checked = await invoke<boolean>("autostart_set", { on: sw.checked });
           } catch (e) {
             sw.checked = !sw.checked;
-            alert(errText(e));
+            void say(errText(e));
           }
         };
       }
@@ -4727,7 +4739,7 @@ function bindIndexCard(): void {
   const now = document.getElementById("rx-now") as HTMLButtonElement | null;
   if (now) {
     now.onclick = async () => {
-      if (!confirm("지금 시작하면 몇 시간 동안 입금 확인이 멈춥니다. 시작할까요?")) return;
+      if (!(await sure(t("지금 시작할까요?"), t("지금 시작하면 몇 시간 동안 입금 확인이 멈춥니다."), t("시작")))) return;
       now.disabled = true;
       say("노드를 다시 띄우는 중입니다…");
       try {
@@ -5742,9 +5754,10 @@ async function openReceive(fresh = false) {
 }
 
 async function showBackupReminder(): Promise<void> {
-  if (localStorage.getItem("rv-v2-backup-reminded")) return;
-  const seen = await sure(t("백업 안내"), t("지갑과 대화 열쇠를 잃지 않도록 백업해 두세요. 설정에서 백업할 수 있어요."), t("알겠습니다"));
-  if (seen) localStorage.setItem("rv-v2-backup-reminded", "1");
+  try { if (localStorage.getItem("rv-v2-backup-reminded")) return; } catch { return; }
+  // 0.9.46: 닫기(취소)도 「봤다」로 기억한다 — 옛 판은 취소하면 글을 올릴 때마다 다시 떴다.
+  try { localStorage.setItem("rv-v2-backup-reminded", "1"); } catch { /* 이번 실행만 */ }
+  await sure(t("백업 안내"), t("지갑과 대화 열쇠를 잃지 않도록 백업해 두세요. 설정에서 백업할 수 있어요."), t("알겠습니다"));
 }
 
 /* ── 주소 확인 · 내 주인 표 (0.4.6) ─────────────────────────────
@@ -10874,6 +10887,8 @@ function showKeyStorageHelp(note: HTMLElement, error: unknown, provider: string,
 }
 
 async function deleteSavedKey(provider: string) {
+  // 0.9.46: 열쇠 지우기는 되돌릴 수 없다(새로 받아 넣어야 한다) — 확인 창에서 한 번 더 누를 때만.
+  if (!(await sure(t("이 AI 열쇠를 지울까요?"), t("지우면 이 컴퓨터에서 사라져요. 다시 쓰려면 열쇠를 새로 넣어야 해요."), t("지우기")))) return;
   let failure: unknown;
   try { await invoke("delete_api_key", { provider }); }
   catch (error) { failure = error; }
@@ -12023,14 +12038,16 @@ function applyActions(actions: any[], typed = ""): string[] {
           // 🔴 라비가 **혼자서** 할 수 있는 유일한 파괴적 동작이었다.
           // 돈은 아니지만 사장이 하루 걸려 넣은 메뉴가 한 번에 사라지고,
           // 되돌릴 방법이 없다. 말로 시킨 것과 시킨 줄 아는 것은 다르다.
-          if (menuItems.length && !confirm(
-            tf("메뉴 {0}개를 전부 지울까요?\n되돌릴 수 없습니다.", menuItems.length),
-          )) {
-            done.push("메뉴 지우기를 그만두었습니다");
-            break;
+          // 0.9.46: confirm() 은 이 앱에서 늘 「아니오」였다 — 앱 안 확인 창에서 사장님이 누를 때만 지운다.
+          if (menuItems.length) {
+            const count = menuItems.length;
+            void sure(tf("메뉴 {0}개를 전부 지울까요?", count), t("되돌릴 수 없습니다."), t("지우기")).then(yes => {
+              if (!yes) return;
+              menuItems.length = 0;
+              renderMenu();
+            });
+            done.push(tf("메뉴 {0}개 지우기 확인 창을 열었습니다 — 누르는 것은 사장님입니다", count));
           }
-          done.push(tf("메뉴 {0}개 모두 지움", menuItems.length));
-          menuItems.length = 0;
           break;
         case "go":
           if (raviOpenScreen(a.screen)) {
@@ -12859,7 +12876,7 @@ function wireRehearse(): void {
   };
 
   (document.getElementById("rh-reset") as HTMLElement).onclick = async () => {
-    if (!confirm("연습한 것을 전부 지울까요?\n연습이라 아무것도 잃지 않습니다.")) return;
+    if (!(await sure(t("연습한 것을 전부 지울까요?"), t("연습이라 아무것도 잃지 않습니다."), t("지우기")))) return;
     await rhSay("지우는 중…");
     try {
       await invoke("rehearse_reset");
@@ -13599,7 +13616,7 @@ async function saveMemberPrivacy() {
 
 async function deleteMember() {
   const asset = msEditing;
-  if (!asset || !confirm(t("이 회원의 정보와 출입 기록을 모두 지울까요? 되돌릴 수 없습니다."))) return;
+  if (!asset || !(await sure(t("이 회원의 정보와 출입 기록을 모두 지울까요? 되돌릴 수 없습니다."), "", t("지우기")))) return;
   const button = $("ms-delete") as HTMLButtonElement;
   button.disabled = true;
   try {
@@ -14050,7 +14067,7 @@ function renderMemberMemos(asset: string, memos: MemberMemo[]) {
     const button = document.createElement("button");
     setCopyText(button, () => t("지우기"));
     button.onclick = async () => {
-      if (msEditing !== asset || !confirm(t("이 메모를 지울까요?"))) return;
+      if (msEditing !== asset || !(await sure(t("이 메모를 지울까요?"), "", t("지우기"))) || msEditing !== asset) return;
       button.disabled = true;
       try {
         const result = await invoke<{ memos: MemberMemo[] }>("member_memo_delete", { asset, at: memo.at, index });
@@ -19212,6 +19229,17 @@ function 대화알림켜짐(): boolean {
   }
 }
 
+/// 0.9.46: 위 스위치(기본 켜짐)는 **나에게 온 말**(쪽지·답글·나를 부른 글)만 울린다.
+/// 방·광장의 새 글은 따로 이 스위치를 켠 사람에게만 소리·컴퓨터 알림이 간다(기본 꺼짐 · 왼쪽 숫자는 그대로).
+const 방소리_KEY = "playx-raven-talk-room-sound";
+function 방소리켜짐(): boolean {
+  try {
+    return 대화알림켜짐() && localStorage.getItem(방소리_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 /// 「톡」. 낮은 솔 한 음, 짧고 작게. 주문의 「딩—동」과 겹치지 않는다.
 ///
 /// ⚠️ **되풀이하지 않는다.** 주문은 안 보고 있으면 두 번 부르지만, 대화는
@@ -19336,8 +19364,8 @@ function 방알림단추그리기() {
 /** 컴퓨터 알림(macOS·Windows). 실패는 조용히 — 앱 안 소리·배지가 남는다. */
 function tkOsNotify(kind: "room" | "reply" | "dm", room: string, from: string, count: number) {
   // 11-18 소리는 「레볼!」 하나만 — 컴퓨터 알림의 기본음(Ping·Default)은 끄고 앱이 직접 낸다(두 번 울리지 않게).
-  void invoke("talk_os_notify", { kind, room, from, count, locale: lang, sound: false }).catch(() => {});
-  if (kind === "dm") 말소리();
+  // 0.9.46: 컴퓨터 알림은 창이 앞에 없을 때만. 소리는 부르는 쪽이 대화 소리 스위치를 보고 낸다.
+  if (document.hidden || !document.hasFocus()) void invoke("talk_os_notify", { kind, room, from, count, locale: lang, sound: false }).catch(() => {});
 }
 
 function 대화살피기(room: string, list: any[]) {
@@ -19390,15 +19418,17 @@ function 대화살피기(room: string, list: any[]) {
   if (!tkMine) return;
   if (!대화알림켜짐()) return;
   if (방알림꺼짐(방)) return; // 11-10 이 방 알림 끔
+  안본대화 += 새글;
+  대화배지그리기();
+  // 0.9.46: 방·광장 글은 기본 조용히 — 숫자만 올린다. 「방·광장 글에도 소리」를 켠 사람에게만 아래로.
+  if (!방소리켜짐()) return;
   // 11-10 컴퓨터 알림 — 창이 앞에 없을 때만(본문 없음, 문장은 러스트가 만든다 · talk_notify.rs).
-  if (document.hidden || !document.hasFocus()) tkOsNotify("room", 방 ? tkRoomNames.get(방) || t("방") : t(SQUARE), 마지막쓴이 ? tkNameText(마지막쓴이) : "", 새글);
+  tkOsNotify("room", 방 ? tkRoomNames.get(방) || t("방") : t(SQUARE), 마지막쓴이 ? tkNameText(마지막쓴이) : "", 새글);
   // ⚠️ 그 방을 보고 있으면 소리도 숫자도 없다. 눈앞에 글이 뜨는 것이 이미
   //    답이다. (주문은 여기서 반대로 판단한다 — 돈이 들어오는 순간 사장의
   //    눈은 손님에게 가 있어서, 창이 떠 있는 것과 보고 있는 것이 다르다.
   //    대화는 그렇지 않다. 읽으려고 연 화면이다.)
   말소리();
-  안본대화 += 새글;
-  대화배지그리기();
 }
 
 /* ── 어느 방을 지켜볼까 ────────────────────────────────────────────────
@@ -19523,6 +19553,14 @@ function 대화알림배선() {
         첫바퀴읽은방.clear();
         대화봤다();
       }
+    });
+  }
+  // 0.9.46: 방·광장 글 소리는 따로(기본 꺼짐).
+  const roomSw = document.getElementById("tk-room-snd-on") as HTMLInputElement | null;
+  if (roomSw) {
+    try { roomSw.checked = localStorage.getItem(방소리_KEY) === "1"; } catch { roomSw.checked = false; }
+    roomSw.addEventListener("change", () => {
+      try { localStorage.setItem(방소리_KEY, roomSw.checked ? "1" : "0"); } catch { /* 이번 실행만 */ }
     });
   }
   // 🔴 「소리 들어보기」가 여기에도 있어야 한다. **주문 소리와 나란히 들어
@@ -20531,7 +20569,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     void refreshKeys();
   });
   $("mn-cur").addEventListener("change", showRate);
-  void refreshKeys().catch(() => {});
+  void refreshKeys().catch(() => {}).then(() => invoke("ai_models_refresh")).catch(() => {}).then(() => refreshKeys()).catch(() => {});
   raviAgentUI?.start();
   showRate();
   let shopTimer: any;
@@ -20650,7 +20688,7 @@ window.addEventListener("DOMContentLoaded", async () => {
       : why === "unsell"
       ? ask("지갑 비밀번호", "판매 글을 내리려면 묶음을 이 지갑의 새 주소로 옮겨야 해요. 옮긴 뒤 지갑을 바로 잠가요.", { password: true })
       : ask("지갑 비밀번호 재인증", "폰과 연결할 받기 전용 번호를 만든 뒤 지갑을 바로 잠가요.", { password: true }),
-    onState: paintHomePhone });
+    onState: paintHomePhone, sure });
   // 체인 POS ① 「체인 매장」 카드 — 처음 보일 때만 지연 묶음(src/chain-store.ts)을 읽는다. 읽기 실패해도 설정 화면은 산다(다음에 보일 때 다시).
   { const host = document.getElementById("chain-store-card");
     if (host && "IntersectionObserver" in window) {
@@ -20795,7 +20833,8 @@ window.addEventListener("DOMContentLoaded", async () => {
     showPerson: (pk) => void tkShowPerson(pk),
     follows: async () => { if (!tkFollows) await tkLoadFollows(); return tkFollows; },
     muted: () => Object.keys(tkMuted),
-    notify: (from, count) => tkOsNotify("dm", "", from, count),
+    // 0.9.46: 쪽지도 대화 소리 스위치를 따른다(옛 판은 꺼 둬도 「레볼!」·컴퓨터 알림이 났다).
+    notify: (from, count) => { if (!대화알림켜짐()) return; tkOsNotify("dm", "", from, count); 말소리(); },
     legacyOpen: () => talkOpenDm(),
     errText,
     escapeHtml,
@@ -20945,7 +20984,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     active: () => currentPage === "talk",
     openTalkNote: (id, reply) => void tkOpenNoteFromRavi(id, reply),
     sound: () => { if (대화알림켜짐()) 말소리(); },
-    osNotify: (from, count) => { if (대화알림켜짐() && (document.hidden || !document.hasFocus())) tkOsNotify("reply", "", from, count); },
+    osNotify: (from, count) => { if (대화알림켜짐()) tkOsNotify("reply", "", from, count); },
     errText,
     pickSave: (name) => pickSavePath({ defaultPath: name, filters: [{ name: "JSON", extensions: ["json"] }] }),
   });
@@ -21419,7 +21458,7 @@ function raviSuggestFixed() {
 }
 
 /** 「내 가게 → 지도에 올리기」(map-card.ts · map.rs). 라비는 prepare 로 칸만 채운다. */
-const mapCard = wireMapCard({ invoke, showShop: () => { showPage("shop"); shopTab("mine"); }, onTemporary: raviSuggestFixed });
+const mapCard = wireMapCard({ invoke, showShop: () => { showPage("shop"); shopTab("mine"); }, onTemporary: raviSuggestFixed, sure });
 void mapCard.refresh();
 document.querySelectorAll('[data-page="shop"]').forEach((a) => a.addEventListener("click", () => void mapCard.refresh()));
 window.addEventListener("rv-map-changed", () => void paintStatusDots());

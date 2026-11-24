@@ -129,7 +129,8 @@ main:has(> #page-talk.on) { padding:0 !important; }
 #page-talk.dmon .tkc-start { margin:auto; color:var(--muted); text-align:center; font-size:14px; }
 #page-talk.dmon .tkc-photo { color:var(--muted); font-style:italic; }
 #page-talk .line.pending { opacity:.6; }
-#page-talk .tkc-retry { border:0; background:none; padding:0; min-height:0 !important; font-size:12px !important; color:var(--bad, #C0392B); cursor:pointer; white-space:nowrap; }
+/* 0.9.46: 「다시 보내기」 — 실패했을 때 누를 단추라 손가락 크기(44px)·읽히는 글자(15px). */
+#page-talk .tkc-retry { border:0; background:none; padding:0 8px; min-height:44px !important; font-size:15px !important; color:var(--bad, #C0392B); cursor:pointer; white-space:nowrap; }
 
 /* 새 메시지 알약 · 비었을 때 가운데 */
 #page-talk:not(.feedon) .tk-new-messages { bottom:132px; min-height:44px !important; padding:0 16px; font-size:14px !important; font-weight:700; white-space:nowrap; }

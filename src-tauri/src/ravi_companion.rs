@@ -76,6 +76,8 @@ pub struct Settings {
     pub muted_day: i64,
     pub size: u16,
     pub greeting: bool,
+    /// 0.9.46: 시작 인사는 사람이 직접 켰을 때만. 기본값(옛 판 true)·언어·시간대 저장으로는 켜지지 않는다.
+    pub greeting_set_by_user: bool,
     pub sound: bool,
     pub reduced: bool,
     pub battery: bool,
@@ -99,7 +101,8 @@ impl Default for Settings {
             alert_count: 0,
             muted_day: -1,
             size: 160,
-            greeting: true,
+            greeting: false,
+            greeting_set_by_user: false,
             sound: false,
             reduced: false,
             battery: false,
@@ -213,7 +216,16 @@ fn read_settings() -> Settings {
         .filter(|b| b.len() < 2048)
         .and_then(|b| serde_json::from_slice::<Settings>(&b).ok())
         .filter(Settings::valid)
+        .map(migrate_greeting)
         .unwrap_or_default()
+}
+/// 0.9.45 까지는 기본값 greeting:true 가 파일에 그대로 적혀 매번 인사가 떴다.
+/// 사람이 고른 기록이 없으면 꺼짐으로 읽는다(한 번 저장되면 파일도 꺼짐으로 바뀐다).
+fn migrate_greeting(mut s: Settings) -> Settings {
+    if !s.greeting_set_by_user {
+        s.greeting = false;
+    }
+    s
 }
 fn persist(s: &Settings) -> Result<(), String> {
     crate::server::atomic_write_0600(
@@ -246,6 +258,9 @@ pub fn companion_save(app: tauri::AppHandle, mut value: Settings) -> Result<(), 
         return Err(FAILURE.into());
     }
     let prior = settings(&app);
+    // 인사 값이 바뀐 저장만 「사람이 고른 것」으로 본다 — 언어·시간대·안내 확인 저장은 인사를 건드리지 않는다.
+    value.greeting_set_by_user = prior.greeting_set_by_user || value.greeting != prior.greeting;
+    value = migrate_greeting(value);
     value.notice_seen |= prior.notice_seen;
     value.alert_day = prior.alert_day;
     value.alert_count = prior.alert_count;
@@ -363,7 +378,10 @@ pub fn notify(kind: &'static str) {
                 s.alert_day = day;
                 s.alert_count = 0;
             }
-            s.alert_count += 1;
+            // 시작 인사는 하루 알림 한도에 세지 않는다.
+            if kind != "hello" {
+                s.alert_count += 1;
+            }
             if persist(&s).is_err() {
                 return;
             }
@@ -548,7 +566,7 @@ pub fn open_main(app: &tauri::AppHandle) -> Result<(), String> {
                 );
             }
             if crate::paths::app_file("ravi-companion.json").is_file() {
-                builder = builder.initialization_script(if s.greeting {
+                builder = builder.initialization_script(if s.greeting && s.greeting_set_by_user {
                     "try { localStorage.setItem('rv-ravi-start-off','0'); } catch {}"
                 } else {
                     "try { localStorage.setItem('rv-ravi-start-off','1'); } catch {}"
@@ -1043,7 +1061,7 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     if tray.is_err() || (!s.resident_start && !crate::display_mode::starts_without_main()) {
         open_main(app.handle()).map_err(std::io::Error::other)?;
     }
-    if s.resident_start && s.greeting {
+    if s.resident_start && s.greeting && s.greeting_set_by_user {
         notify("hello");
     }
     if s.resident_start && s.always_visible {
@@ -1083,6 +1101,17 @@ fn tray_image() -> tauri::image::Image<'static> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn greeting_off_unless_user_chose_it() {
+        assert!(!Settings::default().greeting);
+        // 0.9.45 파일: 기본값 true 가 적혀 있지만 사람이 고른 기록은 없다 → 꺼짐.
+        let old: Settings = serde_json::from_str(r#"{"size":160,"greeting":true}"#).unwrap();
+        assert!(!migrate_greeting(old).greeting);
+        let chosen: Settings =
+            serde_json::from_str(r#"{"size":160,"greeting":true,"greeting_set_by_user":true}"#)
+                .unwrap();
+        assert!(migrate_greeting(chosen).greeting);
+    }
     #[test]
     fn notifications_quiet_limit_mute_midnight_and_migration() {
         let mut s: Settings =

@@ -25,8 +25,8 @@ const lifecycle=mountRaviLifecycle({idleMs:60_000,pending:()=>window.pending,inv
  if(name==='ravi_prepare_quit'){if(window.failPrepare)throw Error('fixture');return {lock:'locked'};}
  return null;
 }});
-window.test={...lifecycle,setLang,autoIdle(){lifecycle.destroy();mountRaviLifecycle({idleMs:0,pending:()=>false,invoke:async()=>window.state});},frame:ms=>rig.renderFrame(openingFrame(ms)),
- opening(){installFirstRunBarrier();window.released=0;window.actions=0;document.querySelector('#fixture-action').onclick=()=>window.actions++;
+window.test={...lifecycle,setLang,autoIdle(){lifecycle.destroy();mountRaviLifecycle({idleMs:0,autoRest:true,pending:()=>false,invoke:async()=>window.state});},frame:ms=>rig.renderFrame(openingFrame(ms)),
+ opening(){localStorage.setItem('rv-ravi-start-off','0');sessionStorage.removeItem('rv-ravi-start-seen');installFirstRunBarrier();window.released=0;window.actions=0;document.querySelector('#fixture-action').onclick=()=>window.actions++;
  const player=mountRaviOpening(host,()=>{window.grounded=host.querySelector('[id$="ravi-character"]').getAttribute('transform');finishRaviLanding();});
  afterRaviLanding(()=>window.released++);host.onclick=player.finish;return true;}
 };
