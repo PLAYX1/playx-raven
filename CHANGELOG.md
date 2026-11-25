@@ -1,5 +1,29 @@
 # 변경 기록
 
+## 0.9.47
+
+### 한국어
+
+- **작은 창도 깔끔하게:** 창을 카톡처럼 폭 400px까지 줄여도 쓸 수 있습니다. 좁으면 왼쪽 메뉴가 아이콘 줄로 바뀌고, 이야기는 목록과 대화방이 한 칸에서 번갈아 보입니다(← 뒤로 · Esc). 글자가 세로로 쌓이거나 단추 글자가 꺾이지 않습니다.
+- **대화 목록:** 미리보기 두 줄, 시간과 안 읽음 배지, 「전체 · 안 읽음」 거르기. 라비는 목록 맨 위에 고정됩니다.
+- **대화방 위쪽 줄 한 줄로:** 이름 · 찾기 · ⋯ 만 남기고 알림·정보·방 설정은 ⋯ 안으로 옮겼습니다.
+- **광장 글쓰기:** 평소에는 한 줄로 접히고, 「모두 ▾」 하나로 누구에게 보일지 고릅니다.
+- **라비가 열쇠 없이 바로 답합니다:** 「내 돈 얼마야」, 「오늘 매출」, 「새 주문 있어?」, 「장터 열어 줘」, 「받기 주소 보여 줘」. 「철수에게 10 RVN 보내 줘」는 보내기 화면을 채워 두기만 하고, 보내기는 직접 누릅니다.
+- **떠 있던 라비 동그라미를 없앴습니다:** 라비는 왼쪽 메뉴 아래와 대화 목록 맨 위에 있습니다.
+- **맨 위 줄 정리:** 글자 크기·화면 밝기는 설정 「화면」으로 옮겼습니다. 백업이 안 됐으면 지갑 맨 위에 「지금 백업」이 나옵니다.
+- **단축키:** ⌘1~4 화면 이동 · ⌘, 설정 · ⌘N 새 쪽지 · ⌘[ 뒤로 · ⌥↑↓ 이전·다음 방.
+
+### English
+
+- **Small windows look right:** The app now works down to 400px wide, like a messenger. Narrow windows get an icon rail, and Chat shows the list or the room in one column (← back · Esc). No more letters stacking vertically or buttons wrapping.
+- **Chat list:** two-line previews, time and unread badges, an "All · Unread" filter. Ravi stays pinned at the top.
+- **One-line room header:** name · search · ⋯; notifications, info and room settings moved into ⋯.
+- **Square composer:** collapses to one line; pick the audience with a single "Everyone ▾" chip.
+- **Ravi answers instantly without an AI key:** "what's my balance", "today's sales", "new orders?", "open market", "show my receive address". "Send 10 RVN to Chulsoo" only fills in the send screen; you press Send yourself.
+- **The floating Ravi bubble is gone:** Ravi lives at the bottom of the left rail and at the top of the chat list.
+- **Top bar cleaned up:** text size and theme moved to Settings → Display. If your wallet isn't backed up, a "Back up now" banner shows at the top of Wallet.
+- **Shortcuts:** ⌘1–4 screens · ⌘, settings · ⌘N new message · ⌘[ back · ⌥↑↓ previous/next room.
+
 ## 0.9.46
 
 ### 한국어
