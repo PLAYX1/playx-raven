@@ -2,8 +2,10 @@
  * 11-17 레이븐볼트 단순화 2판 — 데스크탑 첫 화면 「지갑」(페이블 판정: 「내 것」→「지갑」, 묶음 이름 「보관함」 · 폰과 같은 말)(대표 「다 진행하자」 · 시안 debate/shots2/9-데스크탑.png).
  *
  * 이 파일은 **화면 배치·문구만** 맡는다. 노드·지갑·채굴·발행 동작은 main.ts 의 기존 함수를 부를 뿐이다.
- *  - 맨 위 「라비 한 줄」: 라비 얼굴(이 화면에 하나) + 말풍선 「오늘 할 일 N개 · …처럼 말해도 돼요」 + 마이크.
+ *  - 「라비 한 줄」(내 돈 카드 아래): 라비 얼굴(이 화면에 하나) + 말풍선 「…처럼 말해도 돼요」(좁으면 「라비에게 물어보세요」) + 마이크.
+ *    0.9.48: 「오늘 할 일 N개」는 뺐다 — 바로 아래 카드가 같은 것을 보여 준다(같은 내용 두 번 금지).
  *  - 노드 한 줄: 「공개 장부 받는 중 62% · 약 2시간 남음」 — 남은 시간은 이 창이 본 실제 속도로만 잰다(모르면 %만).
+ *    0.9.48: 첫 화면 노드 알약(#v2-node)은 뺐다 — 노드 상태는 왼쪽 메뉴 아래 점(#d-sum-row) 한 곳. 자리가 없으면 아무것도 안 그린다.
  *  - 내 돈 카드: 「약 ○원」 한 줄(기존 rvn_rate 환산 · 못 읽으면 숫자를 짐작하지 않는다).
  *  - 새 자산 만들기 카드 셋: 작품 한 점 5 · 티켓 100 · 내 이름표 500 RVN(easy-create BURN 과 같은 값).
  *    장부를 다 받기 전에는 「장부 다 받으면 켜져요」 — 적는 것은 되고, 새기기(발행)만 기다린다(create-page·발행 마법사가 막는다).
@@ -19,7 +21,8 @@ export type V2Asset = { name: string; amount: number; mine: boolean };
 
 export const V2_COPY = {
   say: "「이 폴더 음반으로 올려 줘」처럼 말해도 돼요",
-  sayCount: "오늘 할 일 {0}개 · 「이 폴더 음반으로 올려 줘」처럼 말해도 돼요",
+  /** 좁은 창(<760)의 같은 단추 — 긴 예시는 말줄임으로 잘리기만 했다. */
+  sayShort: "라비에게 물어보세요",
   nodeUnknown: "공개 장부 확인 중",
   nodeOk: "공개 장부 다 받음",
   nodeSync: "공개 장부 받는 중 {0}%",
@@ -45,7 +48,7 @@ export const V2_COPY = {
 /** 영어·일본어·중국어(같은 한국어가 사전에 이미 있으면 그것이 이긴다). */
 const COPY: Record<string, [string, string, string]> = {
   [V2_COPY.say]: ["You can just say “publish this folder as an album”", "「このフォルダをアルバムで出して」のように話しても大丈夫です", "也可以直接说“把这个文件夹发布成专辑”"],
-  [V2_COPY.sayCount]: ["{0} things for today · you can just say “publish this folder as an album”", "今日やること {0}件 · 「このフォルダをアルバムで出して」のように話しても大丈夫です", "今天要做 {0} 件 · 也可以直接说“把这个文件夹发布成专辑”"],
+  [V2_COPY.sayShort]: ["Ask Ravi", "ラビに聞いてください", "问问拉比"],
   [V2_COPY.nodeUnknown]: ["Checking the public ledger", "公開台帳を確認中", "正在检查公开账本"],
   [V2_COPY.nodeOk]: ["Public ledger fully received", "公開台帳を受信済み", "公开账本已全部接收"],
   [V2_COPY.nodeSync]: ["Receiving the public ledger {0}%", "公開台帳を受信中 {0}%", "正在接收公开账本 {0}%"],
@@ -227,6 +230,7 @@ export function wireDeskV2(d: V2Deps): void {
       // 말 입력을 못 쓰는 창이면 조용히 넘어가지 않는다 — 어르신은 「안 되네」로 끝난다. 글로 하시라고 한 줄.
       const say = document.getElementById("v2-ravi-t");
       if (say) setCopyText(say, () => t(V2_COPY.noMic));
+      document.getElementById("v2-ravi-say")?.setAttribute("data-say", "long"); // 좁은 창도 이 안내는 짧은 말로 덮지 않는다
       (document.getElementById("chat-q") as HTMLTextAreaElement | null)?.focus();
     }, 400);
   };
@@ -246,11 +250,12 @@ export function wireDeskV2(d: V2Deps): void {
   });
   const nav = $("v2-nav-node"); if (nav) nav.onclick = (e) => { e.preventDefault(); d.openNode(); };
   const rep = $("sx-report"); if (rep) rep.onclick = () => d.openReport();
-  // 알림 종: 백업 확인 필요(주의·문제)·잠금 문제 수 — 안 본 이야기 글은 왼쪽 「이야기」 배지, 노드는 노드 줄이 이미 말한다(같은 것을 두 번 세지 않는다). 누르면 옛 「알림 · 할 일 · 최근 거래 · 바로 가기」 묶음을 펼치고 접는다.
+  // 알림 종: 잠금 문제 수만 센다 — 백업은 맨 위 띠(#rv-backup-banner), 안 본 이야기 글은 왼쪽 「이야기」 배지, 노드는 왼쪽 아래 점이 이미 말한다
+  // (0.9.48 대표 「똑같은 내용이 반복으로 안 나오게」 — 백업 띠와 종 「1」이 같은 것을 두 번 셌다). 누르면 옛 「알림 · 할 일 · 최근 거래 · 바로 가기」 묶음을 펼치고 접는다.
   const bell = $("v2-bell"), bellN = $("v2-bell-n"), old = $("v2-old");
   const countBell = () => {
     if (!bell || !bellN) return;
-    const n = document.querySelectorAll('#rv-home-lock-state[data-tone="bad"], #rv-home-backup-state:is([data-tone="bad"],[data-tone="warn"])').length;
+    const n = document.querySelectorAll('#rv-home-lock-state[data-tone="bad"]').length;
     bellN.hidden = n === 0; bellN.textContent = n > 99 ? "99+" : String(n);
     const label = n ? tf(V2_COPY.bellN, n) : t(V2_COPY.bell);
     bell.setAttribute("aria-label", label); bell.title = label;
@@ -269,15 +274,15 @@ export function wireDeskV2(d: V2Deps): void {
   countBell();
   // 지금 첫 화면인가 — CSS :has() 를 못 읽는 옛 WebView 도 같은 결과가 나게 몸통 표시를 둔다(showPage 가 바꾼다).
   markHome(!!document.querySelector("#page-home.on"));
-  // 라비 말풍선: 오늘 카드 수를 센다(카드 칸이 바뀔 때마다).
-  const cards = $("rv-home-cards"), say = $("v2-ravi-t");
-  const count = () => {
-    if (!cards || !say) return;
-    const n = cards.querySelectorAll(".rv-card").length;
-    setCopyText(say, () => n > 0 ? tf(V2_COPY.sayCount, n) : t(V2_COPY.say));
-  };
-  if (cards) new MutationObserver(count).observe(cards, { childList: true });
-  count();
+  // 라비 말풍선: 늘 같은 말(카드 수는 세지 않는다 — 바로 아래 카드가 보여 준다). 좁은 창은 짧은 말(CSS 가 고른다).
+  const say = $("v2-ravi-t");
+  if (say) setCopyText(say, () => t(V2_COPY.say));
+  const sayBtn = $("v2-ravi-say");
+  if (sayBtn && !sayBtn.querySelector(".v2-ravi-short")) {
+    const short = document.createElement("span"); short.className = "v2-ravi-short";
+    setCopyText(short, () => t(V2_COPY.sayShort));
+    sayBtn.append(short);
+  }
 }
 
 /**

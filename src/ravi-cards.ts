@@ -61,6 +61,8 @@ export type CardsInput = {
   talkNew: number; talkAt: number | null;
   /** 금액 글(화면은 fmtRvn, 시험은 같은 꼴의 함수). */
   rvn: (n: number) => string;
+  /** 0.9.48 같은 화면의 다른 자리가 이미 말하는 카드 id(데스크탑: 「money」= 내 돈 카드의 「들어오는 중」 줄, 「order」= 새 주문 띠). 고르는 규칙은 그대로, 보이기만 뺀다. */
+  hide?: readonly string[];
 };
 
 const card = (id: string, kind: CardKind, text: string, values: readonly (string | number)[], source: CardSource, at: number | null, opens: CardOpen): Card =>
@@ -79,7 +81,7 @@ export function allCards(i: CardsInput): Card[] {
   if (i.confirmed === 0 && i.anyTx === false && !(i.incoming && i.incoming > 0)) out.push(card("first-receive", "next", CARD_COPY.firstReceive, [], "node", i.nodeAt, "receive"));
   return out;
 }
-export const cards = (i: CardsInput): Card[] => allCards(i).slice(0, MAX_CARDS);
+export const cards = (i: CardsInput): Card[] => allCards(i).filter((c) => !i.hide?.includes(c.id)).slice(0, MAX_CARDS);
 
 const hhmm = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 

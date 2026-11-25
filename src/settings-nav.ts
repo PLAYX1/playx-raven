@@ -36,6 +36,8 @@ export function showSettingsTopic(key: string, focus = false): void {
   const changed = key !== current;
   current = key;
   for (const s of sections()) s.hidden = s.dataset.sxPane !== key;
+  // 0.9.48: 넓은 창에서 지금 열린 주제로 가는 바로 가기 카드(「쉬운 설정」 등)를 감추는 기준(responsive.css) — 같은 칸이 두 번 보이지 않게.
+  (sx as HTMLElement).dataset.sxCur = key;
   document.querySelectorAll<HTMLElement>(".sx-list .sx-it").forEach((b) => b.setAttribute("aria-current", String(b.dataset.sxGo === key)));
   // 「고급」은 주제 자체가 접어 둔 칸이다 — 열고 들어온 사람에게 또 접힌 상자를 내밀지 않는다.
   if (key === "advanced") { const d = document.querySelector<HTMLDetailsElement>("#page-settings details.advanced"); if (d) d.open = true; }
@@ -91,6 +93,7 @@ export function mountSettingsNav(): void {
   new MutationObserver(() => route(page)).observe(page, { childList: true, subtree: true });
 
   sx.classList.add("sx-b");
+  (sx as HTMLElement).dataset.sxCur = current;
   showSettingsTopic(current);
 
   const scroll = Element.prototype.scrollIntoView;

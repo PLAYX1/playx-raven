@@ -2681,6 +2681,7 @@ export const SETTINGS_TALK_090_COPY: Record<string, [string, string, string]> = 
   "여기 이름은 「이야기」에서 보이는 이름과 같은 이름표예요. 한 곳에서 바꾸면 둘 다 바뀌어요.": ["This name is the same name tag shown in Chat. Change it in one place and both change.", "ここの名前は「トーク」で表示される名前と同じ名札です。一か所で変えると両方変わります。", "这里的名字和「聊天」中显示的名字是同一个名牌。在一处修改，两处都会改变。"],
   // 11-03 차분한 표시등 · 쉬운 한 줄 · 감사 반영
   "RVN 노드 꺼짐 · 눌러서 켜기": ["RVN node off · click to turn on", "RVN ノード停止中・押して起動", "RVN 节点已关闭 · 点击开启"],
+  "노드 꺼짐 · 켜기": ["Node off · turn on", "ノード停止中・起動", "节点已关闭 · 开启"],
   "따라잡는 중이에요. 방금 들어온 돈이 늦게 보일 수 있어요.": ["Catching up. Money that just arrived may show up late.", "追いつき中です。今届いたお金の表示が遅れることがあります。", "正在追赶同步，刚到账的资金可能显示较晚。"],
   "장부를 여는 중이에요. 처음이면 몇 분 걸려요.": ["Opening the ledger. The first time can take a few minutes.", "台帳を開いています。初回は数分かかります。", "正在打开账本，首次可能需要几分钟。"],
   "노드가 꺼져 있어 잔액·입금 확인·보내기가 멈춰 있어요.": ["The node is off, so balance, deposit checks and sending are paused.", "ノードが停止しているため、残高・入金確認・送金が止まっています。", "节点已关闭，余额、到账确认和发送都已暂停。"],

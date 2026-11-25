@@ -2308,10 +2308,11 @@ type DotSum = { node: "unknown" | "ok" | "sync" | "warm" | "down"; pct: number; 
 const dotSum: DotSum = { node: "unknown", pct: 0, relay: null, out: null };
 
 /** 점 하나의 색과 말. 순서가 곧 급함이다. */
-function sumOfDots(s: DotSum, mode: string): { cls: "on" | "warn" | "bad" | "off"; say: () => string } {
+function sumOfDots(s: DotSum, mode: string): { cls: "on" | "warn" | "bad" | "off"; say: () => string; short?: () => string } {
   if (s.node === "unknown") return { cls: "off", say: () => t("확인 중…") };
   // 11-03: 문제일 때는 무엇이 왜인지 사람 말로(「끊김」만으로는 뭘 해야 할지 모른다). 누르면 바로 노드 화면(wireDotSum).
-  if (s.node === "down") return { cls: "bad", say: () => t("RVN 노드 꺼짐 · 눌러서 켜기") };
+  // 0.9.48: 넓은 메뉴(196px)에서 긴 말이 두 줄로 꺾였다 — 보이는 글자는 짧게, 긴 말은 title·화면 읽기에.
+  if (s.node === "down") return { cls: "bad", say: () => t("RVN 노드 꺼짐 · 눌러서 켜기"), short: () => t("노드 꺼짐 · 켜기") };
   if (s.node === "warm") return { cls: "warn", say: () => t("장부 여는 중") };
   if (mode === "shop" && s.relay === false) return { cls: "warn", say: () => t("손님 화면 꺼짐") };
   if (s.node === "sync") {
@@ -2327,7 +2328,7 @@ function paintDotSum() {
   const label = document.getElementById("d-sum-t");
   const r = sumOfDots(dotSum, modeNow);
   if (d) d.className = `dot ${r.cls}`;
-  if (label) setCopyText(label, r.say);
+  if (label) setCopyText(label, r.short ?? r.say);
   const row = document.getElementById("d-sum-row");
   if (row) { row.title = r.say(); row.setAttribute("aria-label", r.say()); row.dataset.tone = r.cls === "on" ? "ok" : r.cls; }
   paintV2Node({ node: dotSum.node, pct: dotSum.pct });
@@ -2777,7 +2778,13 @@ const homeCards: Omit<CardsInput, "rvn"> = { incoming: null, confirmed: null, an
 function setHomeCards(patch: Partial<typeof homeCards>): void {
   Object.assign(homeCards, patch);
   const host = document.getElementById("rv-home-cards");
-  if (host) paintCards(host, { ...homeCards, rvn: (n) => fmtRvn(n) }, openHomeCard);
+  // 0.9.48 대표 「똑같은 내용이 반복으로 안 나오게」: 새 주문은 위 가운데 띠(#neworder)가 떠 있는 동안 그 띠 한 곳이 말한다 —
+  // 띠와 「새 주문 2건」 카드가 한 화면에 같이 떠 있었다. 띠를 닫으면(주문봤다) 수도 0 이 되니, 카드는 띠가 없을 때만의 자리다.
+  // 들어오는 돈도 같은 까닭으로 바로 위 내 돈 카드의 「들어오는 중 … · 확인 중」 줄 한 곳에서 말한다(카드의 「기록 보기」는 돈 카드 「기록 ›」과 같은 단추였다).
+  const toast = document.getElementById("neworder");
+  // 「first-receive」(받기를 누르면…)의 「받기 화면 열기」도 바로 위 돈 카드 「받기」와 같은 단추라 데스크탑에서는 감춘다.
+  const hide = ["money", "first-receive", ...(toast && !toast.hidden ? ["order"] : [])];
+  if (host) paintCards(host, { ...homeCards, hide, rvn: (n) => fmtRvn(n) }, openHomeCard);
 }
 function openHomeCard(target: CardOpen): void {
   switch (target) {
@@ -19134,6 +19141,7 @@ function 띠띄우기(제목: string) {
   const t = document.getElementById("no-title");
   if (t) t.textContent = 제목;
   띠.hidden = false;
+  setHomeCards({}); // 띠가 떴으니 같은 말을 하는 주문 카드는 내린다
 }
 
 /**
@@ -19922,7 +19930,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   const navTips = () => {
     const pairs: [HTMLElement, string][] = [];
     document.querySelectorAll<HTMLElement>("nav a[data-page]").forEach((a) => pairs.push([a, a.querySelector("span:not(.ordbadge)")?.textContent?.trim() || ""]));
-    for (const [row, txt] of [["d-sum-row", "d-sum-t"], ["d-link-row", "d-link-t"], ["upnag", "upnag"]] as const) {
+    // 노드 점(d-sum-row)은 paintDotSum 이 긴 말(「…눌러서 켜기」)을 title 에 직접 쓴다 — 보이는 짧은 글자로 덮지 않는다(0.9.48).
+    for (const [row, txt] of [["d-link-row", "d-link-t"], ["upnag", "upnag"]] as const) {
       const el = document.getElementById(row); if (el) pairs.push([el, document.getElementById(txt)?.textContent?.trim() || ""]);
     }
     for (const [el, label] of pairs) if (label && el.title !== label) { el.title = label; el.setAttribute("aria-label", label); }

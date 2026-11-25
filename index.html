@@ -4056,26 +4056,31 @@
              옛 칸(알림·최근 거래·라비 대화·가게 매출·바로 가기)은 지우지 않고 아래 접힌 묶음(.v2-old)에 둔다 — 다른 코드가 같은 id 를 그린다. -->
         <div class="v2-head">
           <h1>지갑</h1>
-          <button id="v2-node" class="v2-node" type="button" data-tone="off" aria-live="polite"><i class="v2-dot" aria-hidden="true"></i><span id="v2-node-t">공개 장부 확인 중</span></button>
           <!-- 11-17 알림 종: 안 본 이야기 글 + 백업·잠금 문제 수. 누르면 아래 「알림 · 할 일 · 최근 거래」 묶음을 펼친다(받은 쪽지·백업 경고 입구가 첫 화면에서 사라지지 않게). -->
           <button id="v2-bell" class="v2-bell" type="button" aria-expanded="false" aria-controls="v2-old" aria-label="알림" title="알림"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg><span id="v2-bell-n" class="v2-bell-n" hidden>0</span></button>
         </div>
-        <div class="v2-ravi" role="region" aria-label="라비">
-          <span id="v2-ravi-face" class="v2-ravi-face" aria-hidden="true"></span>
-          <button id="v2-ravi-say" class="v2-ravi-say" type="button"><span id="v2-ravi-t">「이 폴더 음반으로 올려 줘」처럼 말해도 돼요</span></button>
-          <button id="v2-ravi-mic" class="v2-mic" type="button" aria-label="라비에게 말로 하기" title="라비에게 말로 하기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
-        </div>
-        <!-- 11-11 라비 카드(src/ravi-cards.ts): 최대 3장 · 돈 → 주문 → 준비된 것(폰과 같은 순서). 여는 단추만. -->
-        <div id="rv-home-cards" class="rv-cards" role="region" aria-label="오늘 볼 것" aria-live="polite"></div>
-        <div class="v2-row">
+        <!-- 0.9.48 대표 「쉽고 세련되고 · 같은 내용 두 번 금지」: 첫 화면 한 가지 일 = 내 돈. 제목 바로 아래 돈 카드(받기·보내기) → 라비 한 줄 → 오늘 카드.
+             노드 알약은 뺐다(기술 말 — 문제 있을 때만 왼쪽 메뉴 아래 점 하나가 말한다) · 폰 연결은 아래 「더 가기」 줄로. 넓은 창은 돈 카드 | 라비·오늘 카드 두 칸. -->
+        <div class="v2-top">
           <div class="v2-money">
             <div class="overview" aria-labelledby="overview-title">
               <div class="v2-money-top"><h2 id="overview-title">내 돈</h2><button id="rv-home-activity-all" class="v2-link" type="button">기록 ›</button></div>
               <div class="overview-values"><strong id="overview-balance">확인 못 함</strong><span id="v2-krw" class="v2-krw">원화 환산 확인 중</span></div>
               <span id="overview-incoming-row" class="v2-incoming" hidden>들어오는 중 <strong id="overview-incoming"></strong> · 확인 중</span>
-              <div class="overview-actions" role="group" aria-label="잔액 관련 작업"><button id="overview-receive" type="button">받기</button><button id="rv-home-send" type="button">보내기</button><button id="v2-phone" class="v2-phone" type="button">폰 연결</button></div>
+              <div class="overview-actions" role="group" aria-label="잔액 관련 작업"><button id="overview-receive" type="button">받기</button><button id="rv-home-send" type="button">보내기</button></div>
             </div>
           </div>
+          <div class="v2-today">
+            <div class="v2-ravi" role="region" aria-label="라비">
+              <span id="v2-ravi-face" class="v2-ravi-face" aria-hidden="true"></span>
+              <button id="v2-ravi-say" class="v2-ravi-say" type="button"><span id="v2-ravi-t">「이 폴더 음반으로 올려 줘」처럼 말해도 돼요</span></button>
+              <button id="v2-ravi-mic" class="v2-mic" type="button" aria-label="라비에게 말로 하기" title="라비에게 말로 하기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
+            </div>
+            <!-- 11-11 라비 카드(src/ravi-cards.ts): 최대 3장 · 돈 → 주문 → 준비된 것(폰과 같은 순서). 여는 단추만. -->
+            <div id="rv-home-cards" class="rv-cards" role="region" aria-label="오늘 볼 것" aria-live="polite"></div>
+          </div>
+        </div>
+        <div class="v2-row">
           <div class="v2-create" id="v2-create" role="region" aria-labelledby="v2-create-title">
             <div class="v2-create-top"><h2 id="v2-create-title">새 자산 만들기</h2><span id="v2-create-wait" class="v2-wait" hidden>장부 다 받으면 켜져요</span></div>
             <div class="v2-kinds">
@@ -4089,11 +4094,11 @@
         <div class="v2-mine" role="region" aria-labelledby="v2-mine-title">
           <div class="v2-mine-top"><h2 id="v2-mine-title">보관함</h2><button id="v2-mine-all" class="v2-link" type="button">모두 보기 ›</button></div>
           <div id="v2-mine-list" class="v2-mine-list"></div>
+          <!-- 0.9.48: 「지갑」(= 돈 카드 「기록 ›」과 같은 화면)·「판매 대금 받기」(= 왼쪽 메뉴)는 같은 단추가 두 번이라 뺐다. 폰 연결은 돈 카드에서 여기로. -->
           <div class="v2-more" role="group" aria-label="더 가기">
-            <button type="button" class="v2-link" data-v2-go="wallet">지갑</button>
+            <button type="button" class="v2-link" id="v2-phone">폰 연결</button>
             <button type="button" class="v2-link" data-v2-go="artist">아티스트 이름표</button>
             <button type="button" class="v2-link" data-v2-go="profile">내 소개</button>
-            <button type="button" class="v2-link" data-v2-go="sales" data-seller-only hidden inert>판매 대금 받기</button>
           </div>
         </div>
         <div class="v2-old" id="v2-old" hidden>
