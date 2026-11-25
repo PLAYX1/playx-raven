@@ -49,6 +49,7 @@ import { rememberCompanionPage, restoreCompanionPage, mountCompanionBridge } fro
 import { browserPhotoApi, uploadArtistPhoto, photoErrorText, PhotoFailure } from "./artist-photo";
 import { seedErrorKind, seedErrorMessage, seedUnlockButton } from "./seed-recovery";
 import { createRaviAgentUI, TOOL_LABELS } from "./ravi-agent";
+import { raviInstantIntent, payeeExact, INSTANT_COPY_EN, instantCopy, instantCard, instantFallbackHtml, instantLang, weekStartYmd, type RaviInstant } from "./ravi-instant"; // 11-25 키 없이 바로 답
 import { isRaviSendRequest, isExplicitSendOrder, raviSendAnswerHtml, parseRichQuestion, raviRichAnswerHtml, publicAddressQuestion, raviPublicOfferHtml, raviPublicResultHtml, raviKeyHintHtml, raviFailureNextHtml, raviConnectedHtml, type PublicAddress } from "./ravi-chat";
 let raviAgentUI: ReturnType<typeof createRaviAgentUI> | null = null;
 import { createRaviHome } from "./ravi-home";
@@ -4954,6 +4955,8 @@ async function sendOwed() {
 
 /** 지금 열려 있는 화면. 끌어다 놓기가 **자리마다 다르게** 굴려면 필요하다. */
 let currentPage = "home";
+/** 가게가 있나(라비 바로 답·모르는 말 칩) — 홈 「오늘」과 라비가 shop_load 를 읽을 때 채운다. */
+let homeHasShop: boolean | null = null;
 /** 판매자 기능(게임 판매 대금 받기). 기본 꺼짐 — 켜면 판매 메뉴·바로가기가 나타난다. 이 컴퓨터에만 저장. */
 const SELLER_MODE_KEY = "rv-seller-mode";
 function sellerModeOn(): boolean { try { return localStorage.getItem(SELLER_MODE_KEY) === "1"; } catch { return false; } }
@@ -5168,6 +5171,7 @@ async function paintHomeToday(): Promise<void> {
   try {
     const sh = await invoke<any>("shop_load");
     // 가게 유무는 기존 코드와 같은 기준(이름이 있는가)으로 판정한다.
+    homeHasShop = !!(sh && (sh.name || sh.name_en));
     if (!sh || !(sh.name || sh.name_en)) { if (seq === homeTodaySeq) { box.hidden = true; body.innerHTML = `<p>${copyHtml("아직 가게가 없습니다")}</p>`; } return; }
     const ymd = todayYmd();
     const r: any = await invoke("ledger_range", { fromYmd: ymd, toYmd: ymd, tzOffsetMin: tzMin() });
@@ -12447,6 +12451,11 @@ function raviGuide(q: string) {
   // 정해 둔 안내로 답하지 못한 질문은 들고 있다가, 열쇠를 저장하면 AI 로 다시 묻는다(saveKeyCard).
   if (/data-answer-kind="(?:unsupported|clarify)"/.test(html)) raviHeldQuestion = q;
   // 정해 둔 안내로도 답이 없을 때(「아직 못 해요」) 빈손으로 끝내지 않는다 — 한 줄, 단추는 더하지 않는다.
+  // 11-25 모르는 말(한국어·영어) — 짧게, 바로 할 수 있는 일 다섯 칩 + AI 키 한 줄(재촉하지 않는다).
+  if (/data-guide="miss"/.test(html) && /[가-힣]|[a-z]{2}/i.test(q) && !/[ぁ-んァ-ヶ一-鿿]/.test(q)) {
+    chatHtml("ai", instantFallbackHtml(q, !!homeHasShop));
+    return;
+  }
   chatHtml("ai", /data-answer-kind="(?:unsupported|clarify)"/.test(html) ? html + raviKeyHintHtml(q, (["ko", "en", "ja", "zh"].includes(lang) ? lang : "en") as CoreLang) : html);
 }
 
@@ -12678,6 +12687,95 @@ async function raviTalkDo(x: RaviTalkIntent) {
   raviSaid(tf("「{0}」 초대 링크와 QR을 열었어요. 복사해서 보내고 싶은 곳에 붙여 넣으세요.", name));
 }
 
+/* ── 11-25 키 없이 바로 답(ravi-instant.ts) ─────────────────────────────────
+ * 숫자는 이 컴퓨터 IPC 가 준 것만 쓴다 — 못 읽으면 못 읽었다고 말한다(지어내지 않는다).
+ * 돈·복구 단어·지우기·공개 글·우체국/바깥 주소·AI 동의는 여기서 하지 않는다. 보내기는 칸만 채운다. */
+const INSTANT_PAGE_NAME: Record<string, string> = { trade: "장터", games: "게임", settings: "설정", backup: "백업", wallet: "지갑", assets: "자산", shop: "내 가게", home: "홈" };
+async function raviInstantDo(x: RaviInstant, q: string) {
+  const L = instantLang(q), c = instantCopy(L);
+  const go = (to: string, label: string) => `<button type="button" class="ghost" data-guide-go="${to}">${c(label)}</button>`;
+  const say = (kind: string, title: string, body: string, buttons = "") => chatHtml("ai", instantCard(L, kind, c(title), body, buttons));
+  const p = (text: string) => `<p>${text}</p>`;
+  const shopName = async () => { try { const sh = await invoke<any>("shop_load"); homeHasShop = !!(sh && (sh.name || sh.name_en)); return homeHasShop; } catch { return null; } };
+  if (x.kind === "balance") {
+    const [appLock, bal] = await Promise.allSettled([invoke<any>("app_lock_state"), invoke<any>("wallet_balance")]);
+    if (appLock.status === "fulfilled" && appLock.value?.locked) return say("balance", "내 지갑 잔액", p(c("앱이 잠겨 있어 잔액을 보여 드리지 않았어요. 잠금을 풀고 지갑을 열어 주세요.")), go("wallet", "지갑 열기"));
+    const b = bal.status === "fulfilled" ? bal.value : null, conf = Number(b?.confirmed), unc = Number(b?.unconfirmed || 0);
+    if (!b || b.confirmed === null || b.confirmed === undefined || !Number.isFinite(conf)) return say("balance", "내 지갑 잔액", p(c("잔액을 아직 못 읽었어요. 노드가 준비되면 지갑 화면에서 보여 드려요.")), go("wallet", "지갑 열기"));
+    return say("balance", "내 지갑 잔액",
+      `<p><b data-instant-value>${c("쓸 수 있는 돈 {0}", fmtRvn(conf))}</b></p>` +
+      (Number.isFinite(unc) && unc > 0 ? p(c("들어오는 중 {0} (확인되면 쓸 수 있어요)", fmtRvn(unc))) : "") +
+      `<p class="meta">${c("이 컴퓨터 지갑에서 방금 읽은 숫자예요.")}</p>`, go("wallet", "지갑 열기"));
+  }
+  if (x.kind === "sales" || x.kind === "orders") {
+    const has = await shopName();
+    if (has === false) return say(x.kind, x.kind === "orders" ? "새 주문" : x.period === "week" ? "이번 주 매출" : "오늘 매출", p(c("아직 가게가 없어요. 가게를 열면 매출을 알려 드릴게요.")), go("shop", "내 가게 열기"));
+    const pend = await invoke<any>("ledger_pending").catch(() => null);
+    const pendN = Number(pend?.count);
+    if (x.kind === "orders") {
+      return say("orders", "새 주문",
+        p(안본주문 > 0 ? c("주문표를 마지막으로 본 뒤 새 주문 {0}건", 안본주문) : c("새 주문은 없어요.")) +
+        (Number.isFinite(pendN) && pendN > 0 ? p(c("입금 기다리는 주문 {0}건", pendN)) : ""), go("orders", "주문 보기"));
+    }
+    const title = x.period === "week" ? "이번 주 매출" : "오늘 매출";
+    let r: any = null;
+    try { r = await invoke<any>("ledger_range", { fromYmd: x.period === "week" ? weekStartYmd() : todayYmd(), toYmd: todayYmd(), tzOffsetMin: tzMin() }); } catch { r = null; }
+    if (!r || has === null) return say("sales", title, p(c("가게 장부를 읽지 못했어요. 매출 화면에서 다시 확인해 주세요.")), go("sales", "매출 보기"));
+    const doubtful = !!r.mixed_currency || !!r.unreadable_rows || !Number.isFinite(Number(r.total));
+    const cur = r.currency ? " " + String(r.currency) : "";
+    const money = fmtRvn(Number(r.total || 0), { code: "", maxFraction: String(r.currency || "") === "RVN" ? 8 : 2 }) + cur;
+    return say("sales", title,
+      (doubtful ? p(c("통화가 섞였거나 못 읽은 줄이 있어 합계는 매출 화면에서 확인해 주세요.")) : `<p><b data-instant-value>${c("받은 금액 {0} · 판매 {1}건", money, Number(r.sales || 0))}</b></p>`) +
+      (Number.isFinite(pendN) && pendN > 0 ? p(c("아직 입금되지 않은 주문 {0}건은 넣지 않았어요.", pendN)) : ""), go("sales", "매출 보기"));
+  }
+  if (x.kind === "messages") {
+    const dm = tkDmUi?.unread() ?? null;
+    const lines = (dm === null ? p(c("쪽지는 이야기 화면을 한 번 열어야 확인할 수 있어요.")) : p(dm > 0 ? `<b data-instant-value>${c("안 읽은 쪽지 대화 {0}개", dm)}</b>` : c("안 읽은 쪽지는 없어요."))) +
+      (안본대화 > 0 ? p(c("이야기 방 새 글 {0}개", 안본대화)) : "");
+    return say("messages", "안 읽은 쪽지", lines, go("talk", "이야기 열기"));
+  }
+  if (x.kind === "receive") {
+    let r: any = null;
+    try { r = await invoke<any>("receive_address", { fresh: false }); } catch { r = null; }
+    const addr = String(r?.address ?? "").trim();
+    // 받기 화면과 같은 기준 — 노드가 「이 지갑 것」이라 확인한 주소만 보인다.
+    if (!looksLikeAddress(addr) || r?.mine !== true) return say("receive", "받을 주소", p(c("주소를 확인하지 못했어요. 받기 화면에서 다시 열어 주세요.")), go("receive", "받기 화면 열기"));
+    say("receive", "받을 주소", `<p><code class="addr" translate="no" data-instant-addr>${escapeHtml(addr)}</code></p><p class="meta">${c("이 컴퓨터의 노드가 확인한 내 지갑 주소예요.")}</p><p class="meta" data-instant-note aria-live="polite"></p>`,
+      `<button type="button" data-instant-copy>${c("주소 복사")}</button>${go("receive", "받기 화면 열기")}`);
+    const card = $("chat-log").lastElementChild;
+    const btn = card?.querySelector<HTMLButtonElement>("[data-instant-copy]");
+    if (btn) btn.onclick = async () => {
+      const ok = await copyOk(addr);
+      const note = card!.querySelector<HTMLElement>("[data-instant-note]");
+      if (note) note.textContent = ok ? (L === "en" ? "Copied." : "복사했어요.") : (L === "en" ? "Could not copy. Please copy it from the Receive page." : "복사하지 못했어요. 받기 화면에서 복사해 주세요.");
+    };
+    return;
+  }
+  if (x.kind === "send") {
+    // 🔴 준비만 — 보내기 칸을 열고 채운다. 검토·보내기는 사람이 누른다(reviewSend 도 부르지 않는다).
+    const hit = x.to ? payeeExact(x.to, loadPayees()) : null;
+    showPage("wallet");
+    await openSend("rvn");
+    if (hit) { pickPayee(hit.address); 라비가채운보내기 = true; }
+    if (x.amount !== null) setAmountRvn($("s-qty") as HTMLInputElement, x.amount);
+    composeChanged();
+    say("send", "보내기 준비",
+      p(c("보내기 화면을 열었어요.")) +
+      p(hit ? c("받을 사람: {0} (내 받을 사람 목록)", hit.name) : x.to ? c("「{0}」은(는) 내 받을 사람 목록에 없어 주소 칸을 비워 뒀어요.", x.to) : c("받을 주소를 직접 넣어 주세요.")) +
+      (x.amount !== null ? p(c("금액: {0} RVN", fmtQty(x.amount))) : "") +
+      `<p class="meta">${c("라비는 보내지 않아요. 주소·금액을 확인하고 직접 「검토」와 「보내기」를 눌러 주세요.")}</p>`);
+    return;
+  }
+  // 화면 열기
+  const name = INSTANT_PAGE_NAME[x.page] || x.page;
+  if (x.page === "backup" || x.page === "wallet") raviGo(x.page);
+  else if (x.page === "shop") raviOpenScreen("shop");
+  else showPage(x.page);
+  const target = x.page === "backup" ? "settings" : x.page;
+  if (currentPage !== target) return say("open", name, p(c("이 화면은 판매자 기능을 켜야 볼 수 있어요.")));
+  say("open", name, p(c("「{0}」 화면을 열었어요.", L === "en" ? (INSTANT_COPY_EN[name] || name) : name)));
+}
+
 async function chatSend() {
   if (raviRequestPending || !($("chat-q") as HTMLInputElement).value.trim()) return;
   raviRequestPending = true;
@@ -12721,6 +12819,11 @@ async function chatSendExisting() {
   // 11-10 이야기 말(연락 확인·방 열기·방 알림·초대) — 라비는 열고 준비만 한다(ravi-talk-intents.ts).
   const talkAsk = raviTalkIntent(q);
   if (talkAsk) { ($("chat-q") as HTMLInputElement).value = ""; chatSay("me", q); void raviTalkDo(talkAsk); return; }
+  // 11-25 키 없이 바로 답(ravi-instant.ts) — 잔액·매출·주문·쪽지·화면 열기·받기 주소·보내기 준비.
+  //   이 컴퓨터 IPC 만 읽는다(네트워크 없음). 자신 있게 맞을 때만 — 아니면 아래 기존 길(키 있으면 AI).
+  //   🔴 여기 오는 글은 사용자가 대화칸에 직접 치거나 말한 것뿐이다. 보내기는 준비만, 누르는 것은 사람.
+  const instant = raviInstantIntent(q);
+  if (instant) { ($("chat-q") as HTMLInputElement).value = ""; chatSay("me", q); await raviInstantDo(instant, q); return; }
   // 인물 설정·감정·체인 대답은 지연 묶음(ravi-persona-lazy.ts) — 처음 한 번만 읽는다. 읽기 실패면 null → 기존 경로.
   const persona = await loadRaviPersona();
   if (isRaviHelp(q)) {
