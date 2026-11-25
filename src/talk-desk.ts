@@ -21,9 +21,9 @@ export function talkIdle(on: boolean) {
   if (box) box.hidden = !on;
 }
 
-/** 0.9.47 좁은 창(900px 미만 — responsive.css)의 목록/대화 한 칸 바꾸기. 클래스 하나만 바꾼다(다시 읽기·다시 그리기 없음).
+/** 0.9.47 좁은 창(760px 미만 — responsive.css)의 목록/대화 한 칸 바꾸기. 클래스 하나만 바꾼다(다시 읽기·다시 그리기 없음).
  *  목록 칸은 숨기는 동안 굴린 자리를 잃으므로(display:none) 떠날 때 적어 두고 돌아올 때 되돌린다. */
-export const TALK_NARROW = "(max-width: 899px)";
+export const TALK_NARROW = "(max-width: 759px)";
 let listTop = 0;
 export function showList(on: boolean) {
   const page = $("page-talk");
@@ -97,11 +97,14 @@ export function wireTalkDesk(d: DeskDeps) {
     if (filter.value) { filter.value = ""; applyFilter(); } else filter.blur();
   });
 
-  // ── 0.9.47 좁은 창(900px 미만): 목록 또는 대화 한 칸 — 「뒤로」는 목록을, 목록에서 고르면 대화를 보인다 ──
+  // ── 0.9.47 좁은 창(760px 미만): 목록 또는 대화 한 칸 — 「뒤로」는 목록을, 목록에서 고르면 대화를 보인다 ──
   $("tk-back")?.addEventListener("click", () => showList(true));
   page.querySelector(".rooms")?.addEventListener("click", (ev) => {
     const hit = (ev.target as HTMLElement | null)?.closest("#tk-chats .tkc-row, #tk-friends .tkc-dm, #tk-rooms .room, #tk-newdm, #tk-mine, #rv-room-ravi");
-    if (hit) showList(false);
+    if (!hit) return;
+    showList(false);
+    // 방(쪽지)을 열면 곧바로 쓸 수 있게 입력칸에 손을 둔다(광장 피드·라비·내 글 서랍은 빼고)
+    if (hit.matches("#tk-chats .tkc-row, #tk-rooms .room:not([data-room=''])")) setTimeout(() => { if (!page.classList.contains("feedon")) (document.getElementById("tk-text") as HTMLTextAreaElement | null)?.focus({ preventScroll: true }); }, 0);
   }, true); // 먼저 듣는다 — 줄이 다시 그려지기 전에 굴린 자리를 적는다
 
   // ── 정보 칸(오른쪽) 열고 닫기 ───────────────────────────────────────

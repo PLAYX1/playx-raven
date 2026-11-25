@@ -96,6 +96,7 @@ export function mountSettingsNav(): void {
   const scroll = Element.prototype.scrollIntoView;
   Element.prototype.scrollIntoView = function (this: Element, arg?: boolean | ScrollIntoViewOptions) {
     revealFor(this);
+    if (this.closest?.("#page-settings .sx-pane")) page.classList.add("sx-detail"); // 0.9.47 좁은 창: 칸으로 데려갈 때는 주제 칸을 연다
     return scroll.call(this, arg as ScrollIntoViewOptions);
   };
 
@@ -103,6 +104,8 @@ export function mountSettingsNav(): void {
     const target = e.target as Element;
     const go = target.closest<HTMLElement>("[data-sx-go]");
     if (go) {
+      // 0.9.47 좁은 창(760 미만 — responsive.css)은 목록 → 주제 한 칸(밀어 넣기). 넓은 창에서는 이 클래스가 아무것도 안 바꾼다.
+      if (go.closest(".sx-list")) page.classList.add("sx-detail");
       showSettingsTopic(go.dataset.sxGo!, !go.dataset.sxTo);
       const to = go.dataset.sxTo && document.getElementById(go.dataset.sxTo);
       if (to) to.scrollIntoView({ block: "start" });
@@ -112,6 +115,16 @@ export function mountSettingsNav(): void {
     const page2 = target.closest<HTMLElement>("[data-go-page]");
     if (page2) document.querySelector<HTMLElement>(`nav a[data-page="${page2.dataset.goPage}"]`)?.click();
   });
+
+  // 0.9.47 좁은 창의 「← 설정」 — 주제 칸에서 목록으로 돌아간다.
+  const pane = page.querySelector<HTMLElement>(".sx-pane");
+  if (pane && !document.getElementById("sx-back")) {
+    const back = document.createElement("button");
+    back.type = "button"; back.id = "sx-back"; back.className = "ghost sx-back";
+    back.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span>설정</span>';
+    back.onclick = () => { page.classList.remove("sx-detail"); document.querySelector("main")?.scrollTo?.(0, 0); };
+    pane.prepend(back);
+  }
 
   // 목록 안에서 ↑↓ 로 옮겨 다닌다(맥 「시스템 설정」과 같은 손버릇).
   page.querySelector<HTMLElement>(".sx-list")?.addEventListener("keydown", (e: KeyboardEvent) => {

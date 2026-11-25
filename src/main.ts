@@ -114,6 +114,7 @@ import { wireMapCard } from "./map-card";
 import { wirePostHelp } from "./ravi-post-help";
 import "./ravi-post-help.css";
 import "./responsive.css"; // 0.9.47 창을 줄여도 세련되게 — 맨 뒤에 둔다
+import { wireTalkCompact } from "./talk-compact";
 import { Channel, invoke as rawInvoke } from "@tauri-apps/api/core";
 
 /**
@@ -5207,6 +5208,11 @@ async function paintHomeSafety(): Promise<void> {
     el.dataset.tone = summary[key].tone;
   }
   setHomeCards({ backupTone: summary.backup.tone, lockNone: summary.lock.label === "잠금 암호 없음", safetyAt: Date.now() });
+  // 0.9.47 백업 경고 한 줄(맨 위) + 왼쪽 메뉴 「지갑」 점 — 백업이 확인되면(good) 둘 다 사라진다.
+  const banner = $("rv-backup-banner");
+  banner.hidden = summary.backup.tone === "good";
+  if (summary.backup.tone === "bad") setCopyText($("rv-backup-banner-t"), () => t(summary.backup.label));
+  document.querySelector('nav a[data-page="home"]')?.classList.toggle("rv-needs-backup", !banner.hidden);
 }
 
 async function paintHome(): Promise<void> {
@@ -19816,6 +19822,17 @@ window.addEventListener("DOMContentLoaded", async () => {
     }
     for (const [el, label] of pairs) if (label && el.title !== label) { el.title = label; el.setAttribute("aria-label", label); }
   };
+  // 0.9.47 위 바(머리띠)를 없앤다(설계 최종안 8). 있던 것은 지우지 않고 옮긴다 — 손잡이(이벤트)는 그대로 따라간다.
+  //   라비 얼굴 → 왼쪽 메뉴 맨 아래 · 글자 크기·화면 밝기 → 설정 「화면」. 언어는 설정 「화면」과 첫 실행 화면에 그대로 있다.
+  //   맥만 신호등이 왼쪽 메뉴 위에 겹친다(titleBarStyle Overlay) — 그 자리를 비우는 일은 responsive.css(html.rv-mac).
+  if (/Mac/.test(navigator.platform)) document.documentElement.classList.add("rv-mac");
+  {
+    const nav = document.querySelector("body > nav"), rr = document.getElementById("rv-header-ravi");
+    if (nav && rr) { rr.classList.add("rv-rail-ravi"); nav.append(rr); }
+    const lang = document.querySelector("#page-settings .desktop-language-settings");
+    const parts = [document.getElementById("rv-textsize-label"), document.getElementById("rv-textsize"), document.querySelector('label[for="rv-theme"]'), document.getElementById("rv-theme")];
+    if (lang && parts.every(Boolean)) { const card = document.createElement("div"); card.className = "card sx-group rv-view-card"; card.append(...(parts as Element[])); lang.before(card); }
+  }
   navTips();
   const navEl = document.querySelector("body > nav");
   if (navEl) new MutationObserver(navTips).observe(navEl, { subtree: true, childList: true, characterData: true });
@@ -20878,6 +20895,8 @@ window.addEventListener("DOMContentLoaded", async () => {
       escapeHtml,
     }, bub, text),
   });
+  $("rv-backup-now").addEventListener("click", () => { showPage("settings"); document.querySelector<HTMLElement>('#page-settings .sx-it[data-sx-go="backup"]')?.click(); });
+  wireTalkCompact(); // 0.9.47 작은 창 카톡처럼 — 방 칸 폭(data-w) · 「⋯」 대신 누르기 · 「모두 ▾」 · 안 읽음 거르기
   $("tk-nmake").addEventListener("click", () => void talkMakeRoomGo());
   $("tk-ncancel").addEventListener("click", () => {
     $("tk-newbox").hidden = true;
