@@ -1,5 +1,17 @@
 # 변경 기록
 
+## 0.9.48
+
+### 한국어
+
+- **오락실 게임이 손님에게 잘 열립니다:** 게임을 올린 컴퓨터가 자기 바깥 주소에서 내 게임만 직접 내줍니다. 공개 길이 막혀도 손님이 바로 받아요. 남의 파일은 내주지 않고, 지갑이 잠겨 있어도 됩니다.
+- **지갑 첫 화면 정리:** 내 돈이 먼저 보이고, 같은 안내가 두 번 나오지 않습니다. 백업 알림은 지갑 맨 위 한 곳에만 나옵니다.
+
+### English
+
+- **Arcade games open reliably for players:** the computer that published a game now serves only its own games from its own public address, so players get them even when public IPFS gateways are blocked. It never serves other files, and works while the wallet is locked.
+- **Cleaner wallet home:** your balance comes first and the same notice never shows twice. The backup reminder lives in one place at the top of Wallet.
+
 ## 0.9.47
 
 ### 한국어
