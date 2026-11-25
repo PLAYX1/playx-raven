@@ -233,7 +233,7 @@ test('쪽지 화면 1137×780 · 1440×900: 가로 넘침 없음 · 입력칸이
 test('카톡 PC 결: 줄 64~72px · 46px 동그라미 · Ctrl/⌘+F 찾기 · 말풍선 폭 · 보내기는 글이 있을 때만 · Esc 로 닫기', async () => {
   const { page, errors } = await open(1440, 900);
   try {
-    // 목록 줄: 테두리 없고 64~72px, 동그라미 44~48px, 이름 15px 굵게, 마지막 말 13px.
+    // 목록 줄: 테두리 없고 64~72px, 동그라미 44~48px, 이름 15px 굵게, 마지막 말 14px 두 줄(0.9.47 설계 최종안 3).
     const row = await page.$eval(`#tk-chats [data-chat-key="${KIM}"]`, (r) => {
       const cs = getComputedStyle(r), av = r.querySelector('.tkc-av').getBoundingClientRect();
       return { h: Math.round(r.getBoundingClientRect().height), border: cs.borderTopWidth, radius: cs.borderTopLeftRadius, av: Math.round(av.width), avr: getComputedStyle(r.querySelector('.tkc-av')).borderRadius, name: getComputedStyle(r.querySelector('.tkc-name')).fontSize, last: getComputedStyle(r.querySelector('.tkc-last')).fontSize };
@@ -241,12 +241,12 @@ test('카톡 PC 결: 줄 64~72px · 46px 동그라미 · Ctrl/⌘+F 찾기 · �
     assert.ok(row.h >= 64 && row.h <= 72, `줄 높이 ${row.h}`);
     assert.equal(row.border, '0px'); assert.equal(row.radius, '0px');
     assert.ok(row.av >= 44 && row.av <= 48, `동그라미 ${row.av}`); assert.equal(row.avr, '50%');
-    assert.equal(row.name, '15px'); assert.equal(row.last, '13px');
-    // 왼쪽 줄은 앱 메뉴 하나 — 친구·채팅·광장은 목록 위 세 칸 탭(가로 한 줄 · 44px · 글자 한 줄).
+    assert.equal(row.name, '15px'); assert.equal(row.last, '14px');
+    // 왼쪽 줄은 앱 메뉴 하나 — 친구·채팅·광장은 목록 위 세 칸 탭(가로 한 줄 · 36px(위 줄 48 안) · 글자 한 줄).
     const seg = await page.$$eval('.tk-seg [role="tab"]', (b) => b.map((x) => ({ y: Math.round(x.getBoundingClientRect().top), h: Math.round(x.getBoundingClientRect().height), ws: getComputedStyle(x).whiteSpace })));
-    assert.equal(seg.length, 3); assert.equal(new Set(seg.map((r) => r.y)).size, 1, '가로 한 줄'); assert.ok(seg.every((r) => r.ws === 'nowrap' && r.h === 44), JSON.stringify(seg));
+    assert.equal(seg.length, 3); assert.equal(new Set(seg.map((r) => r.y)).size, 1, '가로 한 줄'); assert.ok(seg.every((r) => r.ws === 'nowrap' && r.h === 36), JSON.stringify(seg));
     assert.equal(await page.$('.tk-rail'), null, '두 번째 세로 줄 없음');
-    assert.ok(await page.$eval('.desktop-header', (h) => h.getBoundingClientRect().bottom) <= 40, '머리띠 40px');
+    assert.equal(await page.$eval('.desktop-header', (h) => getComputedStyle(h).display), 'none', '0.9.47 위 바 없음(설계 최종안 8)');
     // Ctrl/⌘+F → 목록 찾기 칸.
     const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
     await page.keyboard.down(mod); await page.keyboard.press('KeyF'); await page.keyboard.up(mod);
@@ -268,8 +268,8 @@ test('카톡 PC 결: 줄 64~72px · 46px 동그라미 · Ctrl/⌘+F 찾기 · �
     assert.equal(await page.$eval('.composer', (c) => c.classList.contains('tk-empty')), true, '빈 칸이면 보내기 흐림');
     await page.type('#tk-text', '안녕');
     assert.equal(await page.$eval('.composer', (c) => c.classList.contains('tk-empty')), false);
-    // 머리 단추는 그림(글자는 화면 읽기용) · 줄바꿈 없음.
-    for (const sel of ['#tk-info', '#tk-more']) {
+    // 머리 단추는 그림(글자는 화면 읽기용) · 줄바꿈 없음. 0.9.47: 정보·알림은 ⋯ 안으로(설계 최종안 4).
+    for (const sel of ['#tk-more']) { // 쪽지 머리에는 찾기가 없다(talk-dm.css)
       const b = await page.$eval(sel, (e) => ({ h: Math.round(e.getBoundingClientRect().height), w: Math.round(e.getBoundingClientRect().width), label: e.textContent.trim() }));
       assert.equal(b.h, 44, sel); assert.equal(b.w, 44, sel); assert.ok(b.label, `${sel} 화면 읽기 글자`);
     }

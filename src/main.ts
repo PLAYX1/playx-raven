@@ -115,6 +115,7 @@ import { wirePostHelp } from "./ravi-post-help";
 import "./ravi-post-help.css";
 import "./responsive.css"; // 0.9.47 창을 줄여도 세련되게 — 맨 뒤에 둔다
 import { wireTalkCompact } from "./talk-compact";
+import { wireDeskKeys } from "./desk-keys";
 import { Channel, invoke as rawInvoke } from "@tauri-apps/api/core";
 
 /**
@@ -20896,6 +20897,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     }, bub, text),
   });
   $("rv-backup-now").addEventListener("click", () => { showPage("settings"); document.querySelector<HTMLElement>('#page-settings .sx-it[data-sx-go="backup"]')?.click(); });
+  wireDeskKeys(); // 0.9.47 ⌘1~4 · ⌘, · ⌘N · ⌘[ · ⌥↑↓
   wireTalkCompact(); // 0.9.47 작은 창 카톡처럼 — 방 칸 폭(data-w) · 「⋯」 대신 누르기 · 「모두 ▾」 · 안 읽음 거르기
   $("tk-nmake").addEventListener("click", () => void talkMakeRoomGo());
   $("tk-ncancel").addEventListener("click", () => {

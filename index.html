@@ -4164,7 +4164,7 @@
         <!-- 11-14 라비 스토리는 장터 「바로 해 보는 게임」 맨 앞으로 옮겼다(대표·페이블: 게임 입구는 한 곳). 여기는 판매자 도구만. -->
         <button type="button" id="game-sales-open" data-seller-only hidden inert>게임 판매 대금 받기</button>
         <button type="button" id="creator-open" data-seller-only hidden inert>내 상품 올리기</button>
-        <button type="button" id="market-open" data-seller-only hidden inert>열린 장터(시험)</button>
+        <button type="button" id="market-open" title="열린 장터(시험)" data-seller-only hidden inert>열린 장터(시험)</button>
         <button type="button" id="bulk-open" data-seller-only hidden inert>상품 대량 등록</button>
         <button type="button" id="devices-open" data-seller-only hidden inert>기기 연결</button>
         <!-- 0.9.46: 「다른 판매자 게임 함께 보관하기(돕기)」 — 기능은 11-13 에 만들었지만 화면에 안 붙어 있었다. 기본 꺼짐. -->
@@ -4348,7 +4348,7 @@
           <details><summary>검증 신청서(선택)</summary><label class="creator-field">「검증됨」을 받으려면 이 신청서를 보내요(보내는 곳은 정해지면 알려 드려요)<textarea id="cw-request" rows="6" readonly></textarea></label></details>
         </div>
 
-        <button type="button" class="ghost" id="lk-s-toggle" aria-expanded="false" aria-controls="lk-seller">구매자 열람 요청 처리 (암호화한 상품)</button>
+        <button type="button" class="ghost" id="lk-s-toggle" title="구매자 열람 요청 처리 (암호화한 상품)" aria-expanded="false" aria-controls="lk-seller">구매자 열람 요청 처리 (암호화한 상품)</button>
         <div class="card" id="lk-seller" hidden>
           <h2>구매자 열람 요청 처리</h2>
           <p class="creator-note" role="note">구매자가 보낸 열람 요청 글을 확인해요: 글의 서명 → 결제 거래 → 결제한 주소와 서명한 주소가 같은지 → 이 상품의 정당한 결제인지 → 확인 수(6 이상)를 차례로 봐요. 모두 맞으면 구매자의 열람 공개키로 싼 열람 허가 글을 만들어요. 허가 글은 메신저·메일 등으로 직접 보내 주세요. 열쇠를 받은 사람이 남에게 주는 것은 기술로 막을 수 없어요.</p>

@@ -130,8 +130,9 @@ for (const lang of LANGS) {
 
 test('기억: 언어를 고르면 바뀌고 다시 켜도 그 말 · 한국어로 되돌리면 사전 파일 없이 동작', { timeout: 120_000 }, async () => {
   const page = await open({ lang: 'ko' });
-  await page.click('#desktop-preferences');
-  await page.click('#desktop-language-menu [data-language="it"]');
+  // 0.9.47 위 바를 없앴다(설계 최종안 8) — 언어는 설정 「화면」 칸에서 고른다.
+  const pick = async (l) => { await page.evaluate(() => document.querySelector('nav [data-page="settings"]').click()); await new Promise(r => setTimeout(r, 300)); await page.click(`.desktop-language-settings [data-language="${l}"]`); };
+  await pick('it');
   await page.waitForFunction(() => document.documentElement.lang === 'it', { timeout: 10000 });
   assert.equal(await page.evaluate(() => localStorage.getItem('playx-raven-lang')), 'it');
   assert.equal(await page.$eval('#desktop-language-name', n => n.textContent), 'Italiano');
@@ -142,8 +143,7 @@ test('기억: 언어를 고르면 바뀌고 다시 켜도 그 말 · 한국어�
   assert.match(await page.$eval('.desktop-language-settings .meta', n => n.textContent), /Italiano, spagnolo/);
   assert.equal(await page.$eval('.lang-ai-note span', n => n.textContent), 'Traduzione AI');
   // 다시 켰을 때 이어지는 것은 위의 lang 별 시험(저장된 말로 켜기)이 본다 — 이 가짜 환경은 불러올 때마다 저장소를 비운다.
-  await page.click('#desktop-preferences');
-  await page.click('#desktop-language-menu [data-language="ko"]');
+  await pick('ko');
   await page.waitForFunction(() => document.documentElement.lang === 'ko');
   await page.close();
 });
@@ -152,8 +152,8 @@ test('사전을 못 읽으면: 바꾸기는 거절(지금 말 그대로) · 켤 
   blockPack.add('ru');
   try {
     const page = await open({ lang: 'ko' });
-    await page.click('#desktop-preferences');
-    await page.click('#desktop-language-menu [data-language="ru"]');
+    await page.evaluate(() => document.querySelector('nav [data-page="settings"]').click()); await new Promise(r => setTimeout(r, 300));
+    await page.click('.desktop-language-settings [data-language="ru"]'); // 0.9.47 위 바 없음 — 설정 「화면」 칸
     await new Promise(r => setTimeout(r, 800));
     assert.equal(await page.evaluate(() => document.documentElement.lang), 'ko', '거절돼야 한다');
     assert.equal(await page.evaluate(() => localStorage.getItem('playx-raven-lang')), 'ko');
