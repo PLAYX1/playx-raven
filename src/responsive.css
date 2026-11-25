@@ -204,3 +204,6 @@ main :is(#lk-s-toggle, #market-open) { max-width:100%; white-space:nowrap !impor
 /* 좁은 광장 칸(s): 아래 줄 그림 단추를 조금 좁혀 「모두 ▾」 「올리기」까지 한 줄에 */
 #page-talk.feedon .chat[data-w="s"] .composer > :is(#tk-photo, #tk-ravi, #tk-stk, #tk-at) { width:38px !important; }
 #page-talk.feedon .chat[data-w="s"] .composer #tk-send { padding:0 14px !important; }
+/* 좁은 광장 칸(s): 글 아래 「답글 · 저장 · 공유 · ⋯」 한 줄이 넘치지 않게 단추 안쪽을 줄인다 */
+#page-talk .chat[data-w="s"] #tk-list.feedcards .facts button { padding:0 8px !important; gap:4px; }
+#page-talk .chat[data-w="s"] #tk-list.feedcards .facts { margin-left:-8px; }
