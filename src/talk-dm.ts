@@ -98,6 +98,8 @@ export function wireTalkDm(d: DmDeps) {
   let reached = true;
   let known = new Map<string, number>(); // 대화 → 마지막으로 알린(본) 남의 글 시각 — 새 쪽지 알림
   let primed = false;
+  /** 목록을 한 번이라도 읽었나 — 라비 「안 읽은 쪽지」가 읽기 전 0 을 「없어요」로 말하지 않게. */
+  let loaded = false;
   let busy = false;
   let tick: number | undefined;
 
@@ -419,6 +421,7 @@ export function wireTalkDm(d: DmDeps) {
       if (typeof r?.same_as_wallet === "boolean") samePerson = r.same_as_wallet;
       if (!local) reached = r?.reached !== false;
       threads = Array.isArray(r?.threads) ? r.threads : [];
+      loaded = true;
       roomsLast = r?.rooms_last && typeof r.rooms_last === "object" ? r.rooms_last : {};
       if (open) { const th = threads.find((x) => x.key === open!.key); if (th) th.unread = 0; }
       // 새 쪽지 알림: 처음 한 바퀴는 적기만 한다. 지금 열어 둔 대화는 알리지 않는다(눈으로 본다).
@@ -489,6 +492,8 @@ export function wireTalkDm(d: DmDeps) {
     start: async () => { paintSide(); await refresh(true); void refresh(false); },
     /** 앱이 켜져 있는 동안 새 쪽지를 살핀다(열쇠가 없으면 아무것도 안 한다). */
     watch: () => { schedule(); window.setTimeout(() => void refresh(false, true), 8_000); },
+    /** 라비 「안 읽은 쪽지」 — 안 읽은 대화 수(이 컴퓨터가 읽어 둔 목록 그대로). 아직 못 읽었으면 null. */
+    unread: (): number | null => loaded ? threads.reduce((n, th) => n + (th.unread > 0 ? 1 : 0), 0) : null,
     side: () => side,
     setSide: (s: Side) => setSide(s),
   };
