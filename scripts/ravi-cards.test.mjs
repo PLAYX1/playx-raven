@@ -20,7 +20,7 @@ const ids = (patch) => JSON.parse(JSON.stringify(C.allCards({ ...base, ...patch 
 test('모르면 카드가 없다(빈 상태)', () => { assert.deepEqual(ids({}), []); });
 test('순서: 돈 → 주문 → 폰 요청 → 문제 → 새 글', () => {
   assert.deepEqual(ids({ incoming: 12.5, newOrders: 2, phoneWaiting: 1, lockNone: true, backupTone: 'bad', storesOff: 3, talkNew: 4 }),
-    ['money', 'order', 'prepared', 'lock', 'backup', 'stores-off', 'message']);
+    ['money', 'order', 'prepared', 'lock', 'stores-off', 'message']);
   assert.equal(C.cards({ ...base, incoming: 1, newOrders: 1, phoneWaiting: 1, talkNew: 1 }).length, 3);
 });
 test('백업 warn 은 카드가 아니다(나쁨만), 첫 받기 안내는 확실히 0일 때만', () => {

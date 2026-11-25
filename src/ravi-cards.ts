@@ -72,7 +72,7 @@ export function allCards(i: CardsInput): Card[] {
   if (i.newOrders > 0) out.push(card("order", "order", CARD_COPY.order, [Math.floor(i.newOrders)], "shop", i.ordersAt, "shop-orders"));
   if (i.phoneWaiting > 0) out.push(card("prepared", "prepared", CARD_COPY.prepared, [Math.floor(i.phoneWaiting)], "phone", i.phoneAt, "phone-requests"));
   if (i.lockNone) out.push(card("lock", "problem", CARD_COPY.lockNone, [], "device", i.safetyAt, "lock"));
-  if (i.backupTone === "bad") out.push(card("backup", "problem", CARD_COPY.backup, [], "device", i.safetyAt, "backup"));
+  // 0.9.47: 백업 문제는 지갑 맨 위 띠(#rv-backup-banner) 한 곳에서만 말한다 — 같은 말을 두 번 보이지 않는다(대표 11-25 「똑같은 내용이 반복으로 안 나오게」).
   if (i.storesOff > 0) out.push(card("stores-off", "problem", CARD_COPY.storesOff, [Math.floor(i.storesOff)], "chain", i.chainAt, "chain"));
   if (i.headFail) out.push(card("head-fail", "problem", CARD_COPY.headFail, [], "chain", i.chainAt, "chain"));
   if (i.talkNew > 0) out.push(card("message", "message", CARD_COPY.message, [Math.floor(i.talkNew)], "talk", i.talkAt, "talk"));
