@@ -11808,7 +11808,8 @@ function paintRaviBadge(): void {
       b.setAttribute("aria-label", b.title);
     }
     const nm = document.getElementById("rv-header-ravi-name");
-    if (nm) setCopyText(nm, () => `${t("라비")} · ${t(on ? "켜짐" : "꺼짐")}`);
+    // 0.9.47 레일 64px: 이름만. 켜짐/꺼짐은 얼굴 점과 title(위) 이 말한다 — 「라비 · …」 로 잘리지 않게.
+    if (nm) setCopyText(nm, () => t("라비"));
     const pill = document.getElementById("rv-home-ai-pill");
     if (pill) {
       pill.dataset.ai = on ? "on" : "off";
