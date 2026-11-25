@@ -1,5 +1,15 @@
 # 변경 기록
 
+## 0.9.49
+
+### 한국어
+
+- **켜자마자 게임이 손님에게 열립니다:** 컴퓨터를 다시 켠 직후 내 게임을 못 찾으면 30분을 기다리지 않고 3분 뒤 다시 찾습니다. 게임을 바깥에 내주는 일을 먼저 하고, 느린 알리기는 뒤에서 합니다(게임 7개 기준 수십 분 → 몇 초).
+
+### English
+
+- **Games open for players right after start:** if the app can't see your games just after starting, it looks again in 3 minutes instead of 30. Serving your games now comes first and the slow network announcement runs in the background (minutes instead of tens of minutes for 7 games).
+
 ## 0.9.48
 
 ### 한국어

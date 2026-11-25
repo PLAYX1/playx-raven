@@ -50,6 +50,8 @@ const SHARE_DOCS_MAX: usize = 200;
 const CACHE_SECS: i64 = 15 * 60;
 const MINE_EVERY_SECS: u64 = 30 * 60;
 const MINE_FIRST_SECS: u64 = 120;
+const MINE_QUICK_SECS: u64 = 180;
+const MINE_QUICK_TRIES: u32 = 5;
 
 fn now() -> i64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
@@ -161,6 +163,9 @@ async fn mine_round_inner() -> Result<Value, String> {
     let mut games = Vec::new();
     let mut serve: HashSet<String> = HashSet::new();
     let (mut kept, mut bytes) = (0usize, 0u64);
+    // 11-26 0.9.49: DHT 알리기(provide)는 CID 하나에 최대 2분×2 — 예전에는 붙잡은 게임마다 그 자리에서 기다려서
+    //   게임 7개면 바깥 /ipfs/ 길을 열고 gw 를 다시 알리기까지 수십 분 걸렸다(키오스크 실측). 모아 두었다가 바퀴 끝에 뒤에서 한다.
+    let mut to_provide: Vec<(String, bool)> = Vec::new();
     for (name, hash) in list.iter().filter(|(n, _)| names.contains(n)) {
         let Some(doc) = hash.clone() else {
             games.push(json!({ "asset": name, "problem": "no-doc" }));
@@ -174,9 +179,9 @@ async fn mine_round_inner() -> Result<Value, String> {
         };
         let folder_kept = ensure_kept(&f.folder, prefs.is_skipped(&f.folder)).await;
         if doc_kept && folder_kept {
-            provide(&doc, false).await;
             let deep = PROVIDED_DEEP.lock().ok().map(|mut g| g.get_or_insert_with(HashSet::new).insert(f.folder.clone())).unwrap_or(false);
-            provide(&f.folder, deep).await;
+            to_provide.push((doc.clone(), false));
+            to_provide.push((f.folder.clone(), deep));
             kept += 1;
             bytes += f.declared;
             serve.insert(doc.clone());
@@ -202,9 +207,9 @@ async fn mine_round_inner() -> Result<Value, String> {
             };
             let folder_kept = ensure_kept(&f.folder, prefs.is_skipped(&f.folder)).await;
             if doc_kept && folder_kept {
-                provide(&doc, false).await;
                 let deep = PROVIDED_DEEP.lock().ok().map(|mut g| g.get_or_insert_with(HashSet::new).insert(f.folder.clone())).unwrap_or(false);
-                provide(&f.folder, deep).await;
+                to_provide.push((doc.clone(), false));
+                to_provide.push((f.folder.clone(), deep));
                 kept += 1;
                 bytes += f.declared;
                 serve.insert(doc.clone());
@@ -225,6 +230,12 @@ async fn mine_round_inner() -> Result<Value, String> {
         }
     } else {
         crate::arcade_gw::set_serving(&serve, chain_error.is_none());
+    }
+    // 바깥 길·다시 알리기가 끝난 뒤 DHT 알리기는 뒤에서(바퀴 결과·화면을 붙잡지 않는다). 실패는 조용히 — 파일창고가 22시간마다 다시 알린다.
+    if !to_provide.is_empty() {
+        tauri::async_runtime::spawn(async move {
+            for (cid, deep) in to_provide { provide(&cid, deep).await; }
+        });
     }
     let games_empty = games.is_empty();
     let mut out = json!({ "at": now(), "games": games, "kept": kept, "bytes": bytes, "gateway": gateway, "reannounced": reannounced });
@@ -269,13 +280,26 @@ pub fn arcade_mine_state() -> Value {
     MINE.lock().ok().and_then(|g| g.clone()).unwrap_or_else(|| json!({ "at": Value::Null, "games": [], "kept": 0, "bytes": 0 }))
 }
 
+/// 다음 바퀴까지. 켠 직후에는 릴레이가 아직 안 붙어 내 쪽지를 못 읽고 「게임 없음」으로 끝나는 일이 있다(11-26 키오스크 실측) —
+/// 그때는 30분을 기다리지 않고 3분 뒤 다시(최대 5번). 게임을 한 번이라도 보면 그 뒤로는 30분.
+pub(crate) fn next_round_secs(v: &Value, quick: &mut u32) -> u64 {
+    let saw_games = v.get("games").and_then(Value::as_array).is_some_and(|g| !g.is_empty());
+    if !saw_games && *quick < MINE_QUICK_TRIES {
+        *quick += 1;
+        return MINE_QUICK_SECS;
+    }
+    if saw_games { *quick = MINE_QUICK_TRIES; }
+    MINE_EVERY_SECS
+}
+
 /// 켤 때 한 번. 파일창고·노드가 올라올 시간을 주고, 그 뒤 30분마다.
 pub fn start() {
     tauri::async_runtime::spawn(async {
         tokio::time::sleep(std::time::Duration::from_secs(MINE_FIRST_SECS)).await;
+        let mut quick = 0u32;
         loop {
-            let _ = arcade_mine_round().await;
-            tokio::time::sleep(std::time::Duration::from_secs(MINE_EVERY_SECS)).await;
+            let v = arcade_mine_round().await.unwrap_or(Value::Null);
+            tokio::time::sleep(std::time::Duration::from_secs(next_round_secs(&v, &mut quick))).await;
         }
     });
 }
@@ -692,6 +716,28 @@ async fn share_apply_inner(checked: Vec<Value>) -> Result<Value, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn 켠_직후_게임을_못_보면_3분_뒤_다시_보고_한_번_보면_30분() {
+        let none = json!({ "at": 1, "games": [] });
+        let some = json!({ "at": 1, "games": [{ "asset": "open:x" }] });
+        let mut q = 0;
+        for _ in 0..MINE_QUICK_TRIES { assert_eq!(next_round_secs(&none, &mut q), MINE_QUICK_SECS); }
+        assert_eq!(next_round_secs(&none, &mut q), MINE_EVERY_SECS, "다섯 번 뒤에는 30분");
+        let mut q = 0;
+        assert_eq!(next_round_secs(&some, &mut q), MINE_EVERY_SECS);
+        assert_eq!(next_round_secs(&none, &mut q), MINE_EVERY_SECS, "한 번 본 뒤 잠깐 빈 결과로 바퀴를 재촉하지 않는다");
+        assert_eq!(next_round_secs(&Value::Null, &mut 0), MINE_QUICK_SECS);
+    }
+
+    #[test]
+    fn dht_알리기는_바깥_길을_연_뒤_뒤에서_한다() {
+        let src = include_str!("arcade_keep.rs");
+        let body = &src[src.find("async fn mine_round_inner").unwrap()..src.find("pub fn kick_mine").unwrap()];
+        assert!(!body.contains("provide(&doc, false).await"), "바퀴 안에서 provide 를 기다리지 않는다");
+        let spawn_at = body.find("for (cid, deep) in to_provide").unwrap();
+        assert!(body.find("reannounce(&events").unwrap() < spawn_at);
+    }
 
     fn q(n: u8) -> String {
         format!("Qm{}", (n as char).to_string().repeat(44))
