@@ -207,3 +207,15 @@ main :is(#lk-s-toggle, #market-open) { max-width:100%; white-space:nowrap !impor
 /* 좁은 광장 칸(s): 글 아래 「답글 · 저장 · 공유 · ⋯」 한 줄이 넘치지 않게 단추 안쪽을 줄인다 */
 #page-talk .chat[data-w="s"] #tk-list.feedcards .facts button { padding:0 8px !important; gap:4px; }
 #page-talk .chat[data-w="s"] #tk-list.feedcards .facts { margin-left:-8px; }
+
+/* 0.9.47 맥 실기기 460px: 「지갑」 제목이 「지/갑」 으로 세로로 쪼개지고 노드 알약 글자가 말줄임 없이 잘렸다.
+   제목은 절대 꺾이지 않고, 남는 폭은 노드 알약이 말줄임으로 받는다. */
+#page-home .v2-head > h1 { white-space:nowrap; flex:none; word-break:keep-all; }
+#page-home .v2-head > .v2-node { flex:0 1 auto; min-width:0; overflow:hidden; }
+#page-home .v2-head > .v2-node > #v2-node-t { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#page-home .v2-head > .v2-bell { flex:none; }
+@media (max-width:759px) {
+  #page-home .v2-head { gap:10px; }
+  #page-home .v2-head > h1 { font-size:26px !important; }
+  #page-home .v2-head > .v2-node { padding:0 12px !important; font-size:14px !important; }
+}
