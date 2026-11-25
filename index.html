@@ -3521,6 +3521,8 @@
                     혼자 쓰는 방이고, 그건 매일 쓰는 자리다
                     (「헤더는 보이는 게 전부」). -->
             <div class="chathead">
+              <!-- 0.9.47 좁은 창(900px 미만)은 목록과 대화를 한 칸씩 — 이 단추로 목록에 돌아간다(responsive.css 가 넓은 창에서는 숨긴다). -->
+              <button type="button" class="ghost" id="tk-back" aria-label="뒤로" title="뒤로"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
               <span id="tk-headav" class="tk-headav" data-initial="광" aria-hidden="true"></span>
               <span class="tk-headtxt"><span class="tk-headline"><b id="tk-title">광장</b><span id="tk-gate-head"></span></span><span class="tk-headsub"><span class="rv-public">공개 방 · 누구나 읽을 수 있어요</span><span class="tkc-dmchip" id="tk-dmchip"></span></span></span>
               <span class="meta" id="tk-me"></span>

@@ -17,7 +17,7 @@
         "title": "RavenVault Desktop",
         "width": 1120,
         "height": 780,
-        "minWidth": 720,
+        "minWidth": 400,
         "minHeight": 480,
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,

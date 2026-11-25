@@ -16,8 +16,22 @@ export function talkIdle(on: boolean) {
   const page = $("page-talk");
   if (!page) return;
   page.classList.toggle("idle", on);
+  if (!on) showList(false); // 0.9.47 좁은 창: 대화를 열면 목록 칸에서 대화 칸으로
   const box = $("tk-idle");
   if (box) box.hidden = !on;
+}
+
+/** 0.9.47 좁은 창(900px 미만 — responsive.css)의 목록/대화 한 칸 바꾸기. 클래스 하나만 바꾼다(다시 읽기·다시 그리기 없음).
+ *  목록 칸은 숨기는 동안 굴린 자리를 잃으므로(display:none) 떠날 때 적어 두고 돌아올 때 되돌린다. */
+export const TALK_NARROW = "(max-width: 899px)";
+let listTop = 0;
+export function showList(on: boolean) {
+  const page = $("page-talk");
+  const rooms = page?.querySelector<HTMLElement>(".rooms");
+  if (!page || !rooms || page.classList.contains("tk-listview") === on) return;
+  if (!on) listTop = rooms.scrollTop;
+  page.classList.toggle("tk-listview", on);
+  if (on) { page.classList.remove("infoon"); rooms.scrollTop = listTop; }
 }
 
 /** 목록 찾기 칸의 말로 지금 보이는 목록(채팅·친구·광장 방·라비)을 거른다. */
@@ -82,6 +96,13 @@ export function wireTalkDesk(d: DeskDeps) {
     ev.preventDefault(); ev.stopPropagation();
     if (filter.value) { filter.value = ""; applyFilter(); } else filter.blur();
   });
+
+  // ── 0.9.47 좁은 창(900px 미만): 목록 또는 대화 한 칸 — 「뒤로」는 목록을, 목록에서 고르면 대화를 보인다 ──
+  $("tk-back")?.addEventListener("click", () => showList(true));
+  page.querySelector(".rooms")?.addEventListener("click", (ev) => {
+    const hit = (ev.target as HTMLElement | null)?.closest("#tk-chats .tkc-row, #tk-friends .tkc-dm, #tk-rooms .room, #tk-newdm, #tk-mine, #rv-room-ravi");
+    if (hit) showList(false);
+  }, true); // 먼저 듣는다 — 줄이 다시 그려지기 전에 굴린 자리를 적는다
 
   // ── 정보 칸(오른쪽) 열고 닫기 ───────────────────────────────────────
   const info = $("tk-info");
@@ -251,6 +272,11 @@ export function wireTalkDesk(d: DeskDeps) {
     // ② 정보 칸 · ③ 답장
     if (page.classList.contains("infoon")) { ev.preventDefault(); page.classList.remove("infoon"); return; }
     if (visible("tk-replybar")) { ev.preventDefault(); $("tk-replyx")?.click(); return; }
+    // ④' 0.9.47 좁은 창: 대화를 보고 있으면 Esc = 목록으로(「뒤로」 단추와 같다). 목록에서는 아무것도 안 한다.
+    if (matchMedia(TALK_NARROW).matches) {
+      if (page.classList.contains("tk-listview") || page.classList.contains("idle")) return;
+      ev.preventDefault(); showList(true); (document.activeElement as HTMLElement | null)?.blur?.(); return;
+    }
     // ④ 대화 닫기 — 채팅 칸이면 가운데를 비우고(카톡 PC), 광장 칸에서 방을 닫으면 광장 피드로.
     if (page.classList.contains("idle")) return;
     if (!d.dm.active() && !d.room()) return;

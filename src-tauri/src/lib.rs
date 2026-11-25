@@ -1002,7 +1002,7 @@ pub fn run() {
                     let m = mon.size().to_logical::<f64>(sf);
                     // 작업 표시줄과 창틀 몫을 남긴다. 화면에 딱 맞추면
                     // 아래 한 줄이 표시줄에 가린다.
-                    let max_w = (m.width - 40.0).max(720.0);
+                    let max_w = (m.width - 40.0).max(400.0);
                     let max_h = (m.height - 90.0).max(480.0);
                     if let Ok(cur) = w.inner_size() {
                         let c = cur.to_logical::<f64>(sf);

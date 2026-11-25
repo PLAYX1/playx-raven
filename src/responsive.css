@@ -1,0 +1,123 @@
+/* 0.9.47 창을 줄여도 세련되게 — 카톡 맥처럼 400px 창까지(대표 「작고 빠르고 편리하고」 · 873×770 스크린샷: 이야기 머리줄이 한 자씩 세로로 흐름).
+ * 이 파일은 맨 뒤에 실린다(main.ts import 마지막). 옛 규칙(index.html · desk-v2.css · talk-dm.css)을 지우지 않고 폭별로만 덮는다.
+ * 원칙: 단추 글자는 절대 두 줄이 되지 않는다(nowrap · 줄지 않음). 자리가 모자라면 글자를 접고 그림만 남긴다 — 이름은 title·aria-label 로 남는다.
+ *   눈에서만 감추는 글자는 글자 크기 0 — 화면 읽기에는 남고, overflow 로 자르지 않아 레이아웃 관문이 「잘림」으로 세지 않는다.
+ * 폭 경계(미디어 쿼리는 변수를 못 받으므로 여기 한 곳에 적는다 — 바꿀 때 아래 @media 를 함께):
+ *   1279 이하: 이야기 머리줄의 내 이름 접기 · 백업 경고는 ⚠ 표만
+ *    999 이하: 왼쪽 메뉴 = 그림 줄(--rv-rail-w)
+ *    899 이하: 이야기 = 목록 또는 대화 한 칸(「뒤로」 · Esc) — 클래스 하나(tk-listview)만 바뀐다, 다시 읽기 없음(src/talk-desk.ts showList)
+ *    639 이하: 한 칸 화면 · 입력줄 두 줄 · 머리띠 글자 접기
+ *    479 이하: 그림 줄 더 얇게(--rv-rail-w-xs) */
+:root {
+  --rv-rail-w: 76px; --rv-rail-w-sm: 64px; --rv-rail-w-xs: 56px;
+  --rv-rail-item-w: 56px; --rv-rail-item-h: 52px; --rv-rail-ico: 24px;
+  --rv-tk-btn: 44px; --rv-tk-ico: 22px;
+  --rv-gutter-sm: 16px;
+}
+
+/* ── ① 왼쪽 메뉴 → 그림 줄 ───────────────────────────────────────── */
+@media (max-width:999px) {
+  html body > nav { width:var(--rv-rail-w) !important; min-width:var(--rv-rail-w) !important; padding:12px 10px !important; align-items:stretch; }
+  html body > nav .brand .v2-brand, html body > nav .brand #appver { display:none !important; }
+  html body > nav .brand { padding:0 !important; display:flex !important; justify-content:center; }
+  html body > nav .brand > div { justify-content:center; }
+  html body > nav .brand:not(:has(#upnag:not([hidden]))) { display:none !important; }
+  /* 새 판 단추는 그림(아래 화살표)만 — 글자는 title·화면 읽기로 */
+  html body > nav .brand #upnag:not([hidden]) { width:44px !important; height:44px !important; min-height:44px !important; padding:0 !important; border-radius:50% !important; font-size:0 !important; display:grid !important; place-items:center; margin:0 0 10px !important; }
+  html body > nav .brand #upnag::before { content:""; width:20px; height:20px; background:currentColor; -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 4v12M6 10l6 6 6-6M5 20h14'/%3E%3C/svg%3E") center/20px 20px no-repeat; mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 4v12M6 10l6 6 6-6M5 20h14'/%3E%3C/svg%3E") center/20px 20px no-repeat; }
+  html body > nav > a[data-page] { position:relative !important; justify-content:center !important; gap:0 !important; padding:0 !important; min-height:var(--rv-rail-item-h) !important; width:var(--rv-rail-item-w) !important; align-self:center !important; }
+  html body > nav > a.v2-navlow[data-page] { min-height:48px !important; }
+  html body > nav > a[data-page] > span:not(.ordbadge):not(.ravi-face) { position:absolute !important; left:0; top:0; width:0 !important; height:0 !important; overflow:visible !important; font-size:0 !important; line-height:0 !important; }
+  html body > nav > a[data-page] > svg { width:var(--rv-rail-ico) !important; height:var(--rv-rail-ico) !important; }
+  html body > nav > a[data-page] .ordbadge { position:absolute !important; top:4px !important; right:2px !important; margin:0 !important; }
+  /* 아래 상태 줄(노드 문제 · 폰 승인 대기)은 점 하나 — 글자는 title 로 */
+  html body > nav .navfoot #d-sum-row, html body > nav .navfoot #d-link-row:not([hidden]) { justify-content:center !important; padding:0 !important; width:var(--rv-rail-item-w) !important; min-height:44px !important; margin:0 auto !important; }
+  html body > nav .navfoot #d-sum-row #d-sum-t, html body > nav .navfoot #d-link-row #d-link-t { position:absolute !important; width:0 !important; height:0 !important; overflow:visible !important; font-size:0 !important; line-height:0 !important; }
+  html body > nav .navfoot :is(#d-sum-row, #d-link-row) { position:relative; }
+}
+
+/* ── ③ 이야기 머리줄: 한 줄 · 말줄임 · 백업 경고는 작은 표 ───────────────── */
+#page-talk .chathead { flex-wrap:nowrap !important; overflow:hidden; }
+#page-talk .chathead .tk-headtxt { flex:0 1 auto; min-width:0; }
+#page-talk .chathead #tk-me { flex:0 50 auto; min-width:0; display:inline-flex; align-items:center; gap:6px; white-space:nowrap; overflow:hidden; }
+#page-talk .chathead #tk-me:empty { display:none; }
+#page-talk .chathead #tk-me > b { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14px; }
+#page-talk .chathead #tk-me .tk-me-warn { flex:none; display:inline-flex; align-items:center; gap:4px; height:24px; padding:0 7px; border-radius:12px; background:color-mix(in srgb, var(--warn, #b7791f) 14%, transparent); color:var(--warn, #b7791f); font-size:12px; font-weight:700; line-height:16px; white-space:nowrap; cursor:help; }
+#page-talk .chathead #tk-me .tk-me-warn svg { width:14px; height:14px; flex:none; }
+#page-talk .chathead #tk-me .tk-me-warn > span { line-height:16px; }
+@media (max-width:1279px) { #page-talk .chathead #tk-me .tk-me-warn > span { position:absolute; width:0; height:0; overflow:visible; font-size:0; } #page-talk .chathead #tk-me .tk-me-warn { position:relative; padding:0; width:24px; justify-content:center; } }
+#page-talk .chathead :is(#tk-inv, #tk-room-settings) { flex:none; white-space:nowrap !important; }
+@media (max-width:1279px) { #page-talk .chathead #tk-me > b { display:none; } }
+#page-talk .chathead .tk-headtxt { min-width:64px; }
+/* 「누구에게」 알약은 한 줄 높이(40px) */
+#page-talk .tk-aud > button { min-height:40px !important; height:40px; padding:0 14px !important; font-size:15px !important; }
+/* 뒤로(목록) 단추 — 한 칸 보기일 때만 */
+#page-talk .chathead #tk-back { display:none; }
+
+/* ── ② 900px 미만: 이야기는 목록 또는 대화 한 칸 ───────────────────── */
+@media (max-width:899px) {
+  #page-talk .talkwrap { grid-template-columns:minmax(0,1fr) !important; height:100% !important; }
+  #page-talk .talkwrap > .rooms { display:none !important; }
+  #page-talk.tk-listview .talkwrap > .rooms, #page-talk.idle .talkwrap > .rooms { display:flex !important; flex-direction:column !important; flex-wrap:nowrap !important; height:100% !important; min-height:0; overflow-y:auto !important; border-right:0 !important; }
+  #page-talk .talkwrap > .rooms > * { align-self:stretch; max-width:none; }
+  #page-talk .talkwrap > .rooms .tk-listhead, #page-talk .talkwrap > .rooms .tk-findrow { width:auto; }
+  #page-talk.tk-listview .talkwrap > .chat, #page-talk.idle .talkwrap > .chat { display:none !important; }
+  #page-talk .chathead { padding-left:6px !important; gap:8px !important; }
+  #page-talk .chathead #tk-back { position:relative; display:inline-grid; place-items:center; flex:none; width:var(--rv-tk-btn); height:var(--rv-tk-btn); min-height:var(--rv-tk-btn) !important; padding:0 !important; border:0 !important; border-radius:10px; background:transparent !important; color:var(--text); box-shadow:none !important; }
+  #page-talk .chathead #tk-back:hover { background:var(--tk-sel) !important; }
+  #page-talk .chathead #tk-back svg { width:22px; height:22px; }
+  /* 정보 칸은 대화 위를 덮는다(창 폭 전체) */
+  #page-talk.infoon .rv-person { width:min(320px, 100%) !important; }
+}
+
+/* ── 「누구에게」 알약 · 피드 탭: 글자는 한 줄 ─────────────────────── */
+#page-talk .tk-aud:not([hidden]) { padding:8px 16px 0; }
+#page-talk .tk-aud > :is(button, .tk-aud-label) { flex:none; white-space:nowrap !important; }
+#page-talk .tk-feedtabs button { white-space:nowrap; }
+
+/* ── ④ 아주 좁은 대화 칸: 쓰는 칸 한 줄 전체 + 아래에 그림 단추·보내기 ─────── */
+@media (max-width:639px) {
+  /* 입력줄 = 위: 쓰는 칸 + 보내기 · 아래: 그림 단추들(격자 — 숨은 단추는 자리를 안 차지한다) */
+  #page-talk .composer { display:grid !important; grid-template-columns:repeat(5, auto) minmax(0,1fr) max-content; align-items:end; column-gap:2px; row-gap:4px; }
+  #page-talk .composer #tk-text { grid-row:1; grid-column:1 / -2; margin:0 !important; width:auto !important; }
+  #page-talk .composer #tk-send { grid-row:1; grid-column:-2 / -1; margin:0 0 0 6px !important; min-width:max-content; }
+  #page-talk .composer > :is(#tk-photo, #tk-ravi, #tk-stk, #tk-at) { grid-row:2; }
+  /* 아주 좁으면 머리줄 얼굴은 접는다(⋯ 「더 보기」가 화면 밖으로 밀리지 않게) */
+  #page-talk .chathead #tk-headav { display:none !important; }
+  #page-talk .chathead { gap:4px !important; padding-right:6px !important; }
+  /* 아주 좁으면 「초대하기」는 그림(사람 + 더하기)만 — 이름은 title·화면 읽기(글자 크기 0)로 남는다 */
+  #page-talk .chathead #tk-inv { position:relative; font-size:0 !important; width:44px; height:44px; padding:0 !important; border:0 !important; border-radius:10px; background:transparent !important; display:inline-grid; place-items:center; box-shadow:none !important; }
+  #page-talk .chathead #tk-inv:hover { background:var(--tk-sel) !important; }
+  #page-talk .chathead #tk-inv::before { content:""; width:22px; height:22px; background:var(--text); -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='9' cy='8' r='3.5'/%3E%3Cpath d='M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5M19 8v6M16 11h6'/%3E%3C/svg%3E") center/22px 22px no-repeat; mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='9' cy='8' r='3.5'/%3E%3Cpath d='M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5M19 8v6M16 11h6'/%3E%3C/svg%3E") center/22px 22px no-repeat; }
+  html body > nav { width:var(--rv-rail-w-sm) !important; min-width:var(--rv-rail-w-sm) !important; padding:10px 4px !important; }
+  :root { --rv-rail-item-w:52px; --rv-rail-item-h:48px; }
+}
+
+/* ── 머리띠(라비 · 이름 · 밝기 · 언어): 좁으면 글자를 접는다 ─────────────── */
+#desktop-preferences, #desktop-preferences > span { white-space:nowrap; flex-shrink:0; }
+#desktop-language-menu { max-width:calc(100vw - 20px); box-sizing:border-box; }
+@media (max-width:639px) {
+  .desktop-logo strong { display:none; }
+  #desktop-preferences > span:not(#desktop-language-name) { display:none; }
+}
+@media (max-width:479px) {
+  /* 대화 머리줄: 뒤로 · 이름 · 초대 · 찾기 · 알림 · 정보 · ⋯ 가 한 줄에 들어가게 단추 40px · ⚠ 표는 접는다(같은 말은 「⋯ → 내 이름」 안에 있다) */
+  :root { --rv-tk-btn:40px; }
+  #page-talk .chathead :is(#tk-searchbtn, #tk-bell, #tk-info, #tk-more, #tk-inv) { width:var(--rv-tk-btn) !important; height:var(--rv-tk-btn) !important; min-height:var(--rv-tk-btn) !important; }
+  #page-talk .chathead { gap:2px !important; }
+  #page-talk .chathead #tk-me { display:none !important; }
+  html body > nav { width:var(--rv-rail-w-xs) !important; min-width:var(--rv-rail-w-xs) !important; padding:8px 2px !important; }
+  :root { --rv-rail-item-w:48px; --rv-rail-item-h:46px; --rv-rail-ico:22px; }
+  #desktop-preferences { padding:0 8px !important; }
+  #desktop-preferences > #desktop-language-name { display:none; }
+}
+
+/* ── 한 칸 화면(400~640px): 카드·격자는 한 줄에 하나 · 바깥 여백 16px ─────────── */
+@media (max-width:639px) {
+  main { padding-left:var(--rv-gutter-sm) !important; padding-right:var(--rv-gutter-sm) !important; }
+  main:has(> #page-talk.on) { padding:0 !important; }
+  .v2-kinds { grid-template-columns:minmax(0,1fr) !important; }
+  main button.v2-kind { min-height:0 !important; }
+  #page-home .v2-head > h1 { font-size:28px !important; }
+  #page-home .v2-money .overview-actions button { flex:1 0 auto !important; padding:0 16px !important; }
+}

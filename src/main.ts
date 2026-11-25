@@ -113,6 +113,7 @@ import { wireWordsRestore } from "./words-restore";
 import { wireMapCard } from "./map-card";
 import { wirePostHelp } from "./ravi-post-help";
 import "./ravi-post-help.css";
+import "./responsive.css"; // 0.9.47 창을 줄여도 세련되게 — 맨 뒤에 둔다
 import { Channel, invoke as rawInvoke } from "@tauri-apps/api/core";
 
 /**
@@ -6800,7 +6801,8 @@ async function talkPaintMe() {
     // 머리줄은 좁다. 긴 설명은 「내 이름」 단추 안에서 말한다.
     $("tk-me").innerHTML =
       (shown ? `<b>${shown}</b>` : "") +
-      (me && !me.recoverable ? ` <span class="warn">${copyHtml("· 백업 파일이 유일한 사본")}</span>` : "");
+      // 0.9.47 경고는 머리줄을 세로로 늘이지 않게 작은 표(⚠)로 — 글은 표 안·title·화면 읽기에 그대로 있다(좁은 창은 표만, responsive.css).
+      (me && !me.recoverable ? ` <span class="warn tk-me-warn" role="note" title="${escapeHtml(t("· 백업 파일이 유일한 사본").replace(/^·\s*/, ""))}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5 2.5 20h19z"/><path d="M12 10v4.5M12 17.3v.2"/></svg><span>${escapeHtml(t("· 백업 파일이 유일한 사본").replace(/^·\s*/, ""))}</span></span>` : "");
   } catch (e) {
     $("tk-me").textContent = "";
   }
@@ -6929,7 +6931,7 @@ function paintInvite() {
   const host = document.getElementById("tk-invite");
   if (!host) return;
   const name = tkRoom ? tkRoomNames.get(tkRoom) || t("방") : t(SQUARE);
-  host.innerHTML = `<button class="ghost" id="tk-inv">${copyHtml("초대하기")}</button>`;
+  host.innerHTML = `<button class="ghost" id="tk-inv" title="${escapeHtml(t("초대하기"))}">${copyHtml("초대하기")}</button>`;
   document.getElementById("tk-inv")!.addEventListener("click", () => {
     const url = inviteLink(tkRoom);
     // 11-10 「공유 = 재방송」: 방 원본 글을 릴레이에 다시 올려 둔다 — 받는 사람 미리보기에 방 이름이 뜨게. 기다리지 않는다.
@@ -19804,6 +19806,19 @@ window.addEventListener("DOMContentLoaded", async () => {
     row.title = t(label);
     row.setAttribute("aria-label", t(label));
   });
+  // 0.9.47 좁은 창(1000px 미만)은 왼쪽 메뉴가 그림 줄이라 이름이 안 보인다(responsive.css) — 얹으면 뜨는 이름(title)이
+  //   지금 보이는 글자와 늘 같게 맞춘다(메뉴 이름·노드 상태·새 판 단추는 켜진 뒤에도 바뀐다). 글자만 보고 속성만 쓴다.
+  const navTips = () => {
+    const pairs: [HTMLElement, string][] = [];
+    document.querySelectorAll<HTMLElement>("nav a[data-page]").forEach((a) => pairs.push([a, a.querySelector("span:not(.ordbadge)")?.textContent?.trim() || ""]));
+    for (const [row, txt] of [["d-sum-row", "d-sum-t"], ["d-link-row", "d-link-t"], ["upnag", "upnag"]] as const) {
+      const el = document.getElementById(row); if (el) pairs.push([el, document.getElementById(txt)?.textContent?.trim() || ""]);
+    }
+    for (const [el, label] of pairs) if (label && el.title !== label) { el.title = label; el.setAttribute("aria-label", label); }
+  };
+  navTips();
+  const navEl = document.querySelector("body > nav");
+  if (navEl) new MutationObserver(navTips).observe(navEl, { subtree: true, childList: true, characterData: true });
   $("rv-room-ravi-face").appendChild(raviFace("sleep", 50, { round: true }));
   applyRaviCharacter();
   $("rv-room-ravi").onclick = wakeRavi;
