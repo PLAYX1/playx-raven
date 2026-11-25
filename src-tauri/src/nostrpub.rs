@@ -813,7 +813,7 @@ mod publish_kind_regression_tests {
         let listing = crate::arcade_listing::build_events(&nk, &serde_json::to_string(&json!({
             "kind": "rv.arcade-listing/1", "seller": "RHMKPy3Ana5NyzTgo6qWXXMiHAxzPyMgG1", "id": "star-run", "version": 1,
             "docCid": format!("Qm{}", "D".repeat(44)), "docHash": "a".repeat(64), "at": now, "state": "open", "signature": "A".repeat(87) + "=",
-        })).unwrap(), now).unwrap();
+        })).unwrap(), now, Some("https://kiosk.tail1234.ts.net")).unwrap();
         let events: Vec<(i64, Value)> = vec![
             (31402, fmt::build_card_event(&card, &signer, &nk).unwrap()),
             (31403, fmt::build_beat_event(&signer, &nk, "playx-gym", "wydk3", now, None).unwrap()),

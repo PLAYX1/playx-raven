@@ -145,12 +145,21 @@ async fn ensure_kept(cid: &str, skip: bool) -> bool {
 }
 
 async fn mine_round_inner() -> Result<Value, String> {
-    let owned_raw = crate::raven::call_rpc("listmyassets", json!(["RVLT/*"])).await?;
-    let owned: Vec<String> = owned_raw.as_object().map(|m| m.keys().cloned().collect()).unwrap_or_default();
-    let names = my_game_names(&owned);
-    let (list, _) = crate::arcade::chain_list().await?;
+    // 11-26: 체인(노드) 쪽이 실패해도 일반 판매자 게임(Nostr 쪽지)은 계속 본다 — 예전에는 노드가 안 답하면 바퀴 전체가 멈춰
+    //   일반 판매자 게임도 붙잡기·알리기를 건너뛰었다. 체인 쪽 실패는 `error` 로 그대로 보인다.
+    let chain = async {
+        let owned_raw = crate::raven::call_rpc("listmyassets", json!(["RVLT/*"])).await?;
+        let owned: Vec<String> = owned_raw.as_object().map(|m| m.keys().cloned().collect()).unwrap_or_default();
+        let (list, _) = crate::arcade::chain_list().await?;
+        Ok::<_, String>((my_game_names(&owned), list))
+    }.await;
+    let (names, list, chain_error) = match chain {
+        Ok((n, l)) => (n, l, None),
+        Err(e) => (HashSet::new(), Vec::new(), Some(e)),
+    };
     let prefs = crate::asset_keep::load();
     let mut games = Vec::new();
+    let mut serve: HashSet<String> = HashSet::new();
     let (mut kept, mut bytes) = (0usize, 0u64);
     for (name, hash) in list.iter().filter(|(n, _)| names.contains(n)) {
         let Some(doc) = hash.clone() else {
@@ -170,6 +179,8 @@ async fn mine_round_inner() -> Result<Value, String> {
             provide(&f.folder, deep).await;
             kept += 1;
             bytes += f.declared;
+            serve.insert(doc.clone());
+            serve.insert(f.folder.clone());
         }
         games.push(json!({
             "asset": name, "title": f.title, "docCid": doc, "folderCid": f.folder, "bytes": f.declared,
@@ -178,6 +189,8 @@ async fn mine_round_inner() -> Result<Value, String> {
         }));
     }
     // 일반 판매자로 올린 내 게임(0 RVN · 체인 자산 없음) — 내 겉봉투 열쇠로 서명된 지금 쪽지가 가리키는 문서·폴더.
+    let mut reannounced = 0usize;
+    let mut gateway: Option<String> = None;
     if let Some(pk) = crate::arcade_listing::my_pubkey() {
         let events = crate::arcade_listing::read_listings().await;
         for (key, doc) in crate::arcade_listing::my_open_docs(&events, &pk) {
@@ -194,6 +207,8 @@ async fn mine_round_inner() -> Result<Value, String> {
                 provide(&f.folder, deep).await;
                 kept += 1;
                 bytes += f.declared;
+                serve.insert(doc.clone());
+                serve.insert(f.folder.clone());
             }
             games.push(json!({
                 "asset": name, "listing": "open", "title": f.title, "docCid": doc, "folderCid": f.folder, "bytes": f.declared,
@@ -201,8 +216,33 @@ async fn mine_round_inner() -> Result<Value, String> {
                 "problem": if doc_kept && folder_kept { Value::Null } else { json!("not-kept") },
             }));
         }
+        // 바깥 /ipfs/ 길이 지금 붙잡힌 내 게임만 내주게(server.rs ipfs_relay) — 다시 알리기 전에 먼저 연다.
+        crate::arcade_gw::set_serving(&serve, chain_error.is_none());
+        // 판매자 게이트웨이: 지금 바깥 주소가 쪽지의 gw 와 다르면(새 임시 터널·옛 쪽지엔 없음) 같은 content 를 새 태그로 다시 싼다.
+        gateway = crate::arcade_gw::outside_origin_for_listing().await;
+        if let Some(g) = gateway.as_deref() {
+            reannounced = crate::arcade_gw::reannounce(&events, &pk, g).await;
+        }
+    } else {
+        crate::arcade_gw::set_serving(&serve, chain_error.is_none());
     }
-    Ok(json!({ "at": now(), "games": games, "kept": kept, "bytes": bytes }))
+    let games_empty = games.is_empty();
+    let mut out = json!({ "at": now(), "games": games, "kept": kept, "bytes": bytes, "gateway": gateway, "reannounced": reannounced });
+    // 체인 쪽만 실패하고 일반 판매자 게임은 본 경우 화면이 「확인하지 못했어요」로 덮지 않게 chainError 로 따로 둔다.
+    if let Some(e) = chain_error { out[if games_empty { "error" } else { "chainError" }] = json!(e); }
+    Ok(out)
+}
+
+/// 지금 한 바퀴를 바로(겹치면 건너뛴다). 올리기 직후·바깥 주소가 바뀐 뒤.
+pub fn kick_mine() {
+    tauri::async_runtime::spawn(async { let _ = arcade_mine_round().await; });
+}
+/// 바깥 주소가 바뀌었다(임시 터널 새 주소 · 테일스케일 고정 주소 켬). 문이 자리 잡을 시간을 두고 한 바퀴.
+pub fn address_changed() {
+    tauri::async_runtime::spawn(async {
+        tokio::time::sleep(std::time::Duration::from_secs(20)).await;
+        let _ = arcade_mine_round().await;
+    });
 }
 
 /// 지금 한 바퀴(화면의 「지금 확인」·30분 박동). 겹치면 지난 결과를 돌려준다.

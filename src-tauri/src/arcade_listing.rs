@@ -14,6 +14,11 @@ pub const ARCADE_LISTING_FORMAT: &str = "rv.arcade-listing/1";
 /// ⚠️ 표식 문자열은 바꾸지 마라 — 바꾸면 겉봉투 열쇠가 바뀌어 이미 올린 쪽지를 고치거나 내리지 못한다.
 pub const ARCADE_NOSTR_TAG: &str = "PLAYX-RAVEN-ARCADENOSTR-v1";
 const DELETE_KIND: i64 = 5;
+/// 11-26 판매자 게이트웨이 태그 — core `ARCADE_LISTING_GW_TAG` 와 같다. `["gw", "https://<호스트>"]`.
+/// 🔴 겉봉투 서명만 덮는다(이벤트 id 가 tags 를 해시). content·안쪽 판매자 서명은 그대로 — 옛 리더가 그대로 읽고,
+///    주소가 바뀌면 **지갑 서명 없이** 겉봉투 열쇠(shopkey.json 에서 뽑는 값, 지갑 잠김과 무관)로 같은 content 를 다시 싸 올릴 수 있다.
+///    안쪽 서명 문구에 겉봉투 pubkey 가 들어 있어 이 열쇠와 판매자 R 주소의 묶임은 쪽지마다 이미 증명돼 있다.
+pub const ARCADE_GW_TAG: &str = "gw";
 
 fn now() -> i64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
@@ -30,6 +35,8 @@ pub fn derive_arcade_key(shop_secret: &[u8; 32]) -> [u8; 32] {
 fn key() -> Result<[u8; 32], String> {
     Ok(derive_arcade_key(&crate::shopkey::secret_for_derivation()?))
 }
+/// 겉봉투 비밀값(다시 싸기용 — arcade_keep.rs). shopkey.json 에서 뽑으므로 지갑 잠김과 상관없다.
+pub(crate) fn nostr_key() -> Result<[u8; 32], String> { key() }
 
 fn is_seller(s: &str) -> bool {
     s.len() == 34 && s.starts_with('R') && s.bytes().all(|b| b.is_ascii_alphanumeric() && !matches!(b, b'0' | b'O' | b'I' | b'l'))
@@ -47,6 +54,37 @@ fn is_cid(s: &str) -> bool {
 }
 fn is_hex64(s: &str) -> bool { s.len() == 64 && s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) }
 fn is_sig(s: &str) -> bool { s.len() == 88 && s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'+' || b == b'/' || b == b'=') }
+
+/// core `arcadeGatewayOrigin` 과 같은 모양 검사 → 깨끗한 원점(`https://<호스트>`, 소문자로 바꾸지 않는다 — 대문자면 거절).
+/// https · 포트·경로·사용자·쿼리 없음 · 점 있는 호스트 이름 · IP 숫자 주소·localhost·.local 류 거절 · 200자 이하.
+pub fn gateway_origin(raw: &str) -> Option<String> {
+    if raw.len() > 200 { return None; }
+    let host = raw.strip_prefix("https://")?;
+    let host = host.strip_suffix('/').unwrap_or(host);
+    if host.is_empty() || host.len() > 190 || !host.contains('.') || host.ends_with('.') { return None; }
+    let label_ok = |l: &str| {
+        let b = l.as_bytes();
+        !b.is_empty() && b.len() <= 63 && b.iter().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'-') && b[0] != b'-' && b[b.len() - 1] != b'-'
+    };
+    let labels: Vec<&str> = host.split('.').collect();
+    if !labels.iter().all(|l| label_ok(l)) { return None; }
+    if labels.last().is_some_and(|l| l.bytes().all(|c| c.is_ascii_digit())) { return None; }
+    const PRIVATE: [&str; 14] = ["localhost", "local", "localdomain", "internal", "intranet", "lan", "home", "corp", "private", "home.arpa", "test", "invalid", "example", "onion"];
+    if PRIVATE.iter().any(|p| host == *p || host.ends_with(&format!(".{p}"))) { return None; }
+    Some(format!("https://{host}"))
+}
+
+fn listing_tags(d: &str, gw: Option<&str>) -> Value {
+    match gw.and_then(gateway_origin) {
+        Some(g) => json!([["d", d], ["t", ARCADE_LISTING_TAG], [ARCADE_GW_TAG, g]]),
+        None => json!([["d", d], ["t", ARCADE_LISTING_TAG]]),
+    }
+}
+
+/// 쪽지의 gw 태그(첫 것, 모양이 맞을 때만).
+pub fn gateway_of(e: &Value) -> Option<String> {
+    e.get("tags")?.as_array()?.iter().find(|t| t.get(0).and_then(Value::as_str) == Some(ARCADE_GW_TAG))?.get(1)?.as_str().and_then(gateway_origin)
+}
 
 /// 화면이 보낸 content → core 와 같은 키 순서로 다시 짠 content + d. 틀리면 첫 문제.
 pub fn normalize_content(raw: &str, now: i64) -> Result<(String, String, i64, String), String> {
@@ -78,9 +116,10 @@ pub fn normalize_content(raw: &str, now: i64) -> Result<(String, String, i64, St
 }
 
 /// 알림 쪽지 이벤트(겉봉투 서명까지). 내림이면 NIP-09 지우기도 하나 더(지우기를 지키는 릴레이에서는 바로 사라진다).
-pub fn build_events(nostr_sk: &[u8; 32], raw_content: &str, now: i64) -> Result<Vec<Value>, String> {
+/// `gw` = 이 컴퓨터의 바깥 주소(올림일 때만 태그로 싣는다 — 내림에는 필요 없다).
+pub fn build_events(nostr_sk: &[u8; 32], raw_content: &str, now: i64, gw: Option<&str>) -> Result<Vec<Value>, String> {
     let (content, d, at, state) = normalize_content(raw_content, now)?;
-    let tags = json!([["d", d], ["t", ARCADE_LISTING_TAG]]);
+    let tags = listing_tags(&d, if state == "open" { gw } else { None });
     let ev = crate::shopkey::sign_with(nostr_sk, ARCADE_LISTING_KIND, tags, &content, at)?;
     let mut out = vec![ev];
     if state == "removed" {
@@ -101,12 +140,44 @@ pub fn arcade_listing_pubkey() -> Result<String, String> {
 #[tauri::command]
 pub async fn arcade_listing_publish(content: String) -> Result<Value, String> {
     if crate::app_lock::is_locked() { return Err("앱이 잠겨 있습니다.".into()); }
-    let events = build_events(&key()?, &content, now())?;
+    let gw = crate::arcade_gw::outside_origin_for_listing().await;
+    let events = build_events(&key()?, &content, now(), gw.as_deref())?;
     let mut answers = Vec::new();
     for ev in events {
         answers.push(crate::nostrpub::nostr_publish(ev).await?);
     }
+    // 바깥 /ipfs/ 길이 새 게임을 곧바로 내주게 「내 게임」 목록을 다시 센다(30분 바퀴를 기다리지 않는다).
+    crate::arcade_keep::kick_mine();
     Ok(json!({ "published": answers.len(), "answers": answers }))
+}
+
+/// 이미 올린 쪽지를 **같은 content(같은 안쪽 판매자 서명)** 그대로, 새 gw 태그·새 시각으로 다시 싼다. 지갑 서명이 필요 없다.
+/// 내 겉봉투 열쇠로 서명이 맞는 open 쪽지만. 시각은 옛 것보다 반드시 크게(릴레이 교체·core 고르기 둘 다 created_at 큰 것).
+pub fn rewrap_event(nostr_sk: &[u8; 32], old: &Value, gw: &str, now: i64) -> Result<Value, String> {
+    let pk = crate::shopkey::pubkey_of(nostr_sk)?;
+    if old.get("pubkey").and_then(Value::as_str) != Some(pk.as_str()) || !crate::relay::verify(old) { return Err("내 쪽지가 아닙니다.".into()); }
+    if old.get("kind").and_then(Value::as_i64) != Some(ARCADE_LISTING_KIND) { return Err("오락실 쪽지가 아닙니다.".into()); }
+    let content = old.get("content").and_then(Value::as_str).ok_or("쪽지 내용이 없습니다.")?;
+    let c: Value = serde_json::from_str(content).map_err(|_| "쪽지 내용을 읽지 못했습니다.".to_string())?;
+    if c.get("state").and_then(Value::as_str) != Some("open") { return Err("내린 게임은 다시 알리지 않습니다.".into()); }
+    let d = format!("{}/{}", c.get("seller").and_then(Value::as_str).unwrap_or(""), c.get("id").and_then(Value::as_str).unwrap_or(""));
+    let old_d = old.get("tags").and_then(Value::as_array).and_then(|t| t.iter().find(|x| x.get(0).and_then(Value::as_str) == Some("d"))).and_then(|x| x.get(1)).and_then(Value::as_str);
+    if old_d != Some(d.as_str()) { return Err("쪽지 d 가 내용과 다릅니다.".into()); }
+    let g = gateway_origin(gw).ok_or("바깥 주소 모양이 올바르지 않습니다.")?;
+    let at = now.max(old.get("created_at").and_then(Value::as_i64).unwrap_or(0) + 1);
+    crate::shopkey::sign_with(nostr_sk, ARCADE_LISTING_KIND, listing_tags(&d, Some(&g)), content, at)
+}
+
+/// 내 겉봉투 열쇠로 서명이 맞는, d 마다 가장 새 쪽지 중 open 인 것(다시 싸기용 원본).
+pub fn my_latest_open_events<'a>(events: &'a [Value], my_pk: &str) -> Vec<&'a Value> {
+    let mut best: std::collections::BTreeMap<String, (i64, &Value)> = std::collections::BTreeMap::new();
+    for e in events {
+        if e.get("pubkey").and_then(Value::as_str) != Some(my_pk) || !crate::relay::verify(e) { continue; }
+        let Some(d) = e.get("tags").and_then(Value::as_array).and_then(|t| t.iter().find(|x| x.get(0).and_then(Value::as_str) == Some("d"))).and_then(|x| x.get(1)).and_then(Value::as_str) else { continue };
+        let at = e.get("created_at").and_then(Value::as_i64).unwrap_or(0);
+        if best.get(d).map_or(true, |(a, _)| at > *a) { best.insert(d.to_string(), (at, e)); }
+    }
+    best.into_values().map(|(_, e)| e).filter(|e| doc_cid_of(e).is_some()).collect()
 }
 
 /// 목록 읽기용: 릴레이에서 kind 31405 · #t ravenvault-arcade (고정 물음, 300개까지). 실패는 빈 목록.
@@ -155,7 +226,7 @@ mod tests {
 
     #[test]
     fn 쪽지는_core_와_같은_키_순서로_다시_짜서_싼다() {
-        let evs = build_events(&[7u8; 32], &content("open", 1_790_000_000), 1_790_000_100).unwrap();
+        let evs = build_events(&[7u8; 32], &content("open", 1_790_000_000), 1_790_000_100, None).unwrap();
         assert_eq!(evs.len(), 1);
         let e = &evs[0];
         assert_eq!(e["kind"], 31405);
@@ -169,7 +240,7 @@ mod tests {
 
     #[test]
     fn 내리기는_지우기_이벤트도_같이() {
-        let evs = build_events(&[7u8; 32], &content("removed", 1_790_000_000), 1_790_000_000).unwrap();
+        let evs = build_events(&[7u8; 32], &content("removed", 1_790_000_000), 1_790_000_000, None).unwrap();
         assert_eq!(evs.len(), 2);
         assert_eq!(evs[1]["kind"], 5);
         let pk = crate::shopkey::pubkey_of(&[7u8; 32]).unwrap();
@@ -185,7 +256,7 @@ mod tests {
             with("docCid", json!("../../etc")), with("docHash", json!("xyz")), with("state", json!("gone")), with("signature", json!("short")),
             with("at", json!(1_790_009_999)), "not json".into(),
         ] {
-            assert!(build_events(&[7u8; 32], &bad, 1_790_000_000).is_err(), "{bad}");
+            assert!(build_events(&[7u8; 32], &bad, 1_790_000_000, None).is_err(), "{bad}");
         }
     }
 
@@ -208,7 +279,7 @@ mod tests {
 
     #[test]
     fn 릴레이_중계는_31405_를_받는다() {
-        let evs = build_events(&[7u8; 32], &content("open", now()), now()).unwrap();
+        let evs = build_events(&[7u8; 32], &content("open", now()), now(), None).unwrap();
         assert!(crate::nostrpub::validate_publish_event(&evs[0]).is_ok());
         let mut no_d = evs[0].clone();
         no_d["tags"] = json!([["t", "ravenvault-arcade"]]);
@@ -219,15 +290,70 @@ mod tests {
     fn 내_게임은_내_열쇠로_서명된_가장_새_쪽지만() {
         let me = [7u8; 32];
         let pk = crate::shopkey::pubkey_of(&me).unwrap();
-        let other = build_events(&[8u8; 32], &content("open", 1_790_000_000), 1_790_000_000).unwrap();
-        let open1 = build_events(&me, &content("open", 1_790_000_000), 1_790_000_000).unwrap();
+        let other = build_events(&[8u8; 32], &content("open", 1_790_000_000), 1_790_000_000, None).unwrap();
+        let open1 = build_events(&me, &content("open", 1_790_000_000), 1_790_000_000, None).unwrap();
         let got = my_open_docs(&[open1[0].clone(), other[0].clone()], &pk);
         assert_eq!(got.len(), 1, "남의 열쇠 쪽지는 내 게임이 아니다");
         // 서명을 망가뜨린 쪽지(내 공개키를 흉내)는 버린다
         let mut fake = open1[0].clone(); fake["content"] = json!(fake["content"].as_str().unwrap().replace("open", "open "));
         assert!(my_open_docs(&[fake], &pk).is_empty());
         // 더 새 내림 쪽지가 있으면 빠진다
-        let removed = build_events(&me, &content("removed", 1_790_000_100), 1_790_000_100).unwrap();
+        let removed = build_events(&me, &content("removed", 1_790_000_100), 1_790_000_100, None).unwrap();
         assert!(my_open_docs(&[open1[0].clone(), removed[0].clone()], &pk).is_empty());
+    }
+
+    #[test]
+    fn gw_주소_모양은_core_와_같다() {
+        for good in ["https://kiosk.tail1234.ts.net", "https://abc-def.trycloudflare.com", "https://games.example.co.kr"] {
+            assert_eq!(gateway_origin(good).as_deref(), Some(good), "{good}");
+        }
+        assert_eq!(gateway_origin("https://kiosk.tail1234.ts.net/").as_deref(), Some("https://kiosk.tail1234.ts.net"));
+        for bad in ["http://a.example.com", "https://a.example.com:5001", "https://user@a.example.com", "https://a.example.com/ipfs", "https://a.example.com?x=1",
+            "https://127.0.0.1", "https://10.0.0.5", "https://169.254.169.254", "https://[::1]", "https://localhost", "https://nas.local", "https://box.internal",
+            "https://Kiosk.Example.com", "https://a..b.com", "https://-a.example.com", "https://a.example.com.", "https://single", "https://router.home.arpa", " https://a.example.com"] {
+            assert_eq!(gateway_origin(bad), None, "{bad}");
+        }
+    }
+
+    #[test]
+    fn 올림_쪽지에만_gw_태그를_싣는다() {
+        let gw = Some("https://kiosk.tail1234.ts.net");
+        let open = build_events(&[7u8; 32], &content("open", 1_790_000_000), 1_790_000_000, gw).unwrap();
+        assert_eq!(open[0]["tags"][2], json!(["gw", "https://kiosk.tail1234.ts.net"]));
+        assert!(crate::relay::verify(&open[0]));
+        assert_eq!(gateway_of(&open[0]).as_deref(), gw);
+        let down = build_events(&[7u8; 32], &content("removed", 1_790_000_000), 1_790_000_000, gw).unwrap();
+        assert_eq!(down[0]["tags"].as_array().unwrap().len(), 2, "내림에는 주소가 필요 없다");
+        let bad = build_events(&[7u8; 32], &content("open", 1_790_000_000), 1_790_000_000, Some("http://10.0.0.1:5001")).unwrap();
+        assert_eq!(bad[0]["tags"].as_array().unwrap().len(), 2, "틀린 주소는 싣지 않는다");
+    }
+
+    #[test]
+    fn 다시_싸기는_같은_content_새_gw_더_큰_시각_내_열쇠만() {
+        let me = [7u8; 32];
+        let old = build_events(&me, &content("open", 1_790_000_000), 1_790_000_000, None).unwrap().remove(0);
+        let re = rewrap_event(&me, &old, "https://new.trycloudflare.com", 1_790_000_500).unwrap();
+        assert_eq!(re["content"], old["content"], "안쪽 판매자 서명 그대로 — 지갑 서명이 필요 없다");
+        assert_eq!(re["tags"][0], old["tags"][0]);
+        assert_eq!(gateway_of(&re).as_deref(), Some("https://new.trycloudflare.com"));
+        assert_eq!(re["created_at"], 1_790_000_500);
+        assert!(crate::relay::verify(&re));
+        // 시계가 뒤로 가도 시각은 옛 것보다 크다
+        let back = rewrap_event(&me, &re, "https://b.trycloudflare.com", 1_700_000_000).unwrap();
+        assert_eq!(back["created_at"], 1_790_000_501);
+        // 남의 열쇠 쪽지 · 내린 쪽지 · 틀린 주소는 싸지 않는다
+        assert!(rewrap_event(&[8u8; 32], &old, "https://x.trycloudflare.com", 1_790_000_500).is_err());
+        let removed = build_events(&me, &content("removed", 1_790_000_000), 1_790_000_000, None).unwrap().remove(0);
+        assert!(rewrap_event(&me, &removed, "https://x.trycloudflare.com", 1_790_000_500).is_err());
+        assert!(rewrap_event(&me, &old, "https://127.0.0.1", 1_790_000_500).is_err());
+        let mut forged = old.clone(); forged["content"] = json!(old["content"].as_str().unwrap().replace("star-run", "star-ruN"));
+        assert!(rewrap_event(&me, &forged, "https://x.trycloudflare.com", 1_790_000_500).is_err(), "서명이 안 맞는 원본");
+        // 다시 싼 쪽지가 「내 게임」 고르기에서 가장 새것
+        let pk = crate::shopkey::pubkey_of(&me).unwrap();
+        let evs = vec![old.clone(), re.clone()];
+        let latest = my_latest_open_events(&evs, &pk);
+        assert_eq!(latest.len(), 1);
+        assert_eq!(gateway_of(latest[0]).as_deref(), Some("https://new.trycloudflare.com"));
+        assert_eq!(my_open_docs(&evs, &pk).len(), 1);
     }
 }

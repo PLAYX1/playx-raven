@@ -323,6 +323,12 @@ pub fn tunnel_changed() {
     }
 }
 
+/// 이 컴퓨터의 바뀌지 않는 바깥 주소(테일스케일 퍼널 등 — `adopt_fixed_shop_url` 이 실제로 답한 뒤에만 적는다). 없으면 빈 글자.
+/// 오락실 판매자 게이트웨이(arcade_keep.rs)가 읽는다.
+pub fn fixed_target() -> String {
+    load().fixed_target
+}
+
 /// 테일스케일 퍼널을 껐을 때(tailscale.rs) — 고정 링크가 죽은 ts.net 을 가리키지 않게 임시 터널로 되돌린다.
 pub fn forget_fixed_target() {
     let mut cfg = load();

@@ -589,8 +589,19 @@ pub(crate) fn relay_only_blocks(outside: bool, shop: bool, remote_admin: bool, p
     outside && !shop && !remote_admin && path != "/api/relay" && customer_path(path)
 }
 
+/// 11-26 오락실 판매자 게이트웨이: 바깥 `/ipfs/<root>[/…]` 중 root 가 **이 컴퓨터가 붙잡은 내 게임**(arcade_keep::serves)이면
+/// 가게가 아닌 컴퓨터(키오스크 등)에서도 연다 — 그 답은 `ipfs_relay` 가 파일창고 API `cat --offline`(남의 CID 받아 오기 없음)으로만 낸다.
+pub(crate) fn arcade_gateway_path(path: &str) -> Option<&str> {
+    let rest = path.strip_prefix("/ipfs/")?;
+    let root = rest.split('/').next()?;
+    crate::arcade_gw::serves(root).then_some(rest)
+}
+
 fn relay_only_blocked(state: &ServerState, headers: &HeaderMap, path: &str) -> bool {
     if path == crate::chain_sales::SALES_PATH || !from_outside(headers) {
+        return false;
+    }
+    if arcade_gateway_path(path).is_some() {
         return false;
     }
     let remote = state.remote_admin.lock().map(|v| *v).unwrap_or(false);
@@ -1574,7 +1585,53 @@ fn relay_headers(kind: String) -> [(header::HeaderName, String); 3] {
     ]
 }
 
+/// 판매자 게이트웨이 경로 글자: CID 뿌리 + 문서 경로(사이트 SAFE_PATH 와 같은 글자) — `..`·빈 칸·`%`·`?` 없음.
+pub(crate) fn arcade_rel_ok(rest: &str) -> bool {
+    !rest.is_empty() && rest.len() <= 512 && !rest.contains("..") && !rest.starts_with('/') && !rest.ends_with('/') && !rest.contains("//")
+        && rest.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-' | b'/'))
+}
+
+/// 바깥에서 온 내 게임 요청: 파일창고 API `cat` 을 **offline** 으로(이 컴퓨터에 없는 블록은 받으러 가지 않는다 = Gateway.NoFetch 와 같은 효과).
+/// 🔴 5001(API)은 바깥에 열지 않는다 — 여기서 고정 명령(cat) 하나만, 고정 모양 경로로 부른다. 쿼리는 버린다.
+async fn arcade_cat_offline(rest: &str) -> (StatusCode, [(header::HeaderName, String); 3], Vec<u8>) {
+    const MAX: usize = 32 * 1024 * 1024;
+    static SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(4);
+    if !arcade_rel_ok(rest) {
+        return (StatusCode::BAD_REQUEST, relay_headers("text/plain".to_string()), Vec::new());
+    }
+    let Ok(_permit) = SLOTS.try_acquire() else {
+        return (StatusCode::SERVICE_UNAVAILABLE, relay_headers("text/plain".to_string()), Vec::new());
+    };
+    let url = format!("http://127.0.0.1:5001/api/v0/cat?arg=/ipfs/{rest}&offline=true");
+    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(20)).redirect(reqwest::redirect::Policy::none()).build().unwrap_or_default();
+    match client.post(&url).send().await {
+        Ok(mut r) if r.status().is_success() => {
+            if r.content_length().is_some_and(|n| n as usize > MAX) {
+                return (StatusCode::PAYLOAD_TOO_LARGE, relay_headers("text/plain".to_string()), Vec::new());
+            }
+            let mut body: Vec<u8> = Vec::new();
+            loop {
+                match r.chunk().await {
+                    Ok(Some(c)) => {
+                        if body.len() + c.len() > MAX {
+                            return (StatusCode::PAYLOAD_TOO_LARGE, relay_headers("text/plain".to_string()), Vec::new());
+                        }
+                        body.extend_from_slice(&c);
+                    }
+                    Ok(None) => break,
+                    Err(_) => return (StatusCode::BAD_GATEWAY, relay_headers("text/plain".to_string()), Vec::new()),
+                }
+            }
+            (StatusCode::OK, relay_headers("application/octet-stream".to_string()), body)
+        }
+        // 파일창고가 꺼져 있으면 503(사이트가 「판매자 꺼짐」), 이 컴퓨터에 없으면 404(「이 게임을 내주지 않았어요」).
+        Err(_) => (StatusCode::SERVICE_UNAVAILABLE, relay_headers("text/plain".to_string()), Vec::new()),
+        _ => (StatusCode::NOT_FOUND, relay_headers("text/plain".to_string()), Vec::new()),
+    }
+}
+
 async fn ipfs_relay(
+    headers: HeaderMap,
     axum::extract::Path(path): axum::extract::Path<String>,
     axum::extract::RawQuery(q): axum::extract::RawQuery,
 ) -> impl IntoResponse {
@@ -1582,6 +1639,13 @@ async fn ipfs_relay(
     // 쓰지 않으므로 그냥 거절한다.
     if path.contains("..") {
         return (StatusCode::BAD_REQUEST, relay_headers("text/plain".to_string()), Vec::new());
+    }
+    // 11-26 바깥에서 온 내 게임(오락실 판매자 게이트웨이)은 offline 으로만 — 남의 CID 를 대신 받아 주지 않는다.
+    if from_outside(&headers) {
+        let full = format!("/ipfs/{path}");
+        if let Some(rest) = arcade_gateway_path(&full) {
+            return arcade_cat_offline(rest).await;
+        }
     }
 
     // 🔴 **물음표 뒤를 버리고 있었다.** 그래서 `?format=raw`(블록 그대로
@@ -4689,7 +4753,7 @@ mod outside {
         use super::{ipfs_relay, relay_headers};
         // 로컬 게이트웨이가 없는 시험에서는 「못 찾음」 길로 간다 — 그 길도 같은 머리말이어야 한다.
         let r = tauri::async_runtime::block_on(async {
-            ipfs_relay(axum::extract::Path("QmNotHereForTests0000000000000000000000000000/index.html".into()), axum::extract::RawQuery(None)).await.into_response()
+            ipfs_relay(HeaderMap::new(), axum::extract::Path("QmNotHereForTests0000000000000000000000000000/index.html".into()), axum::extract::RawQuery(None)).await.into_response()
         });
         assert_eq!(r.headers().get(header::CONTENT_SECURITY_POLICY).unwrap(), "sandbox");
         assert_eq!(r.headers().get(header::X_CONTENT_TYPE_OPTIONS).unwrap(), "nosniff");
@@ -6658,6 +6722,41 @@ mod lan_mount_in_phone_router {
         let app = super::build_phone_router(super::ServerState::default());
         let (s, _) = post(&app, "192.168.0.10:8790", "/lan/pull", &pull_body()).await;
         assert_eq!(s, StatusCode::NOT_FOUND, "기본 꺼짐 = 경로 자체가 없다");
+    }
+
+    /// 11-26 오락실 판매자 게이트웨이: 가게가 아닌 컴퓨터도 바깥에 **내 게임 CID** 의 /ipfs/ 만 연다(나머지 /ipfs/ 는 여전히 404).
+    /// 내 게임 요청은 파일창고 API cat offline 으로만 간다 — 파일창고가 없는 시험 환경에서는 503(꺼짐)으로 답한다(404 가 아니다).
+    #[tokio::test]
+    async fn a_non_shop_computer_opens_only_its_own_games_ipfs_to_the_tunnel() {
+        let _home = super::order_persistence_tests::TestHome::new();
+        let mine = format!("Qm{}", "A".repeat(44));
+        let folder = format!("b{}", "a".repeat(58));
+        let _g = crate::arcade_gw::SERVING_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        crate::arcade_gw::set_serving_for_test(&[&mine, &folder]);
+        assert_eq!(super::arcade_gateway_path(&format!("/ipfs/{folder}/js/game.js")), Some(format!("{folder}/js/game.js").as_str()));
+        assert_eq!(super::arcade_gateway_path(&format!("/ipfs/Qm{}", "B".repeat(44))), None, "남의 CID");
+        assert_eq!(super::arcade_gateway_path("/api/relay"), None);
+        for bad in [format!("{folder}/../x"), format!("{folder}/a%2e%2e"), format!("{folder}/a?b"), format!("{folder}//a"), format!("{folder}/"), format!("{folder}/a b")] {
+            assert!(!super::arcade_rel_ok(&bad), "{bad}");
+        }
+        assert!(super::arcade_rel_ok(&format!("{folder}/art/cover.png")));
+        super::TEST_NOT_SHOP.with(|c| c.set(true));
+        let app = super::build_phone_router(super::ServerState::default());
+        let get = |path: String| {
+            let app = app.clone();
+            async move {
+                let r = axum::http::Request::get(path).header("host", "kiosk.tail1234.ts.net").header("x-forwarded-for", "198.51.100.7");
+                app.oneshot(r.body(axum::body::Body::empty()).unwrap()).await.unwrap().status()
+            }
+        };
+        assert_eq!(get(format!("/ipfs/Qm{}", "B".repeat(44))).await, StatusCode::NOT_FOUND, "남의 CID 는 바깥에 안 연다");
+        // 문 앞(relay_only)은 내 게임 길만 지나보낸다. (실제 cat 은 파일창고를 부르므로 시험은 네트워크 없이 끝나는 길만 본다.)
+        assert!(super::arcade_gateway_path(&format!("/ipfs/{mine}")).is_some());
+        // 400 = 문 앞을 지나 처리기까지 갔다(문 앞에서 막히면 404) — 이상한 글자는 파일창고를 부르기 전에 처리기가 거절한다.
+        assert_eq!(get(format!("/ipfs/{folder}/a-b%20c")).await, StatusCode::BAD_REQUEST);
+        crate::arcade_gw::set_serving_for_test(&[]);
+        assert_eq!(get(format!("/ipfs/{folder}/a-b%20c")).await, StatusCode::NOT_FOUND, "목록에서 빠지면 다시 닫힌다");
+        super::TEST_NOT_SHOP.with(|c| c.set(false));
     }
 
     /// 11-23 우체국(제미나이 E1): 가게가 아닌 컴퓨터는 바깥(터널)에서 릴레이 한 길만 연다 — 나머지는 404.
