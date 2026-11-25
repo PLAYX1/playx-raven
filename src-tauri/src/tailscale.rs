@@ -479,6 +479,7 @@ pub async fn tailscale_fixed_setup() -> Value {
         return json!({ "state": "not_answering", "url": url });
     }
     let published = crate::map::adopt_fixed_shop_url(&url).unwrap_or(false);
+    crate::arcade_keep::address_changed();
     json!({ "state": "ready", "url": url, "published": published })
 }
 

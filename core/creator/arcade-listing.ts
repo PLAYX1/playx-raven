@@ -27,6 +27,19 @@ import { signMessageWithKeyForTest } from '../signer/test-key';
  *   · 고치기 = 같은 d 로 더 높은 version 문서를 가리키는 새 쪽지. 내리기 = state:'removed' 쪽지(+ 데스크탑은 NIP-09 지우기도 보낸다).
  *   · 같은 (seller,id) 쪽지가 여럿이면 at 이 큰 것. 같은 at 이면 removed 가 이긴다(내린 것을 옛 쪽지로 되살리지 못하게). 그다음 이벤트 id 작은 것.
  *
+ * 11-26 판매자 게이트웨이 알림(선택 태그 ["gw", "https://<호스트>"] — 대표 위임 페이블 판정):
+ *   공개 게이트웨이(ipfs.io·dweb.link)가 429·시간 초과로 판매자 컴퓨터의 게임을 못 찾는다. 판매자 데스크탑이 자기 바깥 주소
+ *   (테일스케일 퍼널·클라우드플레어 터널 — 그 컴퓨터 8790 의 읽기 전용 /ipfs/ 길)를 이 태그로 적고, 사이트가 그 주소를 먼저 시도한다.
+ *   · 서명 범위: 🔴 겉봉투(BIP340) 서명만 덮는다 — NIP-01 이벤트 id 가 tags 를 해시하므로 겉봉투 열쇠 없이는 바꿀 수 없다.
+ *     안쪽 판매자 서명 문구·content 에는 넣지 않는다. 까닭 ① 옛 리더는 content 키를 엄격히 본다(keysAre) — content 에 칸을 더하면
+ *     이미 나간 폰·데스크탑·사이트가 새 쪽지를 전부 버린다. ② 주소가 바뀔 때(임시 터널) 지갑 잠금 없이 겉봉투 열쇠만으로
+ *     같은 content(같은 안쪽 서명)를 새 태그로 다시 싸 올릴 수 있다. ③ 안쪽 서명 문구에 겉봉투 pubkey 가 이미 들어 있어
+ *     남이 다른 열쇠로 다시 싸 gw 를 바꿔 끼울 수 없다 — gw 를 바꿀 수 있는 것은 판매자가 묶어 둔 그 겉봉투 열쇠뿐이다.
+ *   · gw 는 「힌트」일 뿐 믿지 않는다: 받은 바이트는 CID·서명·sha256 으로 다시 본다(틀린 주소는 그 판매자 게임만 못 받게 할 뿐).
+ *     사이트는 SSRF 방어(https·기본 포트·DNS 뒤 사설망 차단·리다이렉트 금지·경로 /ipfs/<cid>[/path] 고정)를 따로 한다.
+ *   · 모양: https 원점 하나(경로·포트·사용자·쿼리 없음, 소문자 호스트 이름, IP 숫자 주소·localhost·.local 류 거절, 200자 이하). 틀리면 그 태그만 무시.
+ *   · 같은 (at,state) 쪽지가 여럿이면 created_at 이 큰 것(다시 싼 새 주소)이 이긴다 — 그다음 이벤트 id 작은 것. 옛 리더는 gw 를 안 보므로 어느 것을 골라도 같은 문서다.
+ *
  * 숨김 목록(rv-arcade-hidden v1) — 플랫폼이 관리하고 사이트가 내준다(읽기 전용). 일반 판매자 게임에만 쓴다(확인 판매자는 체인이 닻).
  *   { format:'rv-arcade-hidden', v:1, updatedAt:<ISO>, games:['R…/<id>'…], sellers:['R…'…], docs:['<문서 CID>'…] }
  */
@@ -34,6 +47,8 @@ import { signMessageWithKeyForTest } from '../signer/test-key';
 export const ARCADE_LISTING_KIND = 31405;
 export const ARCADE_LISTING_TAG = 'ravenvault-arcade';
 export const ARCADE_LISTING_FORMAT = 'rv.arcade-listing/1';
+/** 판매자 게이트웨이 태그 이름(선택) — ["gw", "https://<호스트>"]. 데스크탑 arcade_listing.rs ARCADE_GW_TAG 와 같다. */
+export const ARCADE_LISTING_GW_TAG = 'gw';
 export const ARCADE_HIDDEN_FORMAT = 'rv-arcade-hidden';
 export const ARCADE_LISTING_LIMITS = Object.freeze({
   /** 한 번에 살펴볼 쪽지 수 · 목록에 둘 일반 판매자 게임 수 · 쪽지 content 크기 · 숨김 목록 칸 수. */
@@ -42,7 +57,11 @@ export const ARCADE_LISTING_LIMITS = Object.freeze({
 
 export type ArcadeListingState = 'open' | 'removed';
 export type ArcadeListingFields = { seller: string; id: string; version: number; docCid: string; docHash: string; at: number; state: ArcadeListingState };
-export type ArcadeListing = ArcadeListingFields & { key: string; nostrPubkey: string; eventId: string };
+export type ArcadeListing = ArcadeListingFields & { key: string; nostrPubkey: string; eventId: string;
+  /** 겉봉투 시각(다시 싼 쪽지 고르기용). */
+  createdAt: number;
+  /** 판매자가 적은 자기 게이트웨이 원점(겉봉투 서명으로만 묶인 힌트) — 없거나 모양이 틀리면 null. */
+  gateway: string | null };
 export type NostrEventLike = { id: string; pubkey: string; created_at: number; kind: number; tags: string[][]; content: string; sig: string };
 
 const ID = /^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/;
@@ -54,7 +73,38 @@ const unhex = (s: string) => Uint8Array.from(s.match(/../g) ?? [], b => parseInt
 const keysAre = (o: Record<string, Loose>, keys: string) => Object.keys(o).sort().join() === keys.split(',').sort().join();
 
 export const arcadeListingD = (seller: string, id: string): string => `${seller}/${id}`;
-export const arcadeListingTags = (seller: string, id: string): string[][] => [['d', arcadeListingD(seller, id)], ['t', ARCADE_LISTING_TAG]];
+
+const GW_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+const GW_PRIVATE_SUFFIX = /(^|\.)(localhost|local|localdomain|internal|intranet|lan|home|corp|private|home\.arpa|test|invalid|example|onion)$/;
+/**
+ * 판매자 게이트웨이 원점 모양 검사 → 깨끗한 원점(`https://<호스트>`) 또는 null. 순수 문자열 검사뿐 —
+ * 진짜 SSRF 방어(DNS 해석 뒤 사설·루프백·링크로컬·CGNAT·메타데이터 차단)는 부르는 쪽(사이트)이 연결 때 한다.
+ */
+export function arcadeGatewayOrigin(raw: unknown): string | null {
+  if (typeof raw !== 'string' || raw.length > 200) return null;
+  const m = /^https:\/\/([a-z0-9.-]+)\/?$/.exec(raw);
+  if (!m) return null;
+  const host = m[1];
+  if (host.length > 190 || !host.includes('.') || host.endsWith('.')) return null;
+  const labels = host.split('.');
+  if (labels.some(l => !GW_LABEL.test(l))) return null;
+  if (/^[0-9]+$/.test(labels[labels.length - 1]) || /^\d+(\.\d+){3}$/.test(host)) return null; // IP 숫자 주소·숫자 끝 이름
+  if (GW_PRIVATE_SUFFIX.test(host)) return null;
+  return `https://${host}`;
+}
+
+export const arcadeListingTags = (seller: string, id: string, gateway?: string | null): string[][] => {
+  const tags = [['d', arcadeListingD(seller, id)], ['t', ARCADE_LISTING_TAG]];
+  const gw = gateway == null ? null : arcadeGatewayOrigin(gateway);
+  if (gateway != null && !gw) throw new ArcadeProductError('arcade-shape', 'listing-gateway');
+  if (gw) tags.push([ARCADE_LISTING_GW_TAG, gw]);
+  return tags;
+};
+/** 겉봉투 태그에서 판매자 게이트웨이(첫 gw 태그만 본다 — 여럿이거나 틀리면 첫 것이 맞을 때만). */
+export const arcadeListingGateway = (tags: readonly string[][]): string | null => {
+  const t = tags.find(x => x[0] === ARCADE_LISTING_GW_TAG);
+  return t ? arcadeGatewayOrigin(t[1]) : null;
+};
 
 /** 안쪽 서명 문구. nostrPubkey = 겉봉투를 쌀 열쇠의 x-only 공개키(64 hex). */
 export function arcadeListingMessage(f: ArcadeListingFields, nostrPubkey: string): string {
@@ -112,10 +162,10 @@ export function parseArcadeListingEvent(raw: unknown, now = Math.floor(Date.now(
   if (ds.length !== 1 || ds[0][1] !== arcadeListingD(f.seller, f.id)) return null;
   if (typeof c.signature !== 'string' || !SIG.test(c.signature)) return null;
   if (recoverArcadeSigner(arcadeListingMessage(f, e.pubkey), c.signature) !== f.seller) return null;
-  return { ...f, key: arcadeListingD(f.seller, f.id), nostrPubkey: e.pubkey, eventId: e.id };
+  return { ...f, key: arcadeListingD(f.seller, f.id), nostrPubkey: e.pubkey, eventId: e.id, createdAt: e.created_at, gateway: arcadeListingGateway(e.tags) };
 }
 
-/** 같은 (seller,id) 끼리 하나로: at 큰 것 → 같으면 removed → 이벤트 id 작은 것. 결과는 key 순. */
+/** 같은 (seller,id) 끼리 하나로: at 큰 것 → 같으면 removed → 겉봉투 created_at 큰 것(새 게이트웨이로 다시 싼 쪽지) → 이벤트 id 작은 것. 결과는 key 순. */
 export function pickArcadeListings(raws: readonly unknown[], now = Math.floor(Date.now() / 1000)): ArcadeListing[] {
   const best = new Map<string, ArcadeListing>();
   const seen = new Set<string>();
@@ -124,7 +174,8 @@ export function pickArcadeListings(raws: readonly unknown[], now = Math.floor(Da
     if (!l || seen.has(l.eventId)) continue;
     seen.add(l.eventId);
     const cur = best.get(l.key);
-    const wins = !cur || l.at > cur.at || (l.at === cur.at && (l.state === 'removed' && cur.state === 'open' || (l.state === cur.state && l.eventId < cur.eventId)));
+    const wins = !cur || l.at > cur.at || (l.at === cur.at && (l.state === 'removed' && cur.state === 'open'
+      || (l.state === cur.state && (l.createdAt > cur.createdAt || (l.createdAt === cur.createdAt && l.eventId < cur.eventId)))));
     if (wins) best.set(l.key, l);
   }
   return [...best.values()].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
@@ -217,10 +268,15 @@ export function mergeArcadeSources(p: {
 /* ── 시험·도구 전용 ───────────────────────────────────────────────── */
 
 /** 던져 버리는 키로 알림 쪽지 전체(겉봉투까지)를 만든다. 실제 앱은 데스크탑 러스트가 겉봉투를, 노드 signmessage 가 안쪽을 서명한다. */
-export function signArcadeListingForTest(f: ArcadeListingFields, rvnKey: Uint8Array, nostrKey: Uint8Array, createdAt = f.at): NostrEventLike {
+export function signArcadeListingForTest(f: ArcadeListingFields, rvnKey: Uint8Array, nostrKey: Uint8Array, createdAt = f.at, gateway?: string | null): NostrEventLike {
   const pubkey = hex(schnorr.getPublicKey(nostrKey));
   const content = arcadeListingContent(f, signMessageWithKeyForTest(arcadeListingMessage(f, pubkey), rvnKey));
-  const unsigned = { pubkey, created_at: createdAt, kind: ARCADE_LISTING_KIND, tags: arcadeListingTags(f.seller, f.id), content };
+  return wrapArcadeListingForTest(content, f.seller, f.id, nostrKey, createdAt, gateway);
+}
+/** 같은 content(같은 안쪽 서명)를 새 태그·시각으로 다시 싼다 — 데스크탑의 「주소 바뀌면 다시 알리기」와 같은 일(겉봉투 열쇠만 쓴다). */
+export function wrapArcadeListingForTest(content: string, seller: string, gameId: string, nostrKey: Uint8Array, createdAt: number, gateway?: string | null): NostrEventLike {
+  const pubkey = hex(schnorr.getPublicKey(nostrKey));
+  const unsigned = { pubkey, created_at: createdAt, kind: ARCADE_LISTING_KIND, tags: arcadeListingTags(seller, gameId, gateway), content };
   const id = nostrEventIdOf(unsigned);
   return { ...unsigned, id, sig: hex(schnorr.sign(unhex(id), nostrKey)) };
 }

@@ -843,6 +843,14 @@ fn outside_url() -> Option<String> {
     current().own_url.as_deref().and_then(clean_relay_url)
 }
 
+/// 사람이 적은 내 릴레이 주소(`wss://<호스트>/…`)의 https 원점 — 오락실 판매자 게이트웨이 후보(arcade_keep.rs). 포트가 붙어 있으면 버린다.
+pub(crate) fn own_https_origin() -> Option<String> {
+    let u = current().own_url?;
+    let rest = u.strip_prefix("wss://")?;
+    let host = rest.split(['/', '?', '#']).next()?.to_ascii_lowercase();
+    (!host.is_empty() && !host.contains(':') && !host.contains('@')).then(|| format!("https://{host}"))
+}
+
 /// 무엇을 해야 하나 — 순수 판단(시험용).
 #[derive(Debug, PartialEq)]
 pub enum Announce {

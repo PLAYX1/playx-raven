@@ -307,6 +307,8 @@ pub fn tunnel_start(port: u16) -> Result<Value, String> {
             announce_now(Some(url.clone()));
             // 무료 고정 링크(/s/)를 새 주소로 바로 옮긴다(map.rs) — 5분 박동을 기다리지 않는다.
             crate::map::tunnel_changed();
+            // 오락실 게임 알림의 판매자 게이트웨이(gw)도 새 주소로 다시 싼다(지갑 서명 없이 — arcade_keep.rs).
+            crate::arcade_keep::address_changed();
             start_heartbeat();
             Ok(json!({
                 "url": url,
