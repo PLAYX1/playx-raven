@@ -4060,7 +4060,7 @@
           <button id="v2-bell" class="v2-bell" type="button" aria-expanded="false" aria-controls="v2-old" aria-label="알림" title="알림"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg><span id="v2-bell-n" class="v2-bell-n" hidden>0</span></button>
         </div>
         <!-- 0.9.48 대표 「쉽고 세련되고 · 같은 내용 두 번 금지」: 첫 화면 한 가지 일 = 내 돈. 제목 바로 아래 돈 카드(받기·보내기) → 라비 한 줄 → 오늘 카드.
-             노드 알약은 뺐다(기술 말 — 문제 있을 때만 왼쪽 메뉴 아래 점 하나가 말한다) · 폰 연결은 아래 「더 가기」 줄로. 넓은 창은 돈 카드 | 라비·오늘 카드 두 칸. -->
+             노드 알약은 뺐다(기술 말 — 문제 있을 때만 왼쪽 메뉴 아래 점 하나가 말한다) · 폰 연결은 아래 「더 가기」 줄로. 넓은 창은 [내 돈 | 새 자산 만들기] 아래 라비 한 줄·오늘 카드(읽는 순서는 내 돈 → 라비 → 오늘 카드 → 새 자산 만들기). -->
         <div class="v2-top">
           <div class="v2-money">
             <div class="overview" aria-labelledby="overview-title">
@@ -4079,8 +4079,6 @@
             <!-- 11-11 라비 카드(src/ravi-cards.ts): 최대 3장 · 돈 → 주문 → 준비된 것(폰과 같은 순서). 여는 단추만. -->
             <div id="rv-home-cards" class="rv-cards" role="region" aria-label="오늘 볼 것" aria-live="polite"></div>
           </div>
-        </div>
-        <div class="v2-row">
           <div class="v2-create" id="v2-create" role="region" aria-labelledby="v2-create-title">
             <div class="v2-create-top"><h2 id="v2-create-title">새 자산 만들기</h2><span id="v2-create-wait" class="v2-wait" hidden>장부 다 받으면 켜져요</span></div>
             <div class="v2-kinds">
