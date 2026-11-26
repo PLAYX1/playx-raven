@@ -1,5 +1,15 @@
 # 변경 기록
 
+## 0.9.53
+
+### 한국어
+
+- **다시 켠 뒤 오락실 게임이 오래 안 열리던 문제를 고쳤습니다:** 켠 직후 내 게임을 아직 못 찾으면 3분마다 다시 찾습니다(예전에는 다섯 번 뒤 30분을 기다렸어요). 릴레이에 잠깐 못 닿아도 내주던 게임을 멈추지 않습니다.
+
+### English
+
+- **Arcade games come back quickly after a restart:** if your games aren't found right after launch, the app checks again every 3 minutes (it used to wait 30 minutes after five tries). A brief relay outage no longer stops serving your games.
+
 ## 0.9.52
 
 ### 한국어
