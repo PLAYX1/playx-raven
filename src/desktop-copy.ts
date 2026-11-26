@@ -2338,6 +2338,7 @@ export const DESKTOP_COPY: Record<string, [string, string, string]> = {
   "받을 사람 고르기": ["Choose recipient", "受取人を選ぶ", "选择收款人"],
   "저장한 사람": ["Saved recipients", "保存した受取人", "已保存的收款人"],
   "최근 보낸 곳": ["Recently sent to", "最近の送金先", "最近转出对象"],
+  "내 폰": ["My phone", "自分のスマホ", "我的手机"],
   "아직 보낸 곳이 없어요. 보낸 뒤 결과 화면에서 이름을 붙여 저장하면 여기서 고를 수 있어요.": ["You haven't sent to anyone yet. After sending, name and save the address on the result screen to pick it here.", "まだ送金先がありません。送った後の結果画面で名前を付けて保存すると、ここから選べます。", "还没有转出对象。转出后在结果页面为地址命名并保存，即可在这里选择。"],
   "받을 주소 QR": ["Receiving address QR", "受取アドレスのQR", "收款地址二维码"],
   "이 컴퓨터의 노드가 확인한 내 지갑 주소예요. 레이븐코인(RVN)과 레이븐 자산만 받을 수 있어요.": ["Your wallet address, confirmed by this computer's node. It can receive only Ravencoin (RVN) and Ravencoin assets.", "このパソコンのノードが確認した自分のウォレットのアドレスです。受け取れるのはRavencoin（RVN）とRavencoinの資産だけです。", "这是本机节点确认的我的钱包地址。只能接收 Ravencoin（RVN）和 Ravencoin 资产。"],

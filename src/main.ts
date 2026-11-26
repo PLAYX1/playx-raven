@@ -10366,9 +10366,17 @@ async function paintPicker() {
   const seq = ++pickSeq;
   const saved = loadPayees();
   host.innerHTML = pickerHtml(saved, [], copyHtml, escapeHtml);
-  const txs = await invoke<any[]>("recent_transactions", { count: 100 }).catch(() => []);
+  const [txs, phones] = await Promise.all([invoke<any[]>("recent_transactions", { count: 100 }).catch(() => []), linkedPhonePayees()]);
   if (seq !== pickSeq) return;
-  host.innerHTML = pickerHtml(saved, recentPayees(Array.isArray(txs) ? txs : [], saved), copyHtml, escapeHtml);
+  host.innerHTML = pickerHtml(saved, recentPayees(Array.isArray(txs) ? txs : [], saved), copyHtml, escapeHtml, phones);
+}
+
+/** 「폰과 지갑 연결」로 이어진 폰들 — 끊지 않은 연결의 첫 받는 주소(폰이 연결할 때 서명해 넘긴 주소). 못 읽으면 빈 목록. */
+async function linkedPhonePayees(): Promise<{ address: string; name: string }[]> {
+  const box = await invoke<any>("wallet_link_list").catch(() => null);
+  const links: any[] = Array.isArray(box?.links) ? box.links : [];
+  return links.filter((l) => !l?.revoked && Array.isArray(l?.phoneAddresses) && typeof l.phoneAddresses[0] === "string" && /^R[1-9A-HJ-NP-Za-km-z]{33}$/.test(l.phoneAddresses[0]))
+    .map((l) => ({ address: String(l.phoneAddresses[0]), name: String(l.name || t("내 폰")) }));
 }
 
 let pickedAddr = "";

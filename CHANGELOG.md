@@ -1,5 +1,15 @@
 # 변경 기록
 
+## 0.9.51
+
+### 한국어
+
+- **보내기에서 「내 폰」을 바로 고릅니다:** 「폰과 지갑 연결」로 이은 폰이 있으면, 보내기 화면의 「받을 사람 고르기」 맨 앞에 「내 폰」이 나옵니다. 누르면 그 폰의 받는 주소가 들어가요 — 주소를 복사해 붙이지 않아도 됩니다.
+
+### English
+
+- **Pick "My phone" when sending:** if you linked a phone with "Link phone and wallet", it now appears first under "Choose a recipient" on the send screen. Tap it to fill in that phone's receive address — no copy and paste needed.
+
 ## 0.9.50
 
 ### 한국어

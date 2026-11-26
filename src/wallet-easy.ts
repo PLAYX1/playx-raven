@@ -87,14 +87,22 @@ export function shortAddr(a: string): string {
 }
 
 /** 보내기 입력 화면의 「받을 사람 고르기」. 저장한 사람 먼저, 그다음 최근 보낸 곳. */
-export function pickerHtml(saved: Payee[], recent: RecentPayee[], copyHtml: Copy, esc: Esc): string {
+/** `phones` = 「폰과 지갑 연결」로 이어진 내 폰(이름 · 그 폰의 받는 주소) — 11-26 대표 「내 폰으로 보낼 때 주소 붙여넣기 불편」. 맨 앞에 둔다. */
+export function pickerHtml(saved: Payee[], recent: RecentPayee[], copyHtml: Copy, esc: Esc, phones: { address: string; name: string }[] = []): string {
   const chip = (address: string, name: string) =>
     `<button type="button" class="ghost payee" data-payee="${esc(address)}">` +
     (name ? `<b translate="no">${esc(name)}</b>` : "") +
     `<code translate="no">${esc(shortAddr(address))}</code></button>`;
-  const savedSet = new Set(saved.map((p) => p.address));
+  const phoneSet = new Set(phones.map((p) => p.address));
+  const savedOnly = saved.filter((p) => !phoneSet.has(p.address));
+  const savedSet = new Set([...saved.map((p) => p.address), ...phoneSet]);
   const recentOnly = recent.filter((r) => !savedSet.has(r.address));
   const parts: string[] = [`<div class="pickhead">${copyHtml("받을 사람 고르기")}</div>`];
+  if (phones.length) {
+    parts.push(`<div class="picksub">${copyHtml("내 폰")}</div>`,
+      `<div class="payees">${phones.slice(0, 6).map((p) => chip(p.address, p.name)).join("")}</div>`);
+  }
+  saved = savedOnly;
   if (saved.length) {
     parts.push(`<div class="picksub">${copyHtml("저장한 사람")}</div>`,
       `<div class="payees">${saved.slice(0, 12).map((p) => chip(p.address, p.name)).join("")}</div>`);
@@ -103,7 +111,7 @@ export function pickerHtml(saved: Payee[], recent: RecentPayee[], copyHtml: Copy
     parts.push(`<div class="picksub">${copyHtml("최근 보낸 곳")}</div>`,
       `<div class="payees">${recentOnly.map((r) => chip(r.address, r.name)).join("")}</div>`);
   }
-  if (!saved.length && !recentOnly.length) {
+  if (!phones.length && !saved.length && !recentOnly.length) {
     parts.push(`<p class="meta">${copyHtml("아직 보낸 곳이 없어요. 보낸 뒤 결과 화면에서 이름을 붙여 저장하면 여기서 고를 수 있어요.")}</p>`);
   }
   return parts.join("");
