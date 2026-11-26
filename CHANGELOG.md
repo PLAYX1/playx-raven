@@ -1,5 +1,15 @@
 # 변경 기록
 
+## 0.9.55
+
+### 한국어
+
+- **라비 말풍선을 정리했습니다:** 입력칸 안내가 위 문구와 같은 말을 되풀이하던 것을 「예: 오늘 들어온 돈 알려 줘」로 바꾸고, 겹치던 「라비에게 물어보기」 글자를 뺐습니다. 마이크는 이모지 대신 선 그림 아이콘이고, 단추 글자는 두 줄로 꺾이지 않습니다.
+
+### English
+
+- **Tidied Ravi's speech bubble:** the input hint no longer repeats the line above it (now "e.g. Tell me today's income"), the duplicate "Ask Ravi" label is gone, the mic is a line icon instead of an emoji, and button labels no longer wrap.
+
 ## 0.9.54
 
 ### 한국어
