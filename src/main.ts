@@ -2822,9 +2822,12 @@ async function refreshOverview() {
   $("rv-home-server-state").dataset.tone = !n ? "bad" : typeof progress !== "number" || !Number.isFinite(progress) || progress < 0.9999 ? "warn" : "good";
   const confirmed = wallet.status === "fulfilled" ? wallet.value?.confirmed : undefined;
   if (typeof confirmed === "number" && Number.isFinite(confirmed) && confirmed >= 0) lastOverviewConfirmed = confirmed;
-  setCopyText($("overview-balance"), () => typeof confirmed === "number" && Number.isFinite(confirmed) && confirmed >= 0
-    ? fmtRvn(confirmed) : warming ? t("노드가 시작되면 나와요") : t("확인 못 함"));
-  $("overview-balance").classList.toggle("unknown", !(typeof confirmed === "number" && Number.isFinite(confirmed) && confirmed >= 0));
+  // 11-27 키오스크: 노드가 잠깐 바빠 답이 늦으면 아는 잔액이 「노드가 시작되면 나와요」로 바뀌었다가
+  // 다음 확인 때 돌아오기를 되풀이했다. 한 번 읽은 잔액이 있으면 그대로 둔다(다음 답이 오면 바로 새 값).
+  const shown = typeof confirmed === "number" && Number.isFinite(confirmed) && confirmed >= 0 ? confirmed : lastOverviewConfirmed;
+  setCopyText($("overview-balance"), () => shown !== null
+    ? fmtRvn(shown) : warming ? t("노드가 시작되면 나와요") : t("확인 못 함"));
+  $("overview-balance").classList.toggle("unknown", shown === null);
   /* 🔴 0.4.8-B — 방금 받은 10 RVN 이 여기서는 **0** 으로만 보였다(RV3 T04). 확정 잔액에 섞지는
      않는다(확인 전 돈을 쓸 수 있는 돈처럼 보이면 안 된다) — 옆에 「들어오는 중」으로 따로 적는다.
      같은 `wallet_balance` 답을 쓴다(켤 때 읽는 횟수를 늘리지 않는다). */
