@@ -1,5 +1,17 @@
 # 변경 기록
 
+## 0.9.50
+
+### 한국어
+
+- **게임 정보가 내 컴퓨터 우체국에도 남습니다:** 이 컴퓨터의 우체국(릴레이)이 게임 올림 쪽지를 「가게 글이 아니다」라며 버리고 있었습니다. 이제 모양이 맞는 게임 쪽지는 받아 둡니다 — 바깥 우체국이 막혀도 손님이 게임을 찾습니다.
+- **바깥 손님에게는 이 컴퓨터에 있는 파일만:** 바깥에서 온 사진·파일 요청을 남의 것까지 대신 받아 오지 않습니다. 내 가게 사진과 내 게임은 그대로 보입니다.
+
+### English
+
+- **Game listings now stay on your own relay too:** this computer's relay was rejecting arcade listings as "not a shop notice". Well-formed listings are now kept, so players can still find your games when public relays are down.
+- **Outside visitors only get files already on this computer:** the /ipfs path no longer fetches other people's content on a visitor's behalf. Your shop photos and games still load.
+
 ## 0.9.49
 
 ### 한국어

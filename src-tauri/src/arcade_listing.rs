@@ -115,6 +115,31 @@ pub fn normalize_content(raw: &str, now: i64) -> Result<(String, String, i64, St
     Ok((serde_json::to_string(&Value::Object(m)).unwrap_or_default(), format!("{seller}/{id}"), at, state.to_string()))
 }
 
+/// 11-26 우리 릴레이(relay.rs)가 오락실 쪽지를 받을지 — 모양만 본다(시각 600초 규칙은 빼고: 다시 싼 쪽지는 옛 `at` 을 그대로 싣는다).
+/// 판매자 서명·체인 확인은 읽는 쪽(사이트·데스크탑)이 한다. 여기는 아무 글이나 31405 껍데기로 쌓이지 않게만.
+pub(crate) fn listing_shape(e: &Value) -> Result<(), String> {
+    if e.get("kind").and_then(Value::as_i64) != Some(ARCADE_LISTING_KIND) { return Err("오락실 쪽지가 아닙니다.".into()); }
+    let raw = e.get("content").and_then(Value::as_str).unwrap_or("");
+    if raw.len() > 4096 { return Err("오락실 쪽지가 너무 큽니다.".into()); }
+    let tags = e.get("tags").and_then(Value::as_array).ok_or("표가 없습니다.")?;
+    let tag = |k: &str| tags.iter().find(|t| t.get(0).and_then(Value::as_str) == Some(k)).and_then(|t| t.get(1)).and_then(Value::as_str);
+    if !tags.iter().any(|t| t.get(0).and_then(Value::as_str) == Some("t") && t.get(1).and_then(Value::as_str) == Some(ARCADE_LISTING_TAG)) {
+        return Err("오락실 표가 없습니다.".into());
+    }
+    let v: Value = serde_json::from_str(raw).map_err(|_| "쪽지 내용을 읽지 못했습니다.".to_string())?;
+    let o = v.as_object().ok_or("쪽지 내용이 객체가 아닙니다.")?;
+    let s = |k: &str| o.get(k).and_then(Value::as_str).unwrap_or("");
+    if s("kind") != ARCADE_LISTING_FORMAT { return Err("쪽지 형식이 다릅니다.".into()); }
+    let (seller, id) = (s("seller"), s("id"));
+    if !is_seller(seller) || !is_id(id) || !is_cid(s("docCid")) || !is_hex64(s("docHash")) || !is_sig(s("signature")) {
+        return Err("오락실 쪽지 모양이 아닙니다.".into());
+    }
+    if s("state") != "open" && s("state") != "removed" { return Err("올림/내림 상태가 올바르지 않습니다.".into()); }
+    if tag("d") != Some(format!("{seller}/{id}").as_str()) { return Err("d 표가 판매자/게임과 다릅니다.".into()); }
+    if let Some(g) = tag(ARCADE_GW_TAG) { if gateway_origin(g).is_none() { return Err("바깥 주소 모양이 아닙니다.".into()); } }
+    Ok(())
+}
+
 /// 알림 쪽지 이벤트(겉봉투 서명까지). 내림이면 NIP-09 지우기도 하나 더(지우기를 지키는 릴레이에서는 바로 사라진다).
 /// `gw` = 이 컴퓨터의 바깥 주소(올림일 때만 태그로 싣는다 — 내림에는 필요 없다).
 pub fn build_events(nostr_sk: &[u8; 32], raw_content: &str, now: i64, gw: Option<&str>) -> Result<Vec<Value>, String> {
@@ -236,6 +261,31 @@ mod tests {
         assert!(c.starts_with(&format!("{{\"kind\":\"rv.arcade-listing/1\",\"seller\":\"{SELLER}\",\"id\":\"star-run\",\"version\":2,")), "{c}");
         assert!(!c.contains("extra"));
         assert!(crate::relay::verify(e), "겉봉투 id·BIP340 가 맞다");
+    }
+
+    #[test]
+    fn 우리_릴레이는_모양이_맞는_오락실_쪽지만_받는다() {
+        let now = 1_790_000_000;
+        let ok = &build_events(&[7u8; 32], &content("open", now), now, Some("https://playx.taile277f6.ts.net")).unwrap()[0];
+        assert_eq!(listing_shape(ok), Ok(()));
+        // 다시 싼 쪽지처럼 시각이 오래돼도 모양만 맞으면 받는다.
+        let old = &build_events(&[7u8; 32], &content("open", now - 86_400), now - 86_400, None).unwrap()[0];
+        assert_eq!(listing_shape(old), Ok(()));
+        let mut bad_d = ok.clone();
+        bad_d["tags"][0] = json!(["d", format!("{SELLER}/other-game")]);
+        assert!(listing_shape(&bad_d).is_err(), "d 가 내용과 다르면 거절");
+        let mut no_t = ok.clone();
+        no_t["tags"] = json!([["d", format!("{SELLER}/star-run")]]);
+        assert!(listing_shape(&no_t).is_err(), "오락실 표 없으면 거절");
+        let mut junk = ok.clone();
+        junk["content"] = json!("아무 글이나 쌓기");
+        assert!(listing_shape(&junk).is_err(), "글줄은 거절");
+        let mut big = ok.clone();
+        big["content"] = json!("x".repeat(5000));
+        assert!(listing_shape(&big).is_err());
+        let mut gw = ok.clone();
+        gw["tags"][2] = json!(["gw", "javascript:alert(1)"]);
+        assert!(listing_shape(&gw).is_err(), "바깥 주소 모양 아니면 거절");
     }
 
     #[test]

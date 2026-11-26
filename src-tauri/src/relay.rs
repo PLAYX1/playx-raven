@@ -69,7 +69,8 @@ use std::sync::Mutex;
 ///       이미 레이븐 이야기를 남긴 사람 것만 받는다(이름표는 ravencoin 표로도) — 남의 SNS 목록 창고가 되지 않게.
 ///       11-06 GPT 지적: 이걸 안 받아서 우리 릴레이만 읽으면 이름이 안 뜨고 팔로우·북마크가 사라졌다.
 ///   10002 — 릴레이 목록(NIP-65). 릴레이 나누기(docs/RELAY-SHARE.md §6): 이름표처럼 사람마다 하나 · 같은 규칙.
-const KINDS: [i64; 11] = [30078, 30402, 40, 41, 42, 1, 5, 0, 3, 10003, 10002];
+///   31405 — 오락실 게임 쪽지(11-26). 모양 검사는 arcade_listing::listing_shape. 이게 없어서 키오스크 우체국에 게임이 하나도 안 남았다.
+const KINDS: [i64; 12] = [30078, 30402, 31405, 40, 41, 42, 1, 5, 0, 3, 10003, 10002];
 
 /// 사람마다 하나만 남는 글(NIP-01 replaceable: 0·3·10000~19999). 같은 사람·같은 종류면 옛것을 지운다.
 const PERSON_KINDS: [i64; 4] = [0, 3, 10003, 10002];
@@ -549,6 +550,9 @@ fn smells_bad(e: &Value) -> Option<String> {
     // `d` 는 `rvswap:<txid>:<vout>` 이다. 아래 ②③ 에 대면 **우리 릴레이가 장터 물건을 전부 버린다**
     // (regtest 실측 11-07: 「가게 글의 모양이 아닙니다」). 대신 사는 쪽과 같은 모양 검사
     // (`market_listing::parse_listing`)를 통과한 것만 받는다. 체인 확인은 읽는 쪽이 한다.
+    if kind == crate::arcade_listing::ARCADE_LISTING_KIND {
+        return crate::arcade_listing::listing_shape(e).err();
+    }
     if kind == 30402 && has_t(e, "rv-swap") {
         let size = serde_json::to_string(e).map(|s| s.len()).unwrap_or(0);
         if size > MAX_EVENT_BYTES {
@@ -1600,6 +1604,19 @@ pub fn relay_status() -> Value {
 
 #[cfg(test)]
 mod tests {
+
+    /// 11-26 키오스크 우체국에 오락실 쪽지(31405)가 하나도 안 남았다 — 받는 종류에 없어서 「가게 글만 받습니다」로 버렸다.
+    #[test]
+    fn 오락실_쪽지를_받는다_모양이_틀리면_거절() {
+        assert!(super::KINDS.contains(&31405));
+        let c = serde_json::json!({ "kind": "rv.arcade-listing/1", "seller": "RHMKPy3Ana5NyzTgo6qWXXMiHAxzPyMgG1", "id": "star-run", "version": 2,
+            "docCid": format!("Qm{}", "W".repeat(44)), "docHash": "a".repeat(64), "at": 1_790_000_000i64, "state": "open", "signature": "A".repeat(87) + "=" }).to_string();
+        let ev = crate::arcade_listing::build_events(&[7u8; 32], &c, 1_790_000_000, Some("https://playx.taile277f6.ts.net")).unwrap().remove(0);
+        assert_eq!(super::smells_bad(&ev), None, "가게 공지 규칙(JSON d=자산 이름)에 대지 않는다");
+        let mut bad = ev.clone();
+        bad["content"] = serde_json::json!("{\"kind\":\"x\"}");
+        assert!(super::smells_bad(&bad).is_some());
+    }
 
     /// 주인·저장소 전역값을 만지는 시험은 하나씩 돈다.
     static OWNER_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());

@@ -1630,6 +1630,11 @@ async fn arcade_cat_offline(rest: &str) -> (StatusCode, [(header::HeaderName, St
     }
 }
 
+/// 바깥에서 온 `/ipfs` 요청이면 파일창고에 「가진 것만」을 건다(남의 CID 대신 받기 = 열린 중계 막기).
+pub(crate) fn ipfs_relay_cache_rule(outside: bool) -> Option<&'static str> {
+    outside.then_some("only-if-cached")
+}
+
 async fn ipfs_relay(
     headers: HeaderMap,
     axum::extract::Path(path): axum::extract::Path<String>,
@@ -1680,7 +1685,13 @@ async fn ipfs_relay(
     let Ok(_permit) = IPFS_RELAY_SLOTS.try_acquire() else {
         return (StatusCode::SERVICE_UNAVAILABLE, relay_headers("text/plain".to_string()), Vec::new());
     };
-    match client.get(&url).send().await {
+    // 11-26 바깥 손님은 **이 컴퓨터에 이미 있는 것만** — 파일창고가 남의 CID 를 대신 받아 오지 않게(Kubo: only-if-cached → 없으면 412 → 404).
+    //   가게 안(같은 와이파이)·이 컴퓨터 화면은 예전처럼 받아 온다. 내 가게 사진·내 게임은 이 컴퓨터에 있으니 바깥 손님도 그대로 본다.
+    let mut req = client.get(&url);
+    if let Some(cc) = ipfs_relay_cache_rule(from_outside(&headers)) {
+        req = req.header(reqwest::header::CACHE_CONTROL, cc);
+    }
+    match req.send().await {
         Ok(mut r) if r.status().is_success() => {
             let kind = r
                 .headers()
@@ -4747,6 +4758,12 @@ mod outside {
     }
 
     /// 검수 — `/ipfs/…` 로 내주는 남의 HTML 이 가게 출처에서 스크립트를 못 돌리게.
+    #[test]
+    fn 바깥_ipfs_는_이_컴퓨터에_있는_것만_낸다() {
+        assert_eq!(super::ipfs_relay_cache_rule(true), Some("only-if-cached"), "바깥 손님이 남의 CID 를 대신 받아 오게 하지 않는다");
+        assert_eq!(super::ipfs_relay_cache_rule(false), None, "가게 안·이 컴퓨터 화면은 예전처럼");
+    }
+
     #[test]
     fn 파일창고_중계는_스크립트를_가둔다() {
         use axum::{http::header, response::IntoResponse};
