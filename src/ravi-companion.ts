@@ -127,8 +127,8 @@ function apply(value:Settings){
   config.settings=value;physics.reduced=value.reduced||reduced.matches;
   document.documentElement.lang=value.locale;
   document.querySelectorAll<HTMLElement>('[data-copy]').forEach(el=>{el.textContent=say(el.dataset.copy as CopyKey);});
-  for(const [id,key] of [['bird','bird'],['bubble','bubble'],['collapse','close'],['settings-toggle','settings'],['rv-voice','mic']] as const)$(id).setAttribute('aria-label',say(key));
-  bird.title=say('bird');question.placeholder=say('call');
+  for(const [id,key] of [['bird','bird'],['bubble','bubble'],['collapse','close'],['settings-toggle','settings'],['rv-voice','mic'],['question','ask']] as const)$(id).setAttribute('aria-label',say(key));
+  bird.title=say('bird');question.placeholder=say('example');
   paint();
 }
 async function setBubble(on:boolean){

@@ -21,6 +21,7 @@ export const companionCopy = {
   bird: ['라비에게 말하기 · 끌어서 이동','Talk to Ravi · drag to move','ラビに話す · ドラッグで移動','与拉比交谈 · 拖动移动'],
   bubble: ['라비 말풍선','Ravi speech bubble','ラビの吹き出し','拉比消息气泡'],
   ask: ['라비에게 물어보기','Ask Ravi','ラビに質問','询问拉比'],
+  example: ['예: 오늘 들어온 돈 알려 줘','e.g. How much came in today?','例：今日の入金を教えて','例如：告诉我今天收到多少钱'],
   send: ['보내기','Send','送信','发送'],
   mic: ['말로 묻기','Ask by voice','声で質問','语音提问'],
   main: ['큰 화면에서 계속하기','Continue in the main window','メイン画面で続ける','在主窗口中继续'],
