@@ -87,8 +87,21 @@ export const ARCADE_COPY: Record<string, [string, string, string]> = {
     "现在无法获取游戏文件，因此没有准备付款，以免付了钱却玩不了。请稍后再试。"],
   "내기 전에 확인해 주세요": ["Please check before paying", "支払う前に確認してください", "付款前请确认"],
   "게임값": ["Game price", "ゲーム代", "游戏价格"],
-  "판매자에게 (99%)": ["To the seller (99%)", "販売者へ（99%）", "给卖家（99%）"],
-  "레이븐볼트 수수료 (1%)": ["RavenVault fee (1%)", "RavenVault 手数料（1%）", "RavenVault 手续费（1%）"],
+  // 11-26 오해 검토 — 폰·웹(PayConfirm)과 같은 말. 1% 는 값 안에 · 되돌릴 수 없음은 결제 칸 한 곳.
+  "판매자 99% · 레이븐볼트 1%": ["Seller 99% · RavenVault 1%", "販売者 99% · RavenVault 1%", "卖家 99% · RavenVault 1%"],
+  "레이븐볼트 1%는 값 안에 들어 있어요. 공개 장부 수수료는 노드가 정해 따로 조금 붙어요. 레이븐볼트는 거래 당사자가 아니에요.": [
+    "RavenVault’s 1% is already included in the price. A small public-ledger fee, set by the node, is added separately. RavenVault is not a party to this transaction.",
+    "RavenVault の1%は価格に含まれています。公開台帳の手数料はノードが決め、別に少しかかります。RavenVault は取引の当事者ではありません。",
+    "RavenVault 的 1% 已包含在价格中。公开账本手续费由节点决定，另外少量收取。RavenVault 不是交易当事人。"],
+  "보낸 RVN은 누구도 되돌릴 수 없어요.": ["Once sent, RVN can’t be returned by anyone.", "送ったRVNは誰も取り消せません。", "已发送的 RVN 任何人都无法退回。"],
+  "레이븐볼트에 가게 이름을 등록한 판매자예요 · 게임 내용은 심사하지 않아요": [
+    "This seller registered a shop name with RavenVault · RavenVault does not review game content",
+    "RavenVault にお店の名前を登録した販売者です · ゲームの内容は審査していません",
+    "该卖家已在 RavenVault 登记店名 · RavenVault 不审核游戏内容"],
+  "레이븐볼트가 확인한 가게(RVLT 자산)가 아니라, 누구나 올릴 수 있는 일반 판매자 게임이에요. 서명은 맞지만 판매자를 확인하지 않았어요.": [
+    "This isn’t a RavenVault-verified shop (RVLT asset). Anyone can post games like this. The signature is valid, but the seller hasn’t been verified.",
+    "RavenVaultが確認したショップ(RVLT資産)ではなく、誰でも出品できる一般販売者のゲームです。署名は正しいですが、販売者は確認されていません。",
+    "这不是 RavenVault 认证的店铺(RVLT 资产),而是任何人都能上架的普通卖家游戏。签名有效,但卖家未经确认。"],
   "받는 주소": ["Receiving address", "受け取りアドレス", "收款地址"],
   "공개 장부 수수료는 노드가 정해 따로 조금 붙어요. 판매자 몫과 수수료는 한 거래 안에서 각자에게 바로 가요 — 레이븐볼트가 맡아 두지 않아요.": [
     "A small public-ledger fee, set by the node, is added separately. The seller’s share and the fee go straight to each in one transaction — RavenVault never holds them.",
@@ -218,7 +231,6 @@ export const ARCADE_COPY: Record<string, [string, string, string]> = {
   "누구나 0 RVN 으로 올릴 수 있는 일반 판매자 게임이에요. 서명은 맞지만 레이븐볼트가 판매자를 확인하지 않았어요(RVLT 가게 자산 없음).": ["This is a general-seller game that anyone can post for 0 RVN. The signature is valid, but RavenVault hasn’t verified the seller (no RVLT shop asset).", "誰でも 0 RVN で出品できる一般の販売者のゲームです。署名は正しいですが、RavenVault は販売者を確認していません（RVLT のお店の資産なし）。", "这是任何人都能以 0 RVN 上架的普通卖家游戏。签名有效，但 RavenVault 未验证该卖家（没有 RVLT 店铺资产）。"],
   "신고": ["Report", "通報", "举报"],
   "일반 판매자 게임이에요": ["This game is from a general seller", "一般の販売者のゲームです", "这是普通卖家的游戏"],
-  "레이븐볼트가 확인한 가게(RVLT 자산)가 아니라, 누구나 올릴 수 있는 일반 판매자 게임이에요. 서명은 맞지만 판매자를 확인하지 않았어요. 돈은 판매자에게 바로 가고 돌려받을 수 없어요.": ["This isn’t a RavenVault-verified shop (RVLT asset). Anyone can post games like this. The signature is valid, but the seller hasn’t been verified. Money goes straight to the seller and can’t be returned.", "RavenVault が確認したお店（RVLT 資産）ではなく、誰でも出品できる一般の販売者のゲームです。署名は正しいですが、販売者は確認していません。お金は販売者に直接届き、取り戻せません。", "这不是 RavenVault 验证过的店铺（RVLT 资产），而是任何人都能上架的普通卖家游戏。签名有效，但卖家未经验证。钱会直接付给卖家，无法退回。"],
   "알겠어요": ["Got it", "わかりました", "知道了"],
   "신고 이유": ["Reason for report", "通報の理由", "举报原因"],
   "사기·돈만 받고 안 됨": ["Scam · paid but doesn’t work", "詐欺 · 支払っても動かない", "诈骗 · 付了钱却不能玩"],

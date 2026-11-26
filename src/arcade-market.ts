@@ -211,7 +211,9 @@ export function mountArcade(page: HTMLElement, host: HTMLElement, deps: ArcadeDe
       `<p class="meta"><span translate="no">${esc(p.sellerName)}</span>${p.assetName ? ` · <code translate="no">${esc(p.assetName)}</code>` : ""}</p>` +
       `<p class="meta">${esc(tf("{0} · 혼자 하기 · 약 {1}분", t(genreLabel(p.genre)), p.minutes))}</p>` +
       (p.description ? `<p class="ar-desc" translate="no">${esc(p.description)}</p>` : "") +
-      (!p.verified ? `<p class="ar-note">${copyHtml("누구나 0 RVN 으로 올릴 수 있는 일반 판매자 게임이에요. 서명은 맞지만 레이븐볼트가 판매자를 확인하지 않았어요(RVLT 가게 자산 없음).")}</p>` : "") +
+      // 「확인 판매자」가 심사·보증처럼 읽히지 않게 — 가게 이름 등록일 뿐, 게임 내용은 보지 않는다(11-26 검토).
+      (p.verified ? `<p class="meta">${copyHtml("레이븐볼트에 가게 이름을 등록한 판매자예요 · 게임 내용은 심사하지 않아요")}</p>`
+        : `<p class="ar-note">${copyHtml("누구나 0 RVN 으로 올릴 수 있는 일반 판매자 게임이에요. 서명은 맞지만 레이븐볼트가 판매자를 확인하지 않았어요(RVLT 가게 자산 없음).")}</p>`) +
       `<p class="meta">${copyHtml(free ? "무료 게임이에요. 한 판마다 바로 시작해요." : "오락실처럼 한 판마다 넣는 게임이에요. 게임이 「한 판 넣기」를 물으면 그때마다 내가 확인해요. 미리 넣어 두는 돈은 없어요.")}</p>` +
       action +
       `<div data-ar-step="1"></div>` +
@@ -233,7 +235,7 @@ export function mountArcade(page: HTMLElement, host: HTMLElement, deps: ArcadeDe
     if (!step) return;
     step.innerHTML = `<div class="ar-confirm ar-open-notice" role="alertdialog" aria-label="${esc(t("일반 판매자 게임이에요"))}">` +
       `<h4>${ICON_WARN}<span>${copyHtml("일반 판매자 게임이에요")}</span></h4>` +
-      `<p class="meta">${copyHtml("레이븐볼트가 확인한 가게(RVLT 자산)가 아니라, 누구나 올릴 수 있는 일반 판매자 게임이에요. 서명은 맞지만 판매자를 확인하지 않았어요. 돈은 판매자에게 바로 가고 돌려받을 수 없어요.")}</p>` +
+      `<p class="meta">${copyHtml("레이븐볼트가 확인한 가게(RVLT 자산)가 아니라, 누구나 올릴 수 있는 일반 판매자 게임이에요. 서명은 맞지만 판매자를 확인하지 않았어요.")}</p>` +
       `<div class="row"><button type="button" data-ar-notice-ok="1">${copyHtml("알겠어요")}</button><button type="button" class="ghost" data-ar-notice-no="1">${copyHtml("그만두기")}</button></div></div>`;
     step.querySelector<HTMLElement>("[data-ar-notice-no]")!.onclick = () => { step.innerHTML = ""; };
     const ok = step.querySelector<HTMLButtonElement>("[data-ar-notice-ok]")!;
@@ -371,10 +373,12 @@ export function mountArcade(page: HTMLElement, host: HTMLElement, deps: ArcadeDe
     coin.innerHTML =
       `<div class="ar-confirm" role="alertdialog" aria-label="${esc(t("한 판 넣기"))}">` +
       `<h4>${esc(tf("한 판 {0} 넣기", priceText(p)))}</h4>` +
-      row("판매자에게 (99%)", esc(fmtRvn(atomsToRvn(plan.sellerAtoms)))) +
-      row("레이븐볼트 수수료 (1%)", esc(fmtRvn(atomsToRvn(plan.feeAtoms)))) +
+      // 11-26 페이블·네온 오해 검토(폰·웹과 같은 말): 1% 는 값 「안에」 있다 — 따로 더 내는 것처럼 두 줄로 나누지 않는다.
+      //   되돌릴 수 없다는 말은 판매자 구분 없이 이 결제 칸 한 곳에만(일반 판매자 안내에서는 뺐다).
+      row("판매자 99% · 레이븐볼트 1%", esc(`${fmtRvn(atomsToRvn(plan.sellerAtoms))} · ${fmtRvn(atomsToRvn(plan.feeAtoms))}`)) +
       row("받는 주소", `<code translate="no" class="ar-addr">${esc(plan.payTo)}</code>`) +
-      `<p class="meta">${copyHtml("공개 장부 수수료는 노드가 정해 따로 조금 붙어요. 레이븐볼트는 거래 당사자가 아니고, 보낸 RVN은 돌려받을 수 없어요.")}</p>` +
+      `<p class="meta">${copyHtml("레이븐볼트 1%는 값 안에 들어 있어요. 공개 장부 수수료는 노드가 정해 따로 조금 붙어요. 레이븐볼트는 거래 당사자가 아니에요.")}</p>` +
+      `<p class="ar-warn">${copyHtml("보낸 RVN은 누구도 되돌릴 수 없어요.")}</p>` +
       `<div class="row"><button type="button" data-ar-go="1">${esc(tf("한 판 {0} 넣기", priceText(p)))}</button>` +
       `<button type="button" class="ghost" data-ar-stop="1">${copyHtml("그만두기")}</button></div>` +
       `<p class="meta" data-ar-say="1" role="status"></p></div>`;

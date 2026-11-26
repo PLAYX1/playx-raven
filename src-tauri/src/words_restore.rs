@@ -1501,10 +1501,11 @@ mod tests {
         // 서비스·재색인 쪽이 정말 이 문을 묻는지(소스).
         let services = include_str!("services.rs");
         let i = services.find("pub async fn start_parts").unwrap();
-        assert!(services[i..i + 1500].contains("words_restore::node_start_hold()"), "start_parts 가 문을 안 묻는다");
+        fn cut(s: &str, from: usize, n: usize) -> &str { let mut e = (from + n).min(s.len()); while !s.is_char_boundary(e) { e += 1; } &s[from..e] } // 한글 한가운데서 자르지 않는다
+        assert!(cut(services, i, 1500).contains("words_restore::node_start_hold()"), "start_parts 가 문을 안 묻는다");
         let rx = include_str!("reindex_run.rs");
         let j = rx.find("pub async fn reindex_start").unwrap();
-        assert!(rx[j..j + 800].contains("words_restore::node_start_hold()"), "reindex_start 가 문을 안 묻는다");
+        assert!(cut(rx, j, 800).contains("words_restore::node_start_hold()"), "reindex_start 가 문을 안 묻는다");
     }
 
     /// U8 — 옆에 두기: 이름만 바꾸고, 자리에 무엇이 있으면 덮지 않고 멈춘다. 지우는 길은 없다.

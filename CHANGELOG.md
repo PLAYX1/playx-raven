@@ -1,5 +1,17 @@
 # 변경 기록
 
+## 0.9.54
+
+### 한국어
+
+- **오락실 결제 말을 폰·웹과 똑같이 맞췄습니다:** 「판매자 99% · 레이븐볼트 1%」 한 줄로 보이고, 「레이븐볼트 1%는 값 안에 들어 있어요」라고 적습니다(1%를 따로 더 내는 것처럼 보이지 않게). 「보낸 RVN은 누구도 되돌릴 수 없어요」는 판매자 구분 없이 결제 칸 한 곳에만 나옵니다.
+- **확인 판매자 게임에 「레이븐볼트에 가게 이름을 등록한 판매자예요 · 게임 내용은 심사하지 않아요」를 적었습니다:** 레이븐볼트가 게임을 심사하거나 보증하는 것처럼 읽히지 않게.
+
+### English
+
+- **Arcade payment wording now matches phone and web:** one line "Seller 99% · RavenVault 1%", with "RavenVault's 1% is already included in the price" so it doesn't read like an extra charge. "Once sent, RVN can't be returned by anyone" now appears once, in the payment box, for every seller.
+- **Verified-seller games now say "This seller registered a shop name with RavenVault · RavenVault does not review game content"**, so it doesn't read like a review or guarantee.
+
 ## 0.9.53
 
 ### 한국어

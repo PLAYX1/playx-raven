@@ -593,7 +593,8 @@ mod heal_tests {
     fn 한_번만_고친다() {
         let src = include_str!("services.rs");
         let i = src.find("let heal = crate::paths::app_file").expect("있어야 한다");
-        let seg = &src[i..i + 400.min(src.len() - i)];
+        fn cut(s: &str, from: usize, n: usize) -> &str { let mut e = (from + n).min(s.len()); while !s.is_char_boundary(e) { e += 1; } &s[from..e] } // 한글 한가운데서 자르지 않는다
+        let seg = cut(src, i, 400);
         assert!(seg.contains("remove_file"), "표시를 안 지우고 있다 — 매번 다시 계산한다");
     }
 }
