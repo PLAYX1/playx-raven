@@ -17376,6 +17376,8 @@ function labelShopNav() {
   const label = link?.querySelector("span");
   if (label) { label.setAttribute("translate", name ? "no" : "yes"); label.textContent = name || "내 가게"; }
   else if (link) link.textContent = name || "내 가게";
+  // 11-26 대표 「옆에 이름 플레이엑스가 다 안 보인다」 — 좁은 왼쪽 줄은 「내 가게」(rail-lbl, 고정)만, 가게 이름 전체는 마우스를 올리면.
+  if (link) { if (name) link.setAttribute("title", name); else link.removeAttribute("title"); }
   // 라비 화면의 인사말과 「아직 안 된 것」 줄도 같이 따라가야 한다.
   // 안 그러면 가게를 만들어 놓고도 첫 화면은 「가게부터 만들까요?」 그대로다.
   if (document.getElementById("ravi-tiles")) paintRavi();

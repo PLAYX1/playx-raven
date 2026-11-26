@@ -1,5 +1,15 @@
 # 변경 기록
 
+## 0.9.52
+
+### 한국어
+
+- **왼쪽 줄의 가게 이름이 잘리지 않습니다:** 좁은 왼쪽 줄에는 「내 가게」만 보이고, 가게 이름 전체는 마우스를 올리면 나옵니다.
+
+### English
+
+- **Shop name no longer cut off in the side rail:** the narrow rail now shows "My shop"; hover to see the full shop name.
+
 ## 0.9.51
 
 ### 한국어
