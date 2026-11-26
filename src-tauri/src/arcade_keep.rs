@@ -51,7 +51,6 @@ const CACHE_SECS: i64 = 15 * 60;
 const MINE_EVERY_SECS: u64 = 30 * 60;
 const MINE_FIRST_SECS: u64 = 120;
 const MINE_QUICK_SECS: u64 = 180;
-const MINE_QUICK_TRIES: u32 = 5;
 
 fn now() -> i64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
@@ -198,6 +197,8 @@ async fn mine_round_inner() -> Result<Value, String> {
     let mut gateway: Option<String> = None;
     if let Some(pk) = crate::arcade_listing::my_pubkey() {
         let events = crate::arcade_listing::read_listings().await;
+        // 11-26: 릴레이에서 쪽지를 하나도 못 읽은 바퀴(릴레이 끊김)는 「내 게임 없음」이 아니라 「모름」 — 내주던 목록을 줄이지 않는다.
+        let listings_read = !events.is_empty();
         for (key, doc) in crate::arcade_listing::my_open_docs(&events, &pk) {
             let name = format!("open:{key}");
             let doc_kept = ensure_kept(&doc, prefs.is_skipped(&doc)).await;
@@ -222,7 +223,7 @@ async fn mine_round_inner() -> Result<Value, String> {
             }));
         }
         // 바깥 /ipfs/ 길이 지금 붙잡힌 내 게임만 내주게(server.rs ipfs_relay) — 다시 알리기 전에 먼저 연다.
-        crate::arcade_gw::set_serving(&serve, chain_error.is_none());
+        crate::arcade_gw::set_serving(&serve, chain_error.is_none() && listings_read);
         // 판매자 게이트웨이: 지금 바깥 주소가 쪽지의 gw 와 다르면(새 임시 터널·옛 쪽지엔 없음) 같은 content 를 새 태그로 다시 싼다.
         gateway = crate::arcade_gw::outside_origin_for_listing().await;
         if let Some(g) = gateway.as_deref() {
@@ -281,14 +282,15 @@ pub fn arcade_mine_state() -> Value {
 }
 
 /// 다음 바퀴까지. 켠 직후에는 릴레이가 아직 안 붙어 내 쪽지를 못 읽고 「게임 없음」으로 끝나는 일이 있다(11-26 키오스크 실측) —
-/// 그때는 30분을 기다리지 않고 3분 뒤 다시(최대 5번). 게임을 한 번이라도 보면 그 뒤로는 30분.
+/// 그때는 30분을 기다리지 않고 3분 뒤 다시. 11-26 0.9.52 실측: 「최대 5번」 뒤 30분을 기다리는 동안 키오스크가 게임 7개를
+/// 한 시간 가까이 안 내줬다(손님 링크 503). 게임을 못 본 바퀴는 **횟수 제한 없이** 3분 뒤 다시(릴레이 질문 하나라 가볍다).
 pub(crate) fn next_round_secs(v: &Value, quick: &mut u32) -> u64 {
     let saw_games = v.get("games").and_then(Value::as_array).is_some_and(|g| !g.is_empty());
-    if !saw_games && *quick < MINE_QUICK_TRIES {
-        *quick += 1;
+    if !saw_games {
+        *quick = quick.saturating_add(1);
         return MINE_QUICK_SECS;
     }
-    if saw_games { *quick = MINE_QUICK_TRIES; }
+    *quick = 0;
     MINE_EVERY_SECS
 }
 
@@ -718,15 +720,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn 켠_직후_게임을_못_보면_3분_뒤_다시_보고_한_번_보면_30분() {
+    fn 게임을_못_보면_횟수_제한_없이_3분_뒤_다시_보고_보면_30분() {
         let none = json!({ "at": 1, "games": [] });
         let some = json!({ "at": 1, "games": [{ "asset": "open:x" }] });
         let mut q = 0;
-        for _ in 0..MINE_QUICK_TRIES { assert_eq!(next_round_secs(&none, &mut q), MINE_QUICK_SECS); }
-        assert_eq!(next_round_secs(&none, &mut q), MINE_EVERY_SECS, "다섯 번 뒤에는 30분");
+        for _ in 0..20 { assert_eq!(next_round_secs(&none, &mut q), MINE_QUICK_SECS, "게임을 못 보면 횟수 제한 없이 3분"); }
         let mut q = 0;
         assert_eq!(next_round_secs(&some, &mut q), MINE_EVERY_SECS);
-        assert_eq!(next_round_secs(&none, &mut q), MINE_EVERY_SECS, "한 번 본 뒤 잠깐 빈 결과로 바퀴를 재촉하지 않는다");
+        assert_eq!(next_round_secs(&none, &mut q), MINE_QUICK_SECS, "한 번 본 뒤라도 게임이 안 보이면 3분 뒤 다시(11-26 한 시간 공백)");
         assert_eq!(next_round_secs(&Value::Null, &mut 0), MINE_QUICK_SECS);
     }
 
