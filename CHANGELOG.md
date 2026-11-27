@@ -4,12 +4,12 @@
 
 ### 한국어
 
-- **라비 한국어 목소리를 새로 넣었습니다:** 「라비」가 「나비」처럼 들리던 발음을 고친 작은 목소리(19MB)가 앱 안에 들어 있어, 따로 받지 않아도 한국어 답을 라비 목소리로 읽어 줍니다. 한국어가 아니거나 이 목소리가 못 읽으면 전처럼 받은 목소리, 그다음 기기 목소리로 넘어갑니다.
+- **라비 한국어 목소리를 새로 넣었습니다:** 「라비」가 「나비」처럼 들리던 발음을 고친 작은 목소리(19MB)가 앱 안에 들어 있어, 따로 받지 않아도 한국어 답을 라비 목소리로 읽어 줍니다. 한국어가 아니거나 이 목소리가 못 읽으면 전처럼 받은 목소리, 그다음 기기 목소리로 넘어갑니다. (리눅스판은 설치 파일 크기 한도 때문에 이번에는 이 목소리가 빠졌습니다.)
 - **지갑 잔액이 깜빡이지 않습니다:** 노드가 잠깐 바쁠 때 잔액이 「노드가 시작되면 나와요」와 금액 사이를 오가던 것을 고쳤습니다. 한 번 읽은 잔액은 다음 답이 올 때까지 그대로 보입니다.
 
 ### English
 
-- **New Korean voice for Ravi:** a small built-in voice (19 MB) that fixes "Ravi" sounding like "Nabi" now reads Korean replies without any download. Other languages, or if it can't speak, fall back to the downloaded voice and then the device voice as before.
+- **New Korean voice for Ravi:** a small built-in voice (19 MB) that fixes "Ravi" sounding like "Nabi" now reads Korean replies without any download. Other languages, or if it can't speak, fall back to the downloaded voice and then the device voice as before. (Not included in the Linux build this time because of the installer size limit.)
 - **Wallet balance no longer flickers:** when the node was briefly busy the balance alternated with "Shows once the node starts"; the last known balance now stays until the next answer arrives.
 
 ## 0.9.55

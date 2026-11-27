@@ -444,6 +444,9 @@ jobs:
           # 라즈베리파이(ARM 24.04)만: linuxdeploy 의 strip 이 24.04 라이브러리(.relr.dyn)에서
           # 죽는 일을 피한다 — 시험 빌드에서 쓰던 설정 그대로. PC 리눅스·윈도우는 바꾸지 않는다.
           if [ "${{ matrix.label }}" = linux-arm64 ]; then export NO_STRIP=true; fi
+          # 0.9.56: 리눅스 AppImage 는 WebKit 을 통째로 싣어 라비 작은 한국어 목소리(19MB)를 넣으면 배포 한도 99MB 를 넘는다(107~110MB).
+          # 리눅스만 빼고 만든다 — 앱은 파일이 없으면 받은 목소리·기기 목소리로 넘어간다(ravi-home.ts). 윈도우·맥은 그대로 넣는다.
+          if [ "$RUNNER_OS" = Linux ]; then rm -f public/ravi-tts/ravi-ko-v2.int8.onnx; fi
           npx tauri build --target ${{ matrix.target }} --verbose
 
       # Tauri는 앱을 공증·staple한다. 배포할 DMG도 별도로 공증·staple한다.
