@@ -7,12 +7,14 @@
 - **게임 올릴 때 라비가 다 해 줍니다:** 「라비가 다 해 줄게요」를 누르면 라비가 게임을 잠깐 돌려 보고 표지 그림·10초 미리보기 영상·이름·설명을 채워 줍니다(돌리는 동안 소리는 꺼집니다). 고친 것만 직접 바꾸면 됩니다. 맥에서는 화면을 못 떠서 이름 카드 표지만 만들어 줍니다.
 - **첫 판 무료:** 값이 있는 게임은 「첫 판 무료」가 기본으로 켜져, 손님이 한 판 해 보고 살 수 있습니다. 장터 카드에 「첫 판 무료」 표시와 미리보기 영상이 보입니다.
 - **업데이트 알림이 또렷해졌습니다:** 새 버전이 나오면 왼쪽 메뉴 설정 바로 위에 주황 「업데이트」 줄이 생기고, 새 판마다 6초 알림이 한 번 뜹니다. 새 버전이 없으면 줄은 숨겨집니다.
+- **게임이 한 개뿐인 갈래에서도 표지 그림이 다 보입니다:** 카드가 화면 끝까지 늘어나 그림이 가는 띠로 잘리던 것을 고쳤습니다.
 
 ### English
 
 - **Ravi does the whole game upload:** press "Let Ravi do it" and Ravi briefly runs the game to fill in a cover, a 10-second preview video, a name and a description (sound is muted while it runs). Just change what you want. On Mac the screen cannot be captured, so Ravi makes a title-card cover only.
 - **First play free:** priced games have "first play free" on by default so customers can try before buying. Market cards show a "first play free" badge and the preview video.
 - **Clearer update notice:** when a new version is out, an orange "Update" row appears just above Settings in the left menu, with a 6-second notice once per version. The row is hidden when you are up to date.
+- **Covers show in full even when a genre has only one game:** the card no longer stretches across the screen and crops the cover to a thin strip.
 
 ## 0.9.57
 

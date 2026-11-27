@@ -13,7 +13,8 @@
   background: var(--panel); color: var(--text); border: 1px solid var(--line); }
 .ar-chips button[aria-pressed="true"] { border: 2px solid var(--brand); font-weight: 700; background: color-mix(in srgb, var(--brand) 10%, var(--panel)); }
 .ar-row { list-style: none; margin: 0; padding: 0 0 4px; display: grid; gap: 12px; grid-auto-flow: column;
-  grid-auto-columns: minmax(200px, 1fr); overflow-x: auto; }
+  grid-auto-columns: minmax(200px, 260px); justify-content: start; overflow-x: auto; }
+/* 11-27 게임이 1개뿐이면 카드가 화면 끝까지 늘어나 112px 띠로 그림이 잘렸다 → 카드 폭은 260px 까지만, 표지는 16:9 그대로. */
 .ar-grid { list-style: none; margin: 6px 0 16px; padding: 0; display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
 .ar-row li, .ar-grid li { min-width: 0; }
 .ar-card { display: flex; flex-direction: column; width: 100%; height: 100%; margin: 0; padding: 0; text-align: left; overflow: hidden;
@@ -21,7 +22,9 @@
 .ar-card:hover { border-color: var(--brand); }
 .ar-card:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
 .ar-cover, .ar-hero { display: flex; align-items: center; justify-content: center; width: 100%; height: 112px;
+  flex: 0 0 auto;
   background: color-mix(in srgb, var(--tone) 16%, var(--panel)); color: var(--tone); }
+.ar-cover { height: auto; aspect-ratio: 16 / 9; }
 .ar-cover svg { width: 46px; height: 46px; }
 .ar-cover, .ar-hero { overflow: hidden; }
 .ar-cover-img { width: 100%; height: 100%; object-fit: cover; object-position: center top; display: block; }
