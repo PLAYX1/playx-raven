@@ -217,6 +217,15 @@ function paint() {
   (el("rvp-public") as HTMLInputElement).disabled = !state.ready;
 }
 
+/**
+ * 11-28 「폰 연결」 한 곳: 새로 잇는 입구는 홈 「폰 연결」(지갑 연결 카드 = 한 QR) 하나다.
+ * RV6 입구 단추(「폰으로 가게 보기」)는 이미 RV6 로 이어진 폰·기다리는 연결·요청이 있을 때만 보인다 — 옛 사용자는 그대로, 새 사람은 입구 하나.
+ * (지금 폰 앱은 RV6 QR 을 읽지 못한다 — 폰 쪽 RV6 는 v2 갈래에만 있다.)
+ */
+const entries: HTMLButtonElement[] = [];
+export function rv6EntryVisible(s: Pick<State, "devices" | "requests" | "pending">): boolean {
+  return (s.devices?.length ?? 0) > 0 || (s.requests?.length ?? 0) > 0 || !!s.pending;
+}
 async function refresh() {
   try {
     const s = await invoke<State | null>("pairing_state", { tzOffsetMin: -new Date().getTimezoneOffset() });
@@ -224,6 +233,8 @@ async function refresh() {
   } catch {
     state = { ready: false, devices: [], requests: [] };
   }
+  const show = rv6EntryVisible(state);
+  for (const b of entries) b.hidden = !show;
   paint();
 }
 
@@ -350,6 +361,7 @@ export function wirePairing(confirmBox?: Ask) {
     };
     // 11-08 애플 결: 화면 제목 위에 큰 주황 단추가 먼저 보이면 무엇의 화면인지 흐려진다 — 제목·설명 다음에 보조 단추(ghost)로.
     connect.className = "ghost";
+    connect.hidden = true; entries.push(connect);
     const lede = page.querySelector(":scope > .lede") ?? page.querySelector(":scope > h1, :scope > h2");
     if (lede) lede.after(connect); else page.prepend(connect);
   }

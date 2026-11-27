@@ -3629,6 +3629,27 @@ fn role_urls(ip: &str, staff_t: &str, scan_t: &str, desk_pub: Option<&str>) -> (
     )
 }
 
+/// 「폰 연결」 한 QR(11-28)의 가게 칸 = 직원 연결 주소. 순수 판정:
+/// 가게 서버를 켠 적이 있고(started) · 역할 열쇠가 살아 있고 · 봉함 공개키가 있고 · 폰이 닿는 주소(127.0.0.1 아님)일 때만.
+/// 🔴 봉함 키(k) 없는 평문 직원 주소는 한 QR 에 섞지 않는다. 사장(admin) 주소는 어떤 경우에도 내지 않는다.
+fn one_link_staff_url(started: bool, ip: &str, staff_t: &str, live: bool, desk_pub: Option<&str>) -> Option<String> {
+    if !started || !live || staff_t.is_empty() || ip.is_empty() || ip == "127.0.0.1" { return None; }
+    let k = desk_pub.filter(|k| k.len() == 64 && k.bytes().all(|b| b.is_ascii_hexdigit()))?;
+    Some(role_urls(ip, staff_t, "", Some(k)).0)
+}
+
+/// 「폰 연결」 한 QR 이 묻는 것: 지금 쓸 수 있는 직원 연결 주소(없으면 null).
+/// 🔴 읽기만 한다 — 가게 서버를 켜지 않고, 역할 열쇠를 새로 만들지 않는다(그건 「가게」 화면의 일).
+#[tauri::command]
+pub fn phone_staff_link(state: tauri::State<'_, ServerState>) -> Value {
+    let started = state.started_ip.lock().map(|g| !g.is_empty()).unwrap_or(false);
+    let staff = state.role_tokens.lock().ok().and_then(|m| m.get("staff").cloned()).unwrap_or_default();
+    // 서버는 0.0.0.0 에 붙어 있으니 지금 주소로 닿는다(공유기가 주소를 바꿨어도).
+    let ip = local_ip().unwrap_or_default();
+    let desk_pub = crate::shopseal::desk_key().ok().map(|k| k.public_hex());
+    json!({ "staff_url": one_link_staff_url(started, &ip, &staff, tokens_live(&state), desk_pub.as_deref()) })
+}
+
 /// 설정 화면: 봉함 준비 여부, 옛 평문 횟수, 막기 설정.
 #[tauri::command]
 pub fn shop_seal_state(state: tauri::State<'_, ServerState>) -> Value {
@@ -6477,6 +6498,27 @@ mod shop_seal_interop {
         assert_eq!(resp.status(), StatusCode::FORBIDDEN);
         crate::shopseal::set_block_plain(false).unwrap();
         set_test_now(None);
+    }
+
+    #[test]
+    fn one_link_staff_url_only_when_sealed_started_and_reachable() {
+        let k = "cd".repeat(32);
+        assert_eq!(one_link_staff_url(true, "192.168.0.10", "aa", true, Some(&k)), Some(format!("ravenvault-shop://192.168.0.10:{PORT}/staff#t=aa&k={k}")));
+        // 켜지 않았음 · 열쇠 만료 · 직원 열쇠 없음 · 봉함 키 없음/틀림 · 폰이 못 닿는 주소 → 없음(한 QR 에 가게 칸을 넣지 않는다).
+        assert_eq!(one_link_staff_url(false, "192.168.0.10", "aa", true, Some(&k)), None);
+        assert_eq!(one_link_staff_url(true, "192.168.0.10", "aa", false, Some(&k)), None);
+        assert_eq!(one_link_staff_url(true, "192.168.0.10", "", true, Some(&k)), None);
+        assert_eq!(one_link_staff_url(true, "192.168.0.10", "aa", true, None), None);
+        assert_eq!(one_link_staff_url(true, "192.168.0.10", "aa", true, Some("zz")), None);
+        assert_eq!(one_link_staff_url(true, "127.0.0.1", "aa", true, Some(&k)), None);
+        assert_eq!(one_link_staff_url(true, "", "aa", true, Some(&k)), None);
+        // 사장 주소는 절대 아니다.
+        assert!(!one_link_staff_url(true, "192.168.0.10", "aa", true, Some(&k)).unwrap().contains("/admin"));
+        // 읽기 명령은 서버를 켜거나 열쇠를 새로 만들지 않는다.
+        let src = include_str!("server.rs");
+        let body = &src[src.find("pub fn phone_staff_link(").unwrap()..];
+        let body = &body[..body.find("\n}\n").unwrap()];
+        assert!(!body.contains("renew_expired_role_tokens") && !body.contains("build_phone_router") && !body.contains("admin"));
     }
 
     #[test]

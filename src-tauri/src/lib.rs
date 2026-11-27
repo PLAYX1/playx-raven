@@ -870,6 +870,7 @@ pub fn run() {
             market_listing::swap_take_listing,
             market_listing::talk_my_posts,
             server::start_phone_server,
+            server::phone_staff_link,
             server::publish_shop,
             reindex::reindex_window,
             reindex_run::reindex_state,
