@@ -70,7 +70,11 @@ use std::sync::Mutex;
 ///       11-06 GPT 지적: 이걸 안 받아서 우리 릴레이만 읽으면 이름이 안 뜨고 팔로우·북마크가 사라졌다.
 ///   10002 — 릴레이 목록(NIP-65). 릴레이 나누기(docs/RELAY-SHARE.md §6): 이름표처럼 사람마다 하나 · 같은 규칙.
 ///   31405 — 오락실 게임 쪽지(11-26). 모양 검사는 arcade_listing::listing_shape. 이게 없어서 키오스크 우체국에 게임이 하나도 안 남았다.
-const KINDS: [i64; 12] = [30078, 30402, 31405, 40, 41, 42, 1, 5, 0, 3, 10003, 10002];
+///   31407 — 판매자 상태판 신호(11-28 seller_status.rs). 판매자마다 하나만(d 고정) · 모양 검사는 seller_status::shape.
+const KINDS: [i64; 13] = [30078, 30402, 31405, 31407, 40, 41, 42, 1, 5, 0, 3, 10003, 10002];
+/// 이 릴레이가 남기는 종류인가(seller_status 시험용).
+#[cfg(test)]
+pub(crate) fn accepts_kind(k: i64) -> bool { KINDS.contains(&k) }
 
 /// 사람마다 하나만 남는 글(NIP-01 replaceable: 0·3·10000~19999). 같은 사람·같은 종류면 옛것을 지운다.
 const PERSON_KINDS: [i64; 4] = [0, 3, 10003, 10002];
@@ -552,6 +556,9 @@ fn smells_bad(e: &Value) -> Option<String> {
     // (`market_listing::parse_listing`)를 통과한 것만 받는다. 체인 확인은 읽는 쪽이 한다.
     if kind == crate::arcade_listing::ARCADE_LISTING_KIND {
         return crate::arcade_listing::listing_shape(e).err();
+    }
+    if kind == crate::seller_status::SELLER_STATUS_KIND {
+        return crate::seller_status::shape(e).err();
     }
     if kind == 30402 && has_t(e, "rv-swap") {
         let size = serde_json::to_string(e).map(|s| s.len()).unwrap_or(0);

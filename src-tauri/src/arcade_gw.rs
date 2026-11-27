@@ -82,12 +82,29 @@ fn probe_cid() -> Option<String> {
 
 /// 알림에 적을 이 컴퓨터의 바깥 주소 — 후보 중 실제로 닿는 첫 곳. 없으면 None(그때는 gw 를 적지 않는다 · 다시 싸지도 않는다).
 pub async fn outside_origin_for_listing() -> Option<String> {
+    outside_origin_timed().await.map(|(o, _)| o)
+}
+
+/// 위와 같고, 그 문이 답하기까지 걸린 시간(ms)도 함께 — 판매자 상태판(seller_status.rs)의 「응답 속도」.
+/// 🔴 바깥 주소로 이 컴퓨터 자신을 두드린 값이다(터널·퍼널을 한 바퀴 돈다). 손님 폰에서 잰 값이 아니다 — 대략의 빠르기만.
+pub async fn outside_origin_timed() -> Option<(String, u32)> {
     let tunnel = crate::tunnel::tunnel_status()["url"].as_str().map(str::to_string).filter(|s| !s.is_empty());
     let probe = probe_cid();
     for o in origin_candidates(&crate::map::fixed_target(), crate::relay_share::own_https_origin(), tunnel) {
-        if door_answers(&o, probe.as_deref()).await { return Some(o); }
+        let t = std::time::Instant::now();
+        if door_answers(&o, probe.as_deref()).await {
+            return Some((o, t.elapsed().as_millis().min(u32::MAX as u128) as u32));
+        }
     }
     None
+}
+
+/// 지금 바깥에 내주는 **내 게임 문서** CID(작은 것부터). 폴더 CID 는 빼고 문서만 — 손님 쪽 목록이 문서 CID 로 묶인다.
+pub(crate) fn served_docs() -> Vec<String> {
+    let docs = PROBE_DOCS.lock().ok().and_then(|g| g.clone()).unwrap_or_default();
+    let mut out: Vec<String> = docs.into_iter().filter(|c| serves(c)).collect();
+    out.sort();
+    out
 }
 
 /// 내 open 쪽지 중 gw 가 지금 주소와 다른 것만 다시 싸 올린다(지갑 서명 없음 · 겉봉투 열쇠만). 올린 수.
