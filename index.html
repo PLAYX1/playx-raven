@@ -3021,7 +3021,7 @@
                셋 중 하나가 늘 적혀 있다.
                0.9.46: 다시 숨긴다 — 새 판이 있을 때만 보인다. 판 번호(#appver)를 누르면
                잠깐 「확인 중… → 지금이 최신입니다.」를 보여 주고 접는다. -->
-          <button type="button" id="upnag" class="ok" hidden>확인 중…</button>
+          <!-- 11-27 새 판 단추는 왼쪽 메뉴 「설정」 바로 위로 옮겼다(#upnag, 페이블·네온 토론). -->
         </div>
       </div>
       <!-- 사이드바는 기능 상자가 아니라 카운터에서 하는 일 순서다.
@@ -3107,6 +3107,8 @@
         <span class="ordbadge" id="nav-orderbadge" hidden aria-label="안 본 새 주문">0</span></a>
       <!-- 11-17 단순화 2판(대표 승인): 아래 두 칸 — 「노드 지킴이 · 채굴」(부품 화면, 채굴 탭이 바로 옆) · 「설정 · 문제 알리기」. -->
       <a data-page="parts" id="v2-nav-node" class="v2-navlow" href="#" role="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="6" rx="1.5"/><rect x="4" y="14" width="16" height="6" rx="1.5"/><path d="M8 7h.01M8 17h.01"/></svg><span>노드 지킴이 · 채굴</span><span class="rail-lbl" aria-hidden="true">노드</span></a>
+      <!-- 11-27 새 판이 있을 때만 보이는 「업데이트」 줄 — 다른 메뉴와 같은 그림+글자 규격, 주황으로 채움. 맨 위에 두면 나타날 때마다 메뉴가 밀려서 설정 바로 위. -->
+      <button type="button" id="upnag" class="rv-rail-upd" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span id="upnag-t">업데이트</span></button>
       <a data-page="settings" class="v2-navlow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M8 20.5h8M12 16.5v4"/></svg><span>설정 · 문제 알리기</span><span class="rail-lbl" aria-hidden="true">설정</span></a>
       <!-- 0.6.0 — 「더 보기」: 소식(새 주문·새 글)이 접힌 안에 있어도 놓치지 않게 여기에도 점을 띄운다. -->
       <button type="button" id="navmore-btn" aria-expanded="false"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></svg><span id="navmore-t">더 보기</span><span class="ordbadge" id="navmore-badge" hidden aria-label="안 본 소식">•</span><svg class="chev" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
