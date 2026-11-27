@@ -1,5 +1,23 @@
 # 변경 기록
 
+## 0.9.59
+
+### 한국어
+
+- **아무 RVN 지갑으로 오락실 한 판:** 웹 오락실에서 「아무 RVN 지갑으로 내기」를 누르면 QR 이 나오고, 어떤 레이븐코인 지갑으로 보내도 판매자 컴퓨터가 입금을 확인해 한 판이 열립니다. 수수료 1% 는 판마다 바로 보냅니다(지갑이 잠겨 있으면 풀리는 즉시).
+- **「지금 영업 중」 표시:** 판매자 컴퓨터가 켜져 있으면 장터와 게임 화면에 「지금 영업 중 · ○분 전 확인」이 보이고, 다시 켠 뒤에도 손님이 더 빨리 게임을 받습니다.
+- **서로 지켜 주기:** 「돕기」를 켠 컴퓨터들이 게임마다 3대씩 고르게 나눠 지키고, 내 게임 목록에 「○대가 지키는 중」이 보입니다. 음악 파일도 지킵니다. 실패하면 점점 길게 쉬었다 다시 합니다.
+- **폰 연결 QR 하나:** 지갑 연결 카드에서 「가게 주문 처리도 이 폰에 잇기」를 켜면 QR 하나로 지갑과 가게 주문 처리가 같이 이어집니다(새 폰 앱 필요 · 기본은 예전 QR).
+- 가게 사진 돕기 화면의 「받은 조각」 숫자가 늘 0 이던 것을 고쳤습니다.
+
+### English
+
+- **One arcade play with any RVN wallet:** on the web arcade, "Pay with any RVN wallet" shows a QR; pay from any Ravencoin wallet and the seller's computer confirms the payment and opens one play. The 1% fee is sent right away for each play (or as soon as the wallet is unlocked).
+- **"Open now" status:** while a seller's computer is on, the market and game page show "Open now · checked N min ago", and customers reach games faster after a restart.
+- **Keeping each other's games:** computers with Help on now split games evenly, three per game, and your game list shows "N computers keeping". Music files are kept too. Failed fetches back off gradually.
+- **One phone-connect QR:** turn on "Also connect shop orders to this phone" on the wallet link card to link the wallet and shop orders with one QR (needs the new phone app; the old QR is the default).
+- Fixed the shop-photo help screen always showing 0 received blocks.
+
 ## 0.9.58
 
 ### 한국어
