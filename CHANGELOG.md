@@ -1,5 +1,15 @@
 # 변경 기록
 
+## 0.9.57
+
+### 한국어
+
+- **오락실 게임 그림·게임이 안 열리던 것을 고쳤습니다:** 판매자 컴퓨터가 「내 주소가 밖에서 열리나」를 게임 폴더 주소로 시험해 늘 실패했고, 그래서 게임 알림에 이 컴퓨터 주소가 빠져 장터에서 표지 그림과 게임이 안 열렸습니다. 이제 게임 문서로 시험하고, 빠진 알림은 다음 확인 때(30분 안) 저절로 다시 올라갑니다.
+
+### English
+
+- **Fixed arcade covers and games not loading:** the seller computer tested its outside address with a game folder address, which always failed, so game notices went out without this computer's address and covers/games could not load. It now tests with the game document, and missing notices are re-sent automatically within 30 minutes.
+
 ## 0.9.56
 
 ### 한국어
