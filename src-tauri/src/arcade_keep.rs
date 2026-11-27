@@ -161,6 +161,7 @@ async fn mine_round_inner() -> Result<Value, String> {
     let prefs = crate::asset_keep::load();
     let mut games = Vec::new();
     let mut serve: HashSet<String> = HashSet::new();
+    let mut serve_docs: HashSet<String> = HashSet::new();   // 바깥 문 시험용(폴더 말고 문서만)
     let (mut kept, mut bytes) = (0usize, 0u64);
     // 11-26 0.9.49: DHT 알리기(provide)는 CID 하나에 최대 2분×2 — 예전에는 붙잡은 게임마다 그 자리에서 기다려서
     //   게임 7개면 바깥 /ipfs/ 길을 열고 gw 를 다시 알리기까지 수십 분 걸렸다(키오스크 실측). 모아 두었다가 바퀴 끝에 뒤에서 한다.
@@ -184,6 +185,7 @@ async fn mine_round_inner() -> Result<Value, String> {
             kept += 1;
             bytes += f.declared;
             serve.insert(doc.clone());
+            serve_docs.insert(doc.clone());
             serve.insert(f.folder.clone());
         }
         games.push(json!({
@@ -214,6 +216,7 @@ async fn mine_round_inner() -> Result<Value, String> {
                 kept += 1;
                 bytes += f.declared;
                 serve.insert(doc.clone());
+                serve_docs.insert(doc.clone());
                 serve.insert(f.folder.clone());
             }
             games.push(json!({
@@ -224,6 +227,7 @@ async fn mine_round_inner() -> Result<Value, String> {
         }
         // 바깥 /ipfs/ 길이 지금 붙잡힌 내 게임만 내주게(server.rs ipfs_relay) — 다시 알리기 전에 먼저 연다.
         crate::arcade_gw::set_serving(&serve, chain_error.is_none() && listings_read);
+        crate::arcade_gw::set_probe_docs(&serve_docs, chain_error.is_none() && listings_read);
         // 판매자 게이트웨이: 지금 바깥 주소가 쪽지의 gw 와 다르면(새 임시 터널·옛 쪽지엔 없음) 같은 content 를 새 태그로 다시 싼다.
         gateway = crate::arcade_gw::outside_origin_for_listing().await;
         if let Some(g) = gateway.as_deref() {
@@ -231,6 +235,7 @@ async fn mine_round_inner() -> Result<Value, String> {
         }
     } else {
         crate::arcade_gw::set_serving(&serve, chain_error.is_none());
+        crate::arcade_gw::set_probe_docs(&serve_docs, chain_error.is_none());
     }
     // 바깥 길·다시 알리기가 끝난 뒤 DHT 알리기는 뒤에서(바퀴 결과·화면을 붙잡지 않는다). 실패는 조용히 — 파일창고가 22시간마다 다시 알린다.
     if !to_provide.is_empty() {
