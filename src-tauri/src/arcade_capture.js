@@ -7,6 +7,23 @@
   "use strict";
   if (window.__rvCapture) return;
   window.__rvCapture = 1;
+  // 11-27 라비가 게임을 10초 돌리는 동안 소리를 끈다(키오스크 상담 화면 옆에서 올린다 — 페이블). 게임 시계는 그대로 가게
+  //   AudioContext 를 멈추지 않고, 스피커(destination)로 가는 길에만 소리 0 인 마디를 끼운다. 영상·소리 요소는 play 때 음소거.
+  try {
+    var conn = AudioNode.prototype.connect;
+    AudioNode.prototype.connect = function (dest) {
+      if (typeof AudioDestinationNode !== "undefined" && dest instanceof AudioDestinationNode) {
+        var ctx = dest.context, m = ctx.__rvMute;
+        if (!m) { m = ctx.__rvMute = ctx.createGain(); m.gain.value = 0; conn.call(m, dest); }
+        var args = Array.prototype.slice.call(arguments); args[0] = m;
+        conn.apply(this, args);
+        return dest;
+      }
+      return conn.apply(this, arguments);
+    };
+    var play = HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play = function () { try { this.muted = true; this.volume = 0; } catch (e) { /* 그대로 */ } return play.apply(this, arguments); };
+  } catch (e) { /* 소리 장치가 없는 환경 */ }
   // 🔴 sandbox iframe 은 불투명 출처라 게임 자기 그림도 「남의 출처」가 된다 → 캔버스가 더럽혀져 표지·영상을 못 뜬다.
   //    미리보기 서버가 CORS(*)를 붙이고, 여기서 <img> 를 crossOrigin=anonymous 로 바꿔 깨끗하게 둔다(게임보다 먼저 — <head> 첫머리에 붙는다).
   try {

@@ -105,7 +105,8 @@ pub fn answer(root: &Path, token: &str, rel: &str) -> Response {
     let base = base_url(token);
     let send = |ct: &str, body: Vec<u8>| -> Response {
         ([("content-type", ct.to_string()), ("content-security-policy", csp(&base)), ("x-content-type-options", "nosniff".into()),
-          ("cache-control", "no-store".into()), ("referrer-policy", "no-referrer".into()), ("access-control-allow-origin", "*".into())], body).into_response()
+          // 11-27 CORS 는 * 가 아니라 "null" 만(네온) — 읽는 쪽은 sandbox iframe(불투명 출처 = null)뿐이다. 진짜 출처를 가진 웹 페이지는 못 읽는다.
+          ("cache-control", "no-store".into()), ("referrer-policy", "no-referrer".into()), ("access-control-allow-origin", "null".into())], body).into_response()
     };
     if rel == SHIM_NAME { return send("text/javascript; charset=utf-8", SHIM_JS.as_bytes().to_vec()); }
     let Some(file) = resolve_file(root, rel) else { return (StatusCode::NOT_FOUND, "").into_response() };
