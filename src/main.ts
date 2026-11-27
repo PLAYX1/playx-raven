@@ -2482,11 +2482,9 @@ async function checkNow() {
   // 🔴 판 번호 글자는 그대로 둔다. 번호가 「확인 중…」으로 바뀌면 사장은
   //    자기가 쓰는 판이 무엇인지 그 순간 못 본다. 아래 단추가 답한다.
   // 0.9.46: 평소에는 숨어 있다. 판 번호를 눌러 직접 확인할 때만 잠깐 「확인 중…」→「지금이 최신입니다.」를 보이고 접는다.
-  if (nag) {
-    nag.classList.remove("new");
-    nag.hidden = false;
-    setCopyText(nag, () => t("확인 중…"));
-  }
+  // 11-27: 단추는 왼쪽 메뉴 줄이라 「확인 중…」 같은 긴 글은 설정 칸(up-note)에만 적는다(64px 줄에서 잘렸다).
+  void nag;
+  const note = document.getElementById("up-note"); if (note) note.textContent = t("확인 중…");
   await checkForUpdate(true, true);
   // 새 버전이 있으면 설치 칸으로 데려간다. 없으면 단추가 「최신 버전」이라
   // 적혀 있고, 그게 답이다.
@@ -2497,6 +2495,22 @@ async function checkNow() {
 }
 
 let 최신안내접기 = 0;
+/** 11-27 왼쪽 메뉴 「업데이트」 줄을 켠다. 글자는 늘 「업데이트」(64px 줄), 판 번호는 얹으면 뜨는 이름에.
+ *  새 판마다 한 번만 작은 알림(6초)을 띄운다 — 띠·팝업은 쓰지 않는다(같은 말을 두 곳에 두지 않기 · 장사 중 방해 금지). */
+function showUpdateRow(nag: HTMLButtonElement, version: string) {
+  nag.hidden = false; nag.classList.add("new");
+  const label = tf("{0} 업데이트", version);
+  const txt = document.getElementById("upnag-t"); if (txt) setCopyText(txt, () => t("업데이트"));
+  nag.title = label; nag.setAttribute("aria-label", label);
+  let seen = ""; try { seen = localStorage.getItem("rv-update-toast") || ""; } catch { /* 없어도 된다 */ }
+  if (seen === version) return;
+  try { localStorage.setItem("rv-update-toast", version); } catch { /* 없어도 된다 */ }
+  const toast = document.createElement("div");
+  toast.className = "rv-update-toast"; toast.setAttribute("role", "status");
+  toast.textContent = tf("새 버전 {0}이 나왔어요. 「업데이트」를 누르면 설치해요.", version);
+  document.body.appendChild(toast);
+  window.setTimeout(() => toast.remove(), 6000);
+}
 async function checkForUpdate(quiet = true, manual = false) {
   const nag = document.getElementById("upnag") as HTMLButtonElement | null;
   const note = document.getElementById("up-note");
@@ -2505,13 +2519,10 @@ async function checkForUpdate(quiet = true, manual = false) {
     if (!update.version) {
       // 🔴 「확인 중…」이 영영 안 풀렸다(0.8.4 에서 신고) — 새 버전이 없을 때 단추 글자를 되돌리지 않았다.
       // 0.9.46: 새 판이 없으면 위 단추는 숨긴다(「확인 중…/지금이 최신입니다」가 늘 자리를 차지했다). 직접 눌렀을 때만 4초 보인다.
-      if (nag) {
-        nag.classList.remove("new"); setCopyText(nag, () => t("지금이 최신입니다.")); nag.onclick = () => void checkNow();
-        clearTimeout(최신안내접기);
-        if (manual) { nag.hidden = false; 최신안내접기 = window.setTimeout(() => { if (!nag.classList.contains("new")) nag.hidden = true; }, 4000); }
-        else nag.hidden = true;
-      }
-      if (note) note.textContent = "새 버전이 없습니다.";
+      // 11-27: 새 판이 없으면 왼쪽 「업데이트」 줄은 늘 숨긴다. 「지금이 최신입니다」는 설정 칸에만.
+      if (nag) { nag.classList.remove("new"); nag.hidden = true; nag.onclick = null; }
+      clearTimeout(최신안내접기);
+      if (note) note.textContent = manual ? t("지금이 최신입니다.") : "새 버전이 없습니다.";
       return;
     }
     const version = update.version;
@@ -2519,16 +2530,17 @@ async function checkForUpdate(quiet = true, manual = false) {
     if (update.manual) {
       const guide = t("이 설치 방식에서는 자동으로 바꿀 수 없습니다. 새 설치 파일을 내려받아 주세요.");
       if (nag) {
-        nag.hidden = false; nag.classList.add("new"); nag.textContent = `${version} 업데이트`;
-        nag.onclick = () => { if (note) note.textContent = guide; };
+        showUpdateRow(nag, version);
+        // 설정 칸의 안내만 바뀌면 눌러도 아무 반응이 없어 보였다 — 그 칸으로 데려간다.
+        nag.onclick = () => { if (note) note.textContent = guide; showPage("settings"); setTimeout(() => $("up-box")?.scrollIntoView({ block: "center" }), 60); };
       }
       if (note) note.textContent = guide;
       return;
     }
     if (nag) {
-      nag.hidden = false; nag.classList.add("new"); nag.textContent = `${version} 업데이트`;
+      showUpdateRow(nag, version);
       nag.onclick = async () => {
-        if (!await sure("업데이트 설치", `${version} 설치 뒤 앱이 저절로 다시 켜집니다(노드도 잠시 멈췄다 켜집니다).`, "설치")) return;
+        if (!await sure(tf("{0} 로 업데이트", version), t("설치하는 동안 앱과 노드가 잠시 꺼졌다가 저절로 다시 켜져요. 그동안 손님 결제·게임도 잠깐 멈춰요. 손님이 없을 때 눌러 주세요."), t("지금 설치"))) return;
         nag.disabled = true;
         try { await invoke("install_update", { expectedVersion: version }); }
         catch (e) { if (note) note.textContent = errText(e); }
@@ -19944,7 +19956,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     const pairs: [HTMLElement, string][] = [];
     document.querySelectorAll<HTMLElement>("nav a[data-page]").forEach((a) => pairs.push([a, a.querySelector("span:not(.ordbadge)")?.textContent?.trim() || ""]));
     // 노드 점(d-sum-row)은 paintDotSum 이 긴 말(「…눌러서 켜기」)을 title 에 직접 쓴다 — 보이는 짧은 글자로 덮지 않는다(0.9.48).
-    for (const [row, txt] of [["d-link-row", "d-link-t"], ["upnag", "upnag"]] as const) {
+    for (const [row, txt] of [["d-link-row", "d-link-t"]] as const) {   // 11-27 「업데이트」 줄은 showUpdateRow 가 판 번호를 title 에 직접 쓴다
       const el = document.getElementById(row); if (el) pairs.push([el, document.getElementById(txt)?.textContent?.trim() || ""]);
     }
     for (const [el, label] of pairs) if (label && el.title !== label) { el.title = label; el.setAttribute("aria-label", label); }

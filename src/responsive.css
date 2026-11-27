@@ -295,3 +295,20 @@ main :is(#lk-s-toggle, #market-open) { max-width:100%; white-space:nowrap !impor
 body:has(#ravi-panel:not([hidden])) #page-ravi :is(#ravi-menu-open, #ravi-menu-promo) { display:none !important; }
 /* 보관함: 좁은 칸(<560)은 한 줄에 하나 — 두 칸이면 자산 이름(HOMEFIT/COFFEE)이 말줄임으로 잘렸다 */
 @media (max-width:559px) { #page-home .v2-mine-list { grid-template-columns:minmax(0,1fr) !important; } #page-home .v2-mine-list .v2-thing { min-height:0 !important; } }
+
+/* ── 11-27 「업데이트」 줄(새 판이 있을 때만) — 설정 바로 위, 다른 메뉴와 같은 규격에 주황으로 채움(페이블·네온 토론) ── */
+html body > nav > button#upnag.rv-rail-upd { order:8 !important; display:flex !important; flex-direction:row; align-items:center; justify-content:flex-start; gap:12px; width:auto !important; align-self:stretch !important; min-height:44px !important; height:auto; margin:0 0 4px !important; padding:0 14px !important; border:0 !important; border-radius:14px !important; background:var(--rv-badge, #e7731f) !important; color:#fff !important; font-size:15px !important; font-weight:700 !important; line-height:1.2; white-space:nowrap !important; cursor:pointer; box-shadow:none; }
+html body > nav > button#upnag.rv-rail-upd[hidden] { display:none !important; }
+html body > nav > button#upnag.rv-rail-upd > svg { width:20px; height:20px; flex:none; }
+html body > nav > button#upnag.rv-rail-upd:hover { filter:brightness(1.06); }
+html body > nav > button#upnag.rv-rail-upd:focus-visible { outline:2px solid var(--v2-purple, #384192); outline-offset:2px; }
+html body > nav > button#upnag.rv-rail-upd:disabled { opacity:.6; cursor:default; }
+@media (max-width:1199px) {
+  html body > nav > button#upnag.rv-rail-upd { flex-direction:column !important; justify-content:center !important; gap:3px; min-height:var(--rv-rail-row) !important; height:var(--rv-rail-row) !important; padding:0 2px !important; margin:0 0 2px !important; border-radius:12px !important; font-size:var(--rv-rail-lbl) !important; }
+  html body > nav > button#upnag.rv-rail-upd > svg { width:var(--rv-rail-ico); height:var(--rv-rail-ico); }
+}
+/* 새 판마다 한 번 뜨는 작은 알림(6초) — 왼쪽 아래, 메뉴 옆. 누를 것 없이 사라진다. */
+.rv-update-toast { position:fixed; left:calc(var(--rv-menu-w, 196px) + 12px); bottom:16px; z-index:9000; max-width:min(420px, calc(100vw - var(--rv-menu-w, 196px) - 24px)); padding:12px 16px; border-radius:14px; background:#1f224e; color:#fff; font-size:15px; line-height:1.45; word-break:keep-all; overflow-wrap:break-word; box-shadow:0 8px 24px rgba(20,20,40,.25); animation:rv-upd-in .2s ease-out; }
+@keyframes rv-upd-in { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+@media (prefers-reduced-motion: reduce) { .rv-update-toast { animation:none; } }
+@media (max-width:1199px) { .rv-update-toast { left:calc(var(--rv-rail-w) + 12px); max-width:min(420px, calc(100vw - var(--rv-rail-w) - 24px)); } }
