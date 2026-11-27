@@ -9,6 +9,8 @@
  *      → 통과한 문서 CID 만 러스트에 넘긴다. 러스트는 자기가 읽은 체인 목록으로 다시 닻을 보고 용량·상한을 지켜 붙잡는다.
  *      이미 지키는 게임은 다시 받지 않으므로 바퀴는 가볍다 — 새로 올라온 게임은 체인에 기록된 뒤 10분 안에 붙잡힌다.
  *      지갑 열쇠는 쓰지 않는다.
+ *   11-28 「서로 지켜 주기」 1단계(러스트 keep_together.rs): 「모든 게임」은 HRW 로 게임마다 돕는 사람 위 3명만 붙잡는다(모두가 같은 게임에 몰리지 않게).
+ *      ①에는 게임마다 「○대가 지키는 중」(DHT 에 물어 센 값 · 판매자 자신 포함)을 보여 준다 — 3대보다 적으면 목표도 같이.
  */
 import "./arcade-keep.css";
 import { t, tf, copyHtml, setCopyText } from "./i18n";
@@ -38,6 +40,22 @@ export function mineLine(v: any): string | null {
   return bad ? `${line} · ${tf("{0}개는 보관하지 못했어요", bad)}` : line;
 }
 
+/** 게임 한 줄의 「○대가 지키는 중」. 아직 안 셌으면(keepers=null) 「세는 중」. 3대보다 적으면 목표도. */
+export function keepersText(g: any, target = 3): string {
+  const n = g?.keepers;
+  if (typeof n !== "number" || !Number.isFinite(n)) return t("지키는 컴퓨터를 세는 중…");
+  return n < target ? tf("{0}대가 지키는 중 · 목표 {1}대", n, target) : tf("{0}대가 지키는 중", n);
+}
+
+/** ① 게임마다 한 줄(보관된 것만). */
+function keepersList(v: any): string {
+  const games = Array.isArray(v?.games) ? v.games.filter((g: any) => g && !g.problem && g.folderCid) : [];
+  if (!games.length) return "";
+  const target = Number(v?.keepTarget) || 3;
+  return `<ul class="ar-keepers">` + games.map((g: any) =>
+    `<li><span class="ar-kt" translate="no">${esc(g.title || g.asset)}</span> <span class="meta${typeof g.keepers === "number" && g.keepers < target ? " ar-few" : ""}">${esc(keepersText(g, target))}</span></li>`).join("") + `</ul>`;
+}
+
 /** 돕기 한 바퀴. 꺼져 있으면 아무것도 안 한다(null). */
 export async function shareRound(invoke: Invoke): Promise<any | null> {
   const st = await invoke<any>("arcade_share_get");
@@ -65,10 +83,16 @@ export function paintMineKeep(box: HTMLElement, invoke: Invoke, errText: (e: unk
   box.innerHTML =
     `<div class="card ar-keep"><b>${copyHtml("내 게임 보관")}</b>` +
     `<p class="meta" data-mk-line="1"></p>` +
+    `<div data-mk-keepers="1"></div>` +
     `<p class="ar-note">${copyHtml("게임은 내 컴퓨터에 있어요. 내 컴퓨터가 꺼져 있으면 손님이 게임을 못 해요. 손님이 많은 시간에는 켜 두세요.")}</p>` +
     `<div class="row"><button type="button" class="ghost" data-mk-now="1">${copyHtml("지금 확인")}</button></div></div>`;
   const line = box.querySelector<HTMLElement>("[data-mk-line]")!;
-  const show = (v: any) => { const l = mineLine(v); if (l) line.textContent = l; else setCopyText(line, () => t("앱이 켜져 있는 동안 30분마다 내 게임을 붙잡아 두고 바깥에 알려요.")); };
+  const keepers = box.querySelector<HTMLElement>("[data-mk-keepers]")!;
+  const show = (v: any) => {
+    const l = mineLine(v);
+    if (l) line.textContent = l; else setCopyText(line, () => t("앱이 켜져 있는 동안 30분마다 내 게임을 붙잡아 두고 바깥에 알려요."));
+    keepers.innerHTML = v?.error ? "" : keepersList(v);
+  };
   void invoke<any>("arcade_mine_state").then(show).catch(() => show(null));
   const btn = box.querySelector<HTMLButtonElement>("[data-mk-now]")!;
   btn.onclick = async () => {

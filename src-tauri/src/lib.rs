@@ -194,6 +194,8 @@ mod arcade_preview;
 mod arcade_listing;
 mod arcade_phone;
 mod arcade_keep;
+// 11-28 「서로 지켜 주기」 1단계 — HRW 3대 고르기·지킴이 알림·세기·물러서기·곡 파일.
+mod keep_together;
 mod arcade_gw;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
