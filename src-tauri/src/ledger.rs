@@ -380,6 +380,37 @@ pub fn settle(address: &str, txid: &str, paid_at: i64, confirmations: i64) -> Op
     }
 }
 
+/// 11-28 오락실 「아무 RVN 지갑으로 한 판」 — 청구서 주소에 돈이 들어온 것이 확인된 순간 매출 한 줄.
+///
+/// 가게 주문처럼 pending → settle 을 거치지 않는다: 청구서가 15분짜리라 하루 지난 주문을 버리는 pending 규칙과 맞지 않고
+/// (늦게 들어온 돈도 매출이다), 같은 판을 두 번 적지 않는 것은 청구서 쪽 `recorded` 표시가 맡는다.
+/// 시세(`quote`)는 받은 그때의 것 — 못 얻었으면 금액 칸을 비운다(0 을 적지 않는다).
+#[allow(clippy::too_many_arguments)]
+pub fn record_arcade_play(address: &str, txid: &str, cid: &str, title: &str, rvn: f64, quote: &Value, paid_at: i64, confirmations: i64, late: bool) -> Result<(), String> {
+    let _한번에하나 = SETTLE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let rate = quote["rate"].as_f64().filter(|r| *r > 0.0);
+    append(&json!({
+        "kind": "sale",
+        "at": paid_at,
+        "address": address,
+        "txid": txid,
+        "items": [{ "name": format!("오락실 한 판 · {title}"), "qty": 1, "arcade": cid }],
+        "amount": rate.map(|r| (rvn * r * 100.0).round() / 100.0),
+        "currency": quote["currency"],
+        "rvn": rvn,
+        "rate": rate,
+        "sources": quote["sources"],
+        "rate_unstable": quote["unstable"],
+        "rate_direct": quote["direct"],
+        "table": Value::Null,
+        "shop": shop_name(),
+        "quoted_at": paid_at,
+        "confirmations": confirmations,
+        // 청구서 시간(15분)이 지난 뒤에 들어온 돈 — 그래도 매출이다.
+        "late": late,
+    }))
+}
+
 /// Money went back out. Its own row, negative, exactly as on paper.
 pub fn record_refund(
     to: &str,

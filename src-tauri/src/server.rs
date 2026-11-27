@@ -597,11 +597,17 @@ pub(crate) fn arcade_gateway_path(path: &str) -> Option<&str> {
     crate::arcade_gw::serves(root).then_some(rest)
 }
 
+/// 11-28 「아무 RVN 지갑으로 한 판」 청구서 길(arcade_invoice) — 게이트웨이와 같이 가게가 아닌 컴퓨터에서도 바깥에 연다.
+/// 무엇을 받을지는 처리기가 정한다(내가 지금 내주는 내 게임 문서만 · 값은 내 서명 문서에서만 · 한도).
+pub(crate) fn arcade_invoice_path(path: &str) -> bool {
+    path == "/arcade/invoice" || path.strip_prefix("/arcade/invoice/").is_some_and(|a| !a.is_empty() && a.len() <= 40 && a.bytes().all(|b| b.is_ascii_alphanumeric()))
+}
+
 fn relay_only_blocked(state: &ServerState, headers: &HeaderMap, path: &str) -> bool {
     if path == crate::chain_sales::SALES_PATH || !from_outside(headers) {
         return false;
     }
-    if arcade_gateway_path(path).is_some() {
+    if arcade_gateway_path(path).is_some() || arcade_invoice_path(path) {
         return false;
     }
     let remote = state.remote_admin.lock().map(|v| *v).unwrap_or(false);
@@ -621,7 +627,7 @@ fn outside_blocked(state: &ServerState, headers: &HeaderMap, path: &str) -> bool
     if path.starts_with("/lan/") || path == "/lan" {
         return lan_from_outside(headers) || from_outside(headers);
     }
-    if !from_outside(headers) || customer_path(path) {
+    if !from_outside(headers) || customer_path(path) || arcade_invoice_path(path) {
         return false;
     }
     !state.remote_admin.lock().map(|v| *v).unwrap_or(false)
@@ -3668,6 +3674,9 @@ fn build_phone_router(st: ServerState) -> axum::Router {
         // 하나로 줄고, 방화벽 구멍도 하나면 되고, 무엇보다 Cloudflare 터널로
         // 밖에서 접속한 손님에게도 사진이 간다 — 터널은 이 포트만 통과한다.
         .route("/ipfs/{*path}", get(ipfs_relay))
+        // 11-28 오락실 「아무 RVN 지갑으로 한 판」 — 한 판마다 새 받는 주소(arcade_invoice). 몸은 작게.
+        .route("/arcade/invoice", post(arcade_invoice_create).layer(axum::extract::DefaultBodyLimit::max(1024)))
+        .route("/arcade/invoice/{addr}", get(arcade_invoice_status))
         // 손님 지갑이 쓰는 세 가지. 노드 RPC 는 여기 없다 — RPC 는 방이 없는
         // 문 하나라, 손님 폰의 URL 뒤에 가게 지갑을 두는 셈이 된다.
         // 손님 지갑. 인증 없이 — 손님에게 토큰을 요구하면 그건 주문이 아니라
@@ -3807,6 +3816,29 @@ fn build_phone_router(st: ServerState) -> axum::Router {
         .layer(axum::middleware::from_fn_with_state(st.clone(), outside_gate))
         .with_state(st.clone());
     app
+}
+
+fn arcade_invoice_answer(r: Result<Value, (u16, &'static str)>) -> axum::response::Response {
+    let headers = [("cache-control", "no-store"), ("x-content-type-options", "nosniff")];
+    match r {
+        Ok(v) => (StatusCode::OK, headers, Json(v)).into_response(),
+        Err((code, why)) => (StatusCode::from_u16(code).unwrap_or(StatusCode::BAD_REQUEST), headers, Json(json!({ "error": why }))).into_response(),
+    }
+}
+
+/// `POST /arcade/invoice {cid}` — 한 판 청구서(arcade_invoice::create). 몸은 `{"cid": "<문서 CID>"}` 하나만.
+async fn arcade_invoice_create(headers: HeaderMap, body: axum::body::Bytes) -> axum::response::Response {
+    let cid = serde_json::from_slice::<Value>(&body).ok()
+        .filter(|v| v.as_object().is_some_and(|o| o.len() == 1))
+        .and_then(|v| v.get("cid").and_then(Value::as_str).map(str::to_string));
+    let Some(cid) = cid else { return arcade_invoice_answer(Err((400, "bad-body"))) };
+    let key = crate::arcade_invoice::client_key(&headers);
+    arcade_invoice_answer(crate::arcade_invoice::create(&cid, &key).await)
+}
+
+/// `GET /arcade/invoice/<주소>` — pending · paid · short · expired.
+async fn arcade_invoice_status(axum::extract::Path(addr): axum::extract::Path<String>) -> axum::response::Response {
+    arcade_invoice_answer(crate::arcade_invoice::status(&addr).await)
 }
 
 /// 체인 POS ③ 매출 받기. 본문 처리는 `chain_sales::receive`(디스크·서명 확인이라 따로 떼어 돌린다).
@@ -3973,6 +4005,8 @@ pub async fn start_phone_server(
     restore_order_state(&st);
     // RV6 폰 연결(연결한 적이 있을 때만 장부를 연다).
     crate::pairing::net::start();
+    // 11-28 오락실 한 판 청구서: 남은 일(늦게 온 돈·수수료·매출장부)이 있으면 15초마다 본다.
+    crate::arcade_invoice::start();
 
     let ip = local_ip().unwrap_or_else(|| "127.0.0.1".into());
     // QR 에 박히는 값을 기억해 둔다. 나중에 「바뀌었다」를 말하려면 필요하다.
@@ -6773,6 +6807,36 @@ mod lan_mount_in_phone_router {
         assert_eq!(get(format!("/ipfs/{folder}/a-b%20c")).await, StatusCode::BAD_REQUEST);
         crate::arcade_gw::set_serving_for_test(&[]);
         assert_eq!(get(format!("/ipfs/{folder}/a-b%20c")).await, StatusCode::NOT_FOUND, "목록에서 빠지면 다시 닫힌다");
+        super::TEST_NOT_SHOP.with(|c| c.set(false));
+    }
+
+    /// 11-28 「아무 RVN 지갑으로 한 판」 청구서 길: 가게가 아닌 컴퓨터도 바깥에 연다(문 앞을 지나 처리기가 판단한다).
+    #[tokio::test]
+    async fn a_non_shop_computer_opens_the_arcade_invoice_paths_to_the_tunnel() {
+        let _home = super::order_persistence_tests::TestHome::new();
+        let _g = crate::arcade_gw::SERVING_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        crate::arcade_gw::set_serving_for_test(&[]);
+        assert!(super::arcade_invoice_path("/arcade/invoice"));
+        assert!(super::arcade_invoice_path("/arcade/invoice/RLFnbkjmf1VCVq7D9TZvRp7fv6W97rm2cB"));
+        for bad in ["/arcade/invoice/", "/arcade/invoice/a/b", "/arcade/invoice/..", "/arcade/other", "/arcade"] {
+            assert!(!super::arcade_invoice_path(bad), "{bad}");
+        }
+        super::TEST_NOT_SHOP.with(|c| c.set(true));
+        let app = super::build_phone_router(super::ServerState::default());
+        let send = |method: &'static str, path: String, body: &'static str| {
+            let app = app.clone();
+            async move {
+                let r = axum::http::Request::builder().method(method).uri(path).header("host", "kiosk.tail1234.ts.net").header("x-forwarded-for", "198.51.100.7").header("content-type", "application/json");
+                app.oneshot(r.body(axum::body::Body::from(body)).unwrap()).await.unwrap().status()
+            }
+        };
+        // 몸이 틀리면 400 · 내주지 않는 게임이면 404(처리기의 답) · 모르는 주소면 404.
+        assert_eq!(send("POST", "/arcade/invoice".into(), "{}").await, StatusCode::BAD_REQUEST);
+        assert_eq!(send("POST", "/arcade/invoice".into(), r#"{"cid":"x","more":1}"#).await, StatusCode::BAD_REQUEST);
+        assert_eq!(send("POST", "/arcade/invoice".into(), r#"{"cid":"../../etc"}"#).await, StatusCode::BAD_REQUEST);
+        let cid = format!("Qm{}", "E".repeat(44));
+        assert_eq!(send("POST", "/arcade/invoice".into(), Box::leak(format!(r#"{{"cid":"{cid}"}}"#).into_boxed_str())).await, StatusCode::NOT_FOUND);
+        assert_eq!(send("GET", "/arcade/invoice/notanaddress".into(), "").await, StatusCode::BAD_REQUEST);
         super::TEST_NOT_SHOP.with(|c| c.set(false));
     }
 

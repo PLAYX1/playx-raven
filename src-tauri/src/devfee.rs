@@ -62,9 +62,9 @@ static LEDGER_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 /// (tokio 의 sync 기능에 기대지 않으려고 원자 깃발로 한다. 이미 보내는 중이면 기다리지 않고 돌려보낸다.)
 static PAYING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-struct PayGuard;
+pub(crate) struct PayGuard;
 impl PayGuard {
-    fn take() -> Option<PayGuard> {
+    pub(crate) fn take() -> Option<PayGuard> {
         use std::sync::atomic::Ordering;
         PAYING.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire).ok().map(|_| PayGuard)
     }
@@ -311,6 +311,50 @@ pub async fn accrue(order_addr: &str, fee_rvn: f64) {
     }
 }
 
+/// 11-28 오락실 한 판 수수료를 **그 자리에서** 보냈다(arcade_invoice) — 쌓인 빚(`owed`)은 건드리지 않고 기록·보낸 합계만 남긴다.
+/// 같은 판(`arcade:<청구서 주소>`)을 `accrue` 가 다시 적지 않게 history 의 order 칸을 같은 이름으로 쓴다.
+pub(crate) fn record_direct(order: &str, rvn: f64, txid: &str) {
+    if rvn <= 0.0 || order.is_empty() {
+        return;
+    }
+    let _g = LEDGER_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut v = read();
+    let already = v["history"].as_array().map(|h| h.iter().any(|e| e.get("order").and_then(Value::as_str) == Some(order))).unwrap_or(false);
+    if already {
+        return;
+    }
+    v["sent_total"] = json!(round8(v["sent_total"].as_f64().unwrap_or(0.0) + rvn));
+    if let Some(h) = v["history"].as_array_mut() {
+        h.push(json!({ "order": order, "rvn": round8(rvn), "direct": true, "txid": txid, "at": now() }));
+    }
+    if write(&v).is_err() {
+        eprintln!("개발비 기록 저장 실패 — 장부 확인 필요");
+    }
+}
+
+/// 장부에 **아직 안 보낸 오락실 수수료**가 있나 — 마지막 「보냄」 뒤에 `arcade:` 판이 적혔나.
+/// 있으면 자동 송금이 3분 대신 15초마다 보고, 지갑이 쓸 수 있게 되는 그 순간 보낸다(대표 11-28 「그때그때 보내야 보람이 있지」).
+pub(crate) fn arcade_owed() -> bool {
+    arcade_owed_in(&read())
+}
+pub(crate) fn arcade_owed_in(v: &Value) -> bool {
+    if v["owed"].as_f64().unwrap_or(0.0) <= 0.0 {
+        return false;
+    }
+    let Some(h) = v["history"].as_array() else { return false };
+    for e in h.iter().rev() {
+        if e.get("sent").is_some() {
+            return false;
+        }
+        if e.get("direct").is_none() && e.get("order").and_then(Value::as_str).is_some_and(|o| o.starts_with("arcade:")) {
+            return true;
+        }
+    }
+    false
+}
+/// 오락실 수수료가 밀렸을 때 한 번에 보낼 수 있는 가장 작은 값 — 한 판 수수료의 바닥(arcade::split_price 의 먼지 한계 1000 atoms).
+pub(crate) const ARCADE_MIN_RVN: f64 = 0.000_01;
+
 fn now() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -362,10 +406,13 @@ pub fn start_auto_pay() {
         loop {
             // 3분마다 본다. 결제 하나에 곧바로 반응할 필요는 없다 —
             // 몇 분 늦게 가는 것이 지갑을 열어 두는 것보다 낫다.
-            tokio::time::sleep(std::time::Duration::from_secs(180)).await;
+            // 11-28 단, 오락실 한 판 수수료가 밀려 있으면 15초마다 — 지갑이 쓸 수 있게 되는 그 순간 보낸다(대표 「그때그때」).
+            let arcade = arcade_owed();
+            tokio::time::sleep(std::time::Duration::from_secs(if arcade { 15 } else { 180 })).await;
+            let arcade = arcade_owed();
             // 쌓인 것이 보낼 값어치가 되나. 0.01 RVN 미만이면 보내는 데
-            // 드는 값이 더 크다.
-            if read()["owed"].as_f64().unwrap_or(0.0) < 0.01 {
+            // 드는 값이 더 크다. (오락실 수수료는 대표 결정으로 예외 — 판마다 보낸다.)
+            if read()["owed"].as_f64().unwrap_or(0.0) < 0.01 && !arcade {
                 continue;
             }
             // 지금 풀려 있나. 잠겨 있으면 **아무 말 없이** 넘어간다.
@@ -374,6 +421,14 @@ pub fn start_auto_pay() {
                 .ok()
                 .and_then(|v| v["unlocked"].as_bool())
                 .unwrap_or(false);
+            if arcade {
+                // 풀려 있거나 · 자동 판매가 이번 실행 동안 암호를 들고 있으면(auto.rs) 오락실 쪽이 잠깐 열어 보낸다.
+                // 둘 다 아니면 조르지 않고 다음 바퀴를 기다린다.
+                if spendable || crate::auto::armed_pass().is_some() {
+                    let _ = crate::arcade_invoice::pay_owed_now().await;
+                }
+                continue;
+            }
             if !spendable {
                 continue;
             }
@@ -389,6 +444,11 @@ pub fn start_auto_pay() {
 
 #[tauri::command]
 pub async fn fee_pay() -> Result<Value, String> {
+    fee_pay_min(0.01).await
+}
+
+/// `fee_pay` 와 같다 — 보낼 바닥만 다르다(오락실 수수료가 밀렸을 때 `ARCADE_MIN_RVN`).
+pub(crate) async fn fee_pay_min(min_rvn: f64) -> Result<Value, String> {
     // 🔴 한 번에 하나만. 자동 송금과 단추가 겹치면 같은 `owed` 를 두 번 보낸다.
     let Some(_pay) = PayGuard::take() else {
         return Err("이미 개발비를 보내는 중입니다. 잠시 뒤에 다시 확인해 주세요.".into());
@@ -401,7 +461,7 @@ pub async fn fee_pay() -> Result<Value, String> {
         return Err("보낼 주소가 아직 정해지지 않았습니다.".into());
     }
     // 수수료보다 적은 돈을 보내면 보내는 값보다 드는 값이 크다.
-    if !owed.is_finite() || owed < 0.01 || owed > 1_000.0 {
+    if !owed.is_finite() || owed < min_rvn.max(ARCADE_MIN_RVN) || owed > 1_000.0 {
         return Err("아직 보낼 만큼 쌓이지 않았습니다.".into());
     }
 
@@ -485,6 +545,36 @@ mod tests {
         tauri::async_runtime::block_on(accrue("RtestNeg", -5.0));
         assert_eq!(std::fs::read(ledger_file()).ok(), before);
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// 11-28 오락실 수수료: 마지막 「보냄」 뒤에 적힌 `arcade:` 판이 있을 때만 「밀림」 — 그 자리에서 보낸 판(direct)은 빚이 아니다.
+    #[test]
+    fn 오락실_수수료_밀림은_보낸_뒤에_적힌_판만() {
+        let v = |owed: f64, h: Value| json!({ "owed": owed, "sent_total": 0.0, "history": h });
+        assert!(!arcade_owed_in(&v(0.0, json!([]))));
+        assert!(arcade_owed_in(&v(0.01, json!([{ "order": "arcade:Rabc", "rvn": 0.01 }]))));
+        assert!(!arcade_owed_in(&v(0.01, json!([{ "order": "Rshop", "rvn": 0.01 }]))), "가게 주문은 예전처럼 3분 바퀴");
+        assert!(!arcade_owed_in(&v(0.01, json!([{ "order": "arcade:Rabc", "rvn": 0.01 }, { "sent": 0.01, "txid": "t" }]))), "보낸 뒤에는 없다");
+        assert!(!arcade_owed_in(&v(0.5, json!([{ "order": "arcade:Rabc", "rvn": 0.01, "direct": true, "txid": "t" }]))), "그 자리에서 보낸 판");
+    }
+
+    /// 그 자리에서 보낸 판은 빚을 늘리지 않고, 같은 판을 나중에 `accrue` 가 다시 적지 않는다.
+    #[test]
+    fn 그_자리에서_보낸_판은_다시_적지_않는다() {
+        let _g = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
+        let d = crate::paths::test_fixture_root().join("playx-devfee-arcade-direct-test");
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        std::env::set_var("PLAYX_RAVEN_HOME", &d);
+        record_direct("arcade:Rinv1", 0.01, &"a".repeat(64));
+        record_direct("arcade:Rinv1", 0.01, &"a".repeat(64));
+        tauri::async_runtime::block_on(accrue("arcade:Rinv1", 0.01));
+        let v = read();
+        assert_eq!(v["owed"].as_f64().unwrap(), 0.0);
+        assert_eq!(v["sent_total"].as_f64().unwrap(), 0.01);
+        assert_eq!(v["history"].as_array().unwrap().len(), 1);
+        let _ = std::fs::remove_dir_all(&d);
+        std::env::remove_var("PLAYX_RAVEN_HOME");
     }
 
     /// 🔴 송금은 한 번에 하나만 — 두 번째는 기다리지 않고 돌려보내고, 첫째가 끝나면 다시 잡을 수 있다.

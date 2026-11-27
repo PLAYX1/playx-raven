@@ -195,6 +195,7 @@ mod arcade_listing;
 mod arcade_phone;
 mod arcade_keep;
 mod arcade_gw;
+mod arcade_invoice;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

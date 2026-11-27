@@ -337,6 +337,33 @@ pub fn build_menu(items: Value, currency: String) -> Value {
     })
 }
 
+/// 「지금 내줘도 되는 돈인가」의 재료 둘 — 노드가 네트워크를 보고 있나, 소액 기준(30,000 가게 통화)이 몇 RVN 인가.
+/// 가게 주문(`incoming_payments`)과 오락실 한 판 청구서(`arcade_invoice`)가 같은 규칙을 쓴다.
+pub(crate) async fn accept_context() -> (bool, f64) {
+    // 끊긴 노드는 이중지불을 못 본다. 그때는 금액과 무관하게 기다린다.
+    let online = call_rpc("getconnectioncount", json!([]))
+        .await
+        .ok()
+        .and_then(|v| v.as_i64())
+        .map(|n| n > 0)
+        .unwrap_or(false);
+    // 소액 기준을 RVN 으로 환산해 둔다. 시세는 캐시되어 있어 값이 싸다.
+    let small_rvn = crate::price::rvn_rate(crate::shop::currency())
+        .await
+        .ok()
+        .and_then(|r| r["rate"].as_f64())
+        .filter(|r| *r > 0.0)
+        .map(|r| 30_000.0 / r)
+        .unwrap_or(0.0);
+    (online, small_rvn)
+}
+
+/// 지금 내줘도 되는가 — 확인이 하나라도 있거나, (노드가 네트워크를 보고 있고 · 충돌 거래가 없고 · 소액)일 때.
+/// 자세한 까닭은 `incoming_payments` 의 accept_now 설명.
+pub(crate) fn accept_now(confirmations: i64, conflicts: usize, online: bool, rvn: f64, small_rvn: f64) -> bool {
+    confirmations > 0 || (online && conflicts == 0 && small_rvn > 0.0 && rvn <= small_rvn)
+}
+
 /// Payments for orders.
 ///
 /// Every order gets its own address, so the address *is* the order number —
@@ -353,22 +380,7 @@ pub fn build_menu(items: Value, currency: String) -> Value {
 #[tauri::command]
 pub async fn incoming_payments(address: String, min_conf: u32) -> Result<Value, String> {
     let txs = call_rpc("listtransactions", json!(["*", 100, 0, true])).await?;
-
-    // 끊긴 노드는 이중지불을 못 본다. 그때는 금액과 무관하게 기다린다.
-    let online = call_rpc("getconnectioncount", json!([]))
-        .await
-        .ok()
-        .and_then(|v| v.as_i64())
-        .map(|n| n > 0)
-        .unwrap_or(false);
-    // 소액 기준을 RVN 으로 환산해 둔다. 시세는 캐시되어 있어 값이 싸다.
-    let small_rvn = crate::price::rvn_rate(crate::shop::currency())
-        .await
-        .ok()
-        .and_then(|r| r["rate"].as_f64())
-        .filter(|r| *r > 0.0)
-        .map(|r| 30_000.0 / r)
-        .unwrap_or(0.0);
+    let (online, small_rvn) = accept_context().await;
     let list = txs.as_array().cloned().unwrap_or_default();
 
     let mut received = Vec::new();
@@ -426,8 +438,7 @@ pub async fn incoming_payments(address: String, min_conf: u32) -> Result<Value, 
             // 공격이 안 통한다. 남는 위험은 채굴자에게 다른 거래를 직접 밀어넣는
             // 레이스뿐이고, 그건 커피값에 할 짓이 아니다. 대신 조건 셋을 모두
             // 만족해야 한다 — 소액이고, 충돌이 없고, 노드가 네트워크를 보고 있다.
-            "accept_now": confirmations > 0
-                || (online && conflicts == 0 && small_rvn > 0.0 && rvn <= small_rvn),
+            "accept_now": accept_now(confirmations, conflicts, online, rvn, small_rvn),
             // RIP-5 lets a transfer carry an IPFS hash, which is how a remote
             // order arrives attached to its own payment.
             "message": tx.get("message"),

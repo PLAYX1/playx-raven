@@ -10,7 +10,7 @@
 //! - 다시 알리기: 쪽지의 gw 가 지금 주소와 다르면 **같은 content(같은 안쪽 판매자 서명)** 를 겉봉투 열쇠로만 다시 싼다 —
 //!   지갑 잠김과 상관없다(겉봉투 열쇠 = shopkey.json 에서 뽑은 값). 안쪽 서명 문구에 겉봉투 pubkey 가 들어 있어 판매자 R 주소와의 묶임은 그대로 증명된다.
 use serde_json::Value;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 
 fn now() -> i64 {
@@ -33,6 +33,32 @@ pub(crate) fn set_serving(now_set: &HashSet<String>, complete: bool) {
 pub fn serves(root: &str) -> bool {
     crate::arcade::cid_ok(root) && SERVING.lock().ok().and_then(|g| g.as_ref().map(|s| s.contains(root))).unwrap_or(false)
 }
+/// 11-28 「아무 RVN 지갑으로 한 판」: 내가 내주는 **문서** CID → (한 판 값 atoms, 제목). 30분 바퀴가 내 서명 문서에서 다시 채운다.
+/// 청구서(arcade_invoice)는 여기 있는 CID·값만 쓴다 — 요청이 값을 정하지 못한다.
+static PRICES: Mutex<Option<HashMap<String, (u64, String)>>> = Mutex::new(None);
+
+/// 체인 쪽을 못 읽은 바퀴는 SERVING 과 같이 지난 값을 지우지 않고 합친다(새 값이 이긴다).
+pub(crate) fn set_prices(now_map: &HashMap<String, (u64, String)>, complete: bool) {
+    if let Ok(mut g) = PRICES.lock() {
+        let next = if complete { now_map.clone() } else {
+            let mut m = g.clone().unwrap_or_default();
+            m.extend(now_map.iter().map(|(k, v)| (k.clone(), v.clone())));
+            m
+        };
+        *g = Some(next);
+    }
+}
+
+/// 이 컴퓨터가 **지금 내주는** 내 게임 문서의 한 판 값·제목. 내주지 않거나 값을 모르면 None.
+pub fn price_of(cid: &str) -> Option<(u64, String)> {
+    if !serves(cid) { return None; }
+    PRICES.lock().ok()?.as_ref()?.get(cid).cloned()
+}
+#[cfg(test)]
+pub(crate) fn set_price_for_test(cid: &str, price: u64, title: &str) {
+    set_prices(&[(cid.to_string(), (price, title.to_string()))].into_iter().collect(), true);
+}
+
 /// 시험끼리 전역 목록을 동시에 바꾸지 않게(server.rs 시험과 이 파일 시험).
 #[cfg(test)]
 pub(crate) static SERVING_TEST_LOCK: Mutex<()> = Mutex::new(());
@@ -120,6 +146,18 @@ mod tests {
         set_serving(&[folder].into_iter().collect(), true);
         assert_eq!(probe_cid(), None);
         set_serving(&HashSet::new(), true); set_probe_docs(&HashSet::new(), true);
+    }
+
+    #[test]
+    fn 값은_지금_내주는_내_문서에서만() {
+        let _g = SERVING_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let doc = format!("Qm{}", "C".repeat(44));
+        set_serving(&[doc.clone()].into_iter().collect(), true);
+        set_price_for_test(&doc, 50_000_000, "Run");
+        assert_eq!(price_of(&doc), Some((50_000_000, "Run".to_string())));
+        set_serving(&HashSet::new(), true);
+        assert_eq!(price_of(&doc), None, "더는 내주지 않으면 청구서도 없다");
+        set_prices(&HashMap::new(), true);
     }
 
     #[test]

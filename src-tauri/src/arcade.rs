@@ -225,7 +225,7 @@ pub fn split_price(price: u64) -> Result<(u64, u64), String> {
 }
 
 /// atoms → RVN 글자(소수 8자리 정확히). 노드의 금액 칸은 글자도 받는다(AmountFromValue) — 부동소수 반올림이 끼지 않는다.
-fn atoms_json(a: u64) -> Value {
+pub(crate) fn atoms_json(a: u64) -> Value {
     json!(format!("{}.{:08}", a / 100_000_000, a % 100_000_000))
 }
 
