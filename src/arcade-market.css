@@ -45,6 +45,15 @@
 .ar-page { display: grid; grid-template-columns: minmax(220px, 320px) minmax(0, 1fr); gap: 18px; align-items: start; }
 .ar-hero { height: 220px; border-radius: 16px; border: 1px solid var(--line); }
 .ar-hero svg { width: 84px; height: 84px; }
+/* 11-27 미리보기 영상(게임 페이지만) — 표지 위에 겹친다. 못 받으면 hidden → 표지가 보인다. */
+.ar-hero { position: relative; }
+.ar-hero-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; background: transparent; }
+.ar-hero-video[hidden] { display: none; }
+/* 11-27 「첫 판 무료」 알약(값 옆) */
+.ar-pricerow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.ar-ff { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 800; line-height: 1.4; white-space: nowrap; flex-shrink: 0;
+  color: var(--ok); border: 1px solid currentColor; background: color-mix(in srgb, var(--ok) 10%, transparent); vertical-align: middle; }
+.ar-big .ar-ff { margin-left: 8px; font-size: 13px; }
 .ar-info { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .ar-info h3 { margin: 0; font-size: 20px; overflow-wrap: anywhere; }
 .ar-info p { margin: 0; overflow-wrap: anywhere; }
@@ -107,3 +116,31 @@
 .ar-phone-bar { position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 9998; display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 10px; background: var(--panel); color: var(--text); border: 1px solid var(--warn); box-shadow: 0 6px 24px rgb(0 0 0 / 0.18); font-size: 14px; line-height: 1.5; }
 .ar-phone-bar span { flex: 1 1 auto; min-width: 0; }
 .ar-phone-bar button { flex-shrink: 0; white-space: nowrap; }
+/* 11-27 「라비가 다 해 줄게요」 · 「첫 판 무료」 칸 */
+.ar-up-form label.ar-up-ff { flex-direction: row; align-items: flex-start; font-weight: 600; margin: 0; }
+.ar-up-form .ar-up-ff input { width: 22px; height: 22px; min-height: 0; padding: 0; flex: 0 0 auto; }
+.ar-up-form .ar-up-ff:has(input:disabled) { opacity: .6; cursor: default; }
+.ar-maker { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--ravi, #e7731f) 45%, var(--line)); border-radius: 14px;
+  background: color-mix(in srgb, var(--ravi, #e7731f) 7%, var(--panel)); }
+.ar-maker-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.ar-maker-head > div { flex: 1 1 auto; min-width: 0; }
+.ar-maker-head .meta { margin: 2px 0 0; }
+.ar-maker-head button { white-space: nowrap; flex-shrink: 0; }
+.ar-maker-face { width: 40px; height: 40px; border-radius: 50%; flex: 0 0 auto; background: #fff; }
+.ar-maker-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.ar-maker-steps[hidden] { display: none; }
+.ar-maker-steps li { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); font-size: 14px; min-width: 0; overflow-wrap: anywhere; }
+.ar-maker-steps li span { white-space: nowrap; }
+.ar-maker-steps li .meta { white-space: normal; font-size: 13px; }
+.ar-mk-doing { border-color: var(--brand) !important; }
+.ar-mk-done > span:first-of-type { color: var(--ok); }
+.ar-mk-fail > span:first-of-type { color: var(--warn); }
+.ar-mk-skip > span:first-of-type, .ar-mk-wait > span:first-of-type { color: var(--muted); }
+.ar-maker-stage[hidden], .ar-maker-out[hidden] { display: none; }
+.ar-maker-view { width: 480px; height: 270px; max-width: 100%; overflow: hidden; border: 1px solid var(--line); border-radius: 10px; background: #000; }
+.ar-maker-frame { display: block; width: 1280px; height: 720px; border: 0; transform: scale(.375); transform-origin: 0 0; pointer-events: none; }
+.ar-maker-out { display: flex; flex-wrap: wrap; gap: 12px; }
+.ar-maker-out figure { margin: 0; display: flex; flex-direction: column; gap: 4px; width: min(320px, 100%); }
+.ar-maker-out img, .ar-maker-out video { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); background: #000; }
+.ar-maker-out figcaption { font-size: 13px; color: var(--muted); }
+@media (max-width: 860px) { .ar-maker-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ar-maker-head { flex-wrap: wrap; } }

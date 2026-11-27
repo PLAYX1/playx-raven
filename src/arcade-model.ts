@@ -109,6 +109,16 @@ export function coverUrl(p: Pick<ArcadeProduct, "docCid" | "doc">): string | nul
   return hit ? `${ARCADE_LINK_BASE}${p.docCid}/${hit}` : null;
 }
 
+/** 11-27 미리보기 영상 — 맨 위 preview.mp4/webm(라비가 올리기 때 떠 둔 몇 초). 규칙은 표지와 같다(파일 목록에 있고 잠기지 않은 것만). */
+export const PREVIEW_FILES = ["preview.mp4", "preview.webm"] as const;
+export function previewUrl(p: Pick<ArcadeProduct, "docCid" | "doc">): string | null {
+  if (!/^[A-Za-z0-9]{46,100}$/.test(p.docCid)) return null;
+  const files = Array.isArray((p.doc as { files?: unknown })?.files) ? (p.doc as { files: { path?: unknown }[] }).files : [];
+  const locked = new Set(Array.isArray(p.doc?.lock?.paths) ? p.doc.lock!.paths : []);
+  const hit = PREVIEW_FILES.find((name) => files.some((f) => f?.path === name) && !locked.has(name));
+  return hit ? `${ARCADE_LINK_BASE}${p.docCid}/${hit}` : null;
+}
+
 /** 무료 게임만 결제 없이 연다. 한 판마다 내는 게임이라 「이미 산 게임」은 없다(폰과 같은 규칙, 대표 11-03). */
 export const playsWithoutPay = (p: Pick<ArcadeProduct, "priceSats">) => p.priceSats === 0;
 

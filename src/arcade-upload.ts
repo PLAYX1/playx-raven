@@ -22,6 +22,7 @@ import {
 import type { ArcadeProduct } from "./arcade-model";
 import { publishListing, runOpenUpload, type OpenStep } from "./arcade-open";
 import type { PhoneMeta } from "./arcade-phone-upload";
+import { mountMaker } from "./arcade-maker";
 
 type Invoke = <T = any>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
 export interface UploadDeps { invoke: Invoke; ensureUnlocked: (why: string) => Promise<boolean>; errText: (e: unknown) => string }
@@ -31,6 +32,9 @@ function esc(s: unknown): string {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 }
 const isSentUnknown = (e: unknown) => /SENT_UNKNOWN/.test(String(e));
+/** 확인 칸의 「첫 판」 줄(유료 게임만). */
+const firstFreeRow = (priceSats: string, on: boolean) => priceSats === "0" ? "" :
+  `<div class="kv"><b>${copyHtml("첫 판")}</b><span>${copyHtml(on ? "무료 (사는 사람이 먼저 한 판 해 봐요)" : "유료 (처음부터 한 판 값)")}</span></div>`;
 const fmtSize = (n: number) => n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
 
 /** 폰에서 보낸 게임(가게 이름으로 올리기) — 받은 폴더·글을 채워 연다. 확인 칸·소각은 이 화면 그대로(사람이 눌러야 나간다). */
@@ -40,6 +44,7 @@ export function paintUpload(host: HTMLElement, deps: UploadDeps, o: { existing: 
   let scan: FolderScan | null = null;
   let places = { shops: [] as string[], products: [] as string[] };
   let busy = false;
+  let maker: ReturnType<typeof mountMaker> | null = null;
 
   host.innerHTML =
     `<div class="ar-head"><button type="button" class="ghost ar-back" data-up-back="1">${copyHtml("장터로")}</button><h3>${copyHtml("게임 올리기")}</h3></div>` +
@@ -96,7 +101,8 @@ export function paintUpload(host: HTMLElement, deps: UploadDeps, o: { existing: 
   }
 
   // 가게 목록은 미리 읽는다(주인 표 RVLT/<가게>!).
-  void deps.invoke<unknown>("owner_tokens").then((r) => { places = sellerPlaces(r); if (scan) paintForm(); }).catch(() => { places = { shops: [], products: [] }; });
+  // 폼이 이미 있으면 「어디에 올릴까요」 칸만 바꾼다(적던 글·라비가 하던 일을 지우지 않게).
+  void deps.invoke<unknown>("owner_tokens").then((r) => { places = sellerPlaces(r); if (scan) repaintTargets(); }).catch(() => { places = { shops: [], products: [] }; });
 
   $("[data-up-pick]").onclick = async () => {
     if (busy) return;
@@ -108,8 +114,40 @@ export function paintUpload(host: HTMLElement, deps: UploadDeps, o: { existing: 
       scan = scanOf(r);
       if (!scan) throw new Error(t("폴더를 읽지 못했어요."));
       paintForm();
+      // 판매자 표지가 없으면 라비가 한 번 알아서 해 본다(표지가 있으면 단추만 — 판매자 것은 덮지 않는다).
+      maker?.autoRun();
     } catch (e) { box.innerHTML = `<p class="danger">${esc(deps.errText(e))}</p>`; }
   };
+
+  function targetOptionsHtml() {
+    const tokens = places;
+    const openOpts = `<option value="open:new">${esc(t("새 게임 · 일반 판매자 (0 RVN · 자산 없음)"))}</option>` +
+      myOpen().map((p) => `<option value="open:update:${esc(p.id)}">${esc(tf("고치기 · {0} (일반 판매자 · 0 RVN)", p.title))}</option>`).join("");
+    return openOpts + tokens.shops.map((x) => `<option value="new:${esc(x)}">${esc(tf("새 게임 · RVLT/{0}#… (고유 자산)", x))}</option>`).join("") +
+      tokens.products.map((x) => `<option value="update:${esc(x)}">${esc(tf("고치기 · {0} (재발행)", x))}</option>`).join("");
+  }
+  function repaintTargets() {
+    const sel = host.querySelector<HTMLSelectElement>("[data-up-target]");
+    if (!sel) { paintForm(); return; }
+    const keep = sel.value;
+    sel.innerHTML = targetOptionsHtml();
+    if ([...sel.options].some((x) => x.value === keep)) sel.value = keep;
+    sel.dispatchEvent(new Event("change"));
+  }
+  /** 폴더 줄(이름 · 파일 수 · 크기). */
+  function paintFolderLine(s: FolderScan) {
+    const total = s.files.reduce((n, f) => n + f.size, 0);
+    $("[data-up-folder]").innerHTML =
+      `<div class="ar-up-folder"><b translate="no">${esc(s.folder)}</b> · ${esc(tf("파일 {0}개 · {1}", s.files.length, fmtSize(total)))}</div>`;
+  }
+  let recheckNow: () => boolean = () => false;
+  /** 라비가 파일을 쓴 뒤: 새로 훑은 폴더로 바꾸고 검사를 다시 한다. 확인 칸은 닫는다(파일 목록이 바뀌었다). */
+  function setScan(next: FolderScan) {
+    scan = next;
+    paintFolderLine(next);
+    recheckNow();
+    if (!busy) $("[data-up-step]").innerHTML = "";
+  }
 
   function listHtml(items: { say: string }[], cls: string) {
     return items.length ? `<ul class="ar-up-list ${cls}">${items.map((p) => `<li>${esc(t(p.say) === p.say ? p.say : t(p.say))}</li>`).join("")}</ul>` : "";
@@ -119,17 +157,13 @@ export function paintUpload(host: HTMLElement, deps: UploadDeps, o: { existing: 
     if (!scan) return;
     const s = scan;
     const entries = entryCandidates(s.files);
-    const total = s.files.reduce((n, f) => n + f.size, 0);
-    $("[data-up-folder]").innerHTML =
-      `<div class="ar-up-folder"><b translate="no">${esc(s.folder)}</b> · ${esc(tf("파일 {0}개 · {1}", s.files.length, fmtSize(total)))}</div>`;
+    paintFolderLine(s);
     const tokens = places;
-    const openOpts = `<option value="open:new">${esc(t("새 게임 · 일반 판매자 (0 RVN · 자산 없음)"))}</option>` +
-      myOpen().map((p) => `<option value="open:update:${esc(p.id)}">${esc(tf("고치기 · {0} (일반 판매자 · 0 RVN)", p.title))}</option>`).join("");
-    const shopOpts = openOpts + tokens.shops.map((x) => `<option value="new:${esc(x)}">${esc(tf("새 게임 · RVLT/{0}#… (고유 자산)", x))}</option>`).join("") +
-      tokens.products.map((x) => `<option value="update:${esc(x)}">${esc(tf("고치기 · {0} (재발행)", x))}</option>`).join("");
+    const shopOpts = targetOptionsHtml();
     const saved = (() => { try { return localStorage.getItem(SELLER_KEY) || ""; } catch { return ""; } })();
     $("[data-up-form]").innerHTML =
       `<div class="ar-up-form">` +
+      `<div data-up-maker="1"></div>` +
       `<p class="ar-note">${copyHtml(tokens.shops.length || tokens.products.length
         ? "일반 판매자로 올리면 0 RVN 이에요. 내 RVLT 가게 아래로 올리면 「확인 판매자」 표시가 붙고 RVN 이 소각돼요."
         : "가게 자산이 없어도 일반 판매자로 0 RVN 에 올릴 수 있어요. 장터에는 「일반 판매자」로 보여요. RVLT/<가게> 자산이 있으면 「확인 판매자」 표시가 붙어요.")}</p>` +
@@ -142,6 +176,7 @@ export function paintUpload(host: HTMLElement, deps: UploadDeps, o: { existing: 
       `<label>${copyHtml("한 판 값 (RVN · 0 = 무료)")}<input data-up-price="1" inputmode="decimal" autocomplete="off" placeholder="0.5" /></label>` +
       `<label>${copyHtml("한 판 약 몇 분")}<input data-up-min="1" inputmode="numeric" value="3" /></label>` +
       `</div>` +
+      `<label class="ar-agree ar-up-ff"><input type="checkbox" data-up-ff="1" checked /> <span>${copyHtml("첫 판 무료 (사는 사람이 먼저 한 판 해 봐요)")}</span></label>` +
       `<label>${copyHtml("시작 파일")}<select data-up-entry="1">${entries.map((p) => `<option>${esc(p)}</option>`).join("")}</select></label>` +
       `<label>${copyHtml("판매 대금 받는 주소 (비우면 이 지갑의 새 주소)")}<input data-up-payto="1" maxlength="40" autocomplete="off" spellcheck="false" translate="no" value="${esc(saved)}" /></label>` +
       `<div data-up-check="1"></div>` +
@@ -150,6 +185,11 @@ export function paintUpload(host: HTMLElement, deps: UploadDeps, o: { existing: 
     const target = $<HTMLSelectElement>("[data-up-target]");
     const syncTag = () => { $("[data-up-tagrow]").hidden = !(target.value.startsWith("new:") || target.value === "open:new"); };
     target.onchange = syncTag; syncTag();
+    // 「첫 판 무료」는 유료 게임에서만 뜻이 있다(core: 무료 게임에는 둘 수 없다).
+    const price = $<HTMLInputElement>("[data-up-price]"), ff = $<HTMLInputElement>("[data-up-ff]");
+    const syncFf = () => { const a = atomsOfRvnText(price.value || "0"); ff.disabled = a === null || a === "0"; };
+    price.addEventListener("input", syncFf); syncFf();
+    $<HTMLSelectElement>("[data-up-genre]").addEventListener("change", (e) => { (e.currentTarget as HTMLElement).dataset.touched = "1"; });
     const title = $<HTMLInputElement>("[data-up-title]"), tag = $<HTMLInputElement>("[data-up-tag]");
     title.oninput = () => { if (!tag.dataset.touched) tag.value = suggestTag(title.value); };
     tag.oninput = () => { tag.dataset.touched = "1"; };
@@ -161,7 +201,12 @@ export function paintUpload(host: HTMLElement, deps: UploadDeps, o: { existing: 
       return c.problems.length === 0;
     };
     $<HTMLSelectElement>("[data-up-entry]").onchange = recheck;
+    recheckNow = recheck;
     recheck();
+    maker = mountMaker($("[data-up-maker]"), {
+      invoke: deps.invoke, errText: deps.errText, getScan: () => scan, setScan,
+      field: <T extends HTMLElement>(sel: string) => host.querySelector<T>(sel),
+    });
     $("[data-up-review]").onclick = () => void review(recheck);
     if (o.preset) fillPreset(o.preset.meta, recheck);
   }
@@ -173,6 +218,7 @@ export function paintUpload(host: HTMLElement, deps: UploadDeps, o: { existing: 
     set("[data-up-price]", m.priceSats === "0" ? "0" : String(Number(m.priceSats) / 1e8)); set("[data-up-min]", String(m.minutes));
     const tag = host.querySelector<HTMLInputElement>("[data-up-tag]"); if (tag) { tag.value = m.tag; tag.dataset.touched = "1"; }
     if (m.entry) set("[data-up-entry]", m.entry);
+    const ff = host.querySelector<HTMLInputElement>("[data-up-ff]"); if (ff) ff.checked = m.firstFree === true;
     const target = host.querySelector<HTMLSelectElement>("[data-up-target]");
     if (target && m.mode === "shop" && m.shop && [...target.options].some((x) => x.value === `new:${m.shop}`)) { target.value = `new:${m.shop}`; target.dispatchEvent(new Event("change")); }
     recheck();
@@ -194,12 +240,13 @@ export function paintUpload(host: HTMLElement, deps: UploadDeps, o: { existing: 
     const genre = $<HTMLSelectElement>("[data-up-genre]").value as ArcadeGenre;
     const entry = $<HTMLSelectElement>("[data-up-entry]").value;
     const description = $<HTMLTextAreaElement>("[data-up-desc]").value;
+    const firstFree = priceSats !== "0" && $<HTMLInputElement>("[data-up-ff]").checked;
     const id = prior ? prior.doc.id : idFromTag(tag);
     const version = prior ? prior.doc.version + 1 : 1;
     let seller = prior ? prior.doc.seller : "";
     let payTo = $<HTMLInputElement>("[data-up-payto]").value.trim();
     const probe = "R" + "1".repeat(33);
-    try { buildBody({ id, version, title, description, priceSats, seller: seller || payTo || probe, payTo: payTo || seller || probe, entry, cid: PLACEHOLDER_CID, files: scan.files, minutes, genre, assetName: "" }); }
+    try { buildBody({ id, version, title, description, priceSats, seller: seller || payTo || probe, payTo: payTo || seller || probe, entry, cid: PLACEHOLDER_CID, files: scan.files, minutes, genre, assetName: "", firstFree }); }
     catch (e) { if (!/arcade-address/.test(String(e))) { step.innerHTML = `<p class="danger">${esc(t("상품 문서 모양이 맞지 않아요."))} <span class="meta">${esc(String((e as Error)?.message ?? e))}</span></p>`; return; } }
     const priceText = priceSats === "0" ? t("무료") : `${(Number(priceSats) / 1e8).toString()} RVN`;
     step.innerHTML =
@@ -208,6 +255,7 @@ export function paintUpload(host: HTMLElement, deps: UploadDeps, o: { existing: 
       `<div class="kv"><b>${copyHtml("올리는 곳")}</b><span>${copyHtml("일반 판매자")} · <code translate="no">${esc(id)}</code>${prior ? ` · ${esc(tf("{0}판", version))}` : ""}</span></div>` +
       `<div class="kv"><b>${copyHtml("게임 이름")}</b><span translate="no">${esc(title)}</span></div>` +
       `<div class="kv"><b>${copyHtml("한 판 값")}</b><span>${esc(priceText)}</span></div>` +
+      firstFreeRow(priceSats, firstFree) +
       `<div class="kv"><b>${copyHtml("소각")}</b><span><b>${copyHtml("없음 (0 RVN · 체인 거래 없음)")}</b></span></div>` +
       `<p class="meta">${copyHtml("장터에는 「일반 판매자」로 보여요. 사는 사람은 첫 결제 전에 「일반 판매자 게임이에요」 안내를 봐요. 신고가 쌓이면 레이븐볼트가 숨길 수 있어요.")}</p>` +
       `<p class="ar-warn">${copyHtml("「올리기」를 누르면 게임 폴더와 상품 문서가 공개 IPFS 에, 알림 쪽지가 공개 릴레이에 올라가요. 게임 파일은 이 컴퓨터가 지켜요 — 켜 두어야 사람들이 받을 수 있어요.")}</p>` +
@@ -228,7 +276,7 @@ export function paintUpload(host: HTMLElement, deps: UploadDeps, o: { existing: 
           if (!seller) { seller = String(await deps.invoke<string>("new_address", { label: "arcade" })); try { localStorage.setItem(SELLER_KEY, seller); } catch { /* 없어도 된다 */ } }
         }
         if (!payTo) payTo = seller;
-        const r = await runOpenUpload(deps.invoke, { files: scan.files, id, version, title, description, priceSats, seller, payTo, entry, minutes, genre },
+        const r = await runOpenUpload(deps.invoke, { files: scan.files, id, version, title, description, priceSats, seller, payTo, entry, minutes, genre, firstFree },
           (st) => { if (words[st]) setCopyText(sayEl, () => t(words[st])); });
         try { localStorage.setItem(SELLER_KEY, seller); } catch { /* 없어도 된다 */ }
         step.innerHTML = `<p class="ok">${copyHtml("올렸어요. 몇 분 안에 장터 「바로 해 보는 게임」에 「일반 판매자」로 보여요.")}</p>` +
@@ -257,6 +305,7 @@ export function paintUpload(host: HTMLElement, deps: UploadDeps, o: { existing: 
     const genre = $<HTMLSelectElement>("[data-up-genre]").value as ArcadeGenre;
     const entry = $<HTMLSelectElement>("[data-up-entry]").value;
     const description = $<HTMLTextAreaElement>("[data-up-desc]").value;
+    const firstFree = priceSats !== "0" && $<HTMLInputElement>("[data-up-ff]").checked;
     // 고치기: 체인에 있는 지금 판의 id·판매자 주소를 그대로 잇는다(같은 판매자·같은 id 의 더 높은 판).
     const prior = target.mode === "update" ? o.existing.find((p) => p.assetName === tn.name) : undefined;
     const id = prior ? prior.doc.id : idFromTag(target.mode === "new" ? target.tag : tn.name.split("/").pop()!);
@@ -266,7 +315,7 @@ export function paintUpload(host: HTMLElement, deps: UploadDeps, o: { existing: 
     // 모양 먼저 확인(자리 주소·자리 CID) — 공개·서명 전에 문서가 맞는지.
     const probe = "R" + "1".repeat(33);
     try {
-      buildBody({ id, version, title, description, priceSats, seller: seller || payTo || probe, payTo: payTo || seller || probe, entry, cid: PLACEHOLDER_CID, files: scan.files, minutes, genre, assetName: tn.name });
+      buildBody({ id, version, title, description, priceSats, seller: seller || payTo || probe, payTo: payTo || seller || probe, entry, cid: PLACEHOLDER_CID, files: scan.files, minutes, genre, assetName: tn.name, firstFree });
     } catch (e) {
       if (!/arcade-address/.test(String(e))) { step.innerHTML = `<p class="danger">${esc(t("상품 문서 모양이 맞지 않아요."))} <span class="meta">${esc(String((e as Error)?.message ?? e))}</span></p>`; return; }
     }
@@ -277,6 +326,7 @@ export function paintUpload(host: HTMLElement, deps: UploadDeps, o: { existing: 
       `<div class="kv"><b>${copyHtml("자산")}</b><span><code translate="no">${esc(tn.name)}</code></span></div>` +
       `<div class="kv"><b>${copyHtml("게임 이름")}</b><span translate="no">${esc(title)}</span></div>` +
       `<div class="kv"><b>${copyHtml("한 판 값")}</b><span>${esc(priceText)}</span></div>` +
+      firstFreeRow(priceSats, firstFree) +
       `<div class="kv"><b>${copyHtml("소각")}</b><span><b>${esc(tf("{0} RVN", tn.burnRvn))}</b> + ${copyHtml("공개 장부 수수료(노드가 정함, 조금)")}</span></div>` +
       `<p class="meta">${copyHtml(target.mode === "new" ? "고유 자산은 이름을 바꾸거나 나중에 다시 가리키게 할 수 없어요. 값을 바꾸려면 새 꼬리표로 다시 올려요." : "재발행은 수량을 늘리지 않고 붙은 상품 문서만 새 판으로 바꿔요.")}</p>` +
       `<p class="ar-warn">${copyHtml("「올리기」를 누르면 게임 폴더와 상품 문서가 공개 IPFS 에 올라가고, 위 RVN 이 소각돼요. 되돌릴 수 없어요.")}</p>` +
@@ -299,7 +349,7 @@ export function paintUpload(host: HTMLElement, deps: UploadDeps, o: { existing: 
         if (!payTo) payTo = seller;
         setCopyText(sayEl, () => t("게임 폴더를 이 컴퓨터 IPFS 에 올리는 중…"));
         const pinned = await deps.invoke<any>("arcade_pin_folder", { expect: scan.files });
-        const body = buildBody({ id, version, title, description, priceSats, seller, payTo, entry, cid: String(pinned?.cid ?? ""), files: scan.files, minutes, genre, assetName: tn.name });
+        const body = buildBody({ id, version, title, description, priceSats, seller, payTo, entry, cid: String(pinned?.cid ?? ""), files: scan.files, minutes, genre, assetName: tn.name, firstFree });
         setCopyText(sayEl, () => t("상품 문서에 서명하는 중…"));
         const signed = await deps.invoke<any>("sign_message", { address: seller, message: arcadeSigningMessage(body), passphrase: null });
         const v = attachArcadeSignature(body, String(signed?.signature ?? "")); // 서명이 seller 로 되살아나야 통과

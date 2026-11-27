@@ -15,10 +15,10 @@ import type { PhonePreset } from "./arcade-upload";
 import "./arcade-market.css";
 import { t, tf, copyHtml, setCopyText } from "./i18n";
 import { fmtRvn } from "./amount-ui";
-import type { ArcadeGenre } from "../core/creator/arcade-product";
+import { arcadeFirstFree, type ArcadeGenre } from "../core/creator/arcade-product";
 import { creditGate, creditMessage, denyMessage, newPlayId, parseGameMessage } from "../core/creator/arcade-credit";
 import {
-  ArcadeDocError, atomsToRvn, coverUrl, filterByGenre, filterProducts, gameUrl, genreLabel, genresPresent, isResting, noteReach, playsWithoutPay, prepareArcadePay,
+  ArcadeDocError, atomsToRvn, coverUrl, previewUrl, filterByGenre, filterProducts, gameUrl, genreLabel, genresPresent, isResting, noteReach, playsWithoutPay, prepareArcadePay,
   productsFromSources, sortProducts, type ArcadeProduct, type ReachLog,
 } from "./arcade-model";
 
@@ -76,11 +76,24 @@ const coverImg = (p: ArcadeProduct): string => {
   return u ? `<img class="ar-cover-img" src="${esc(u)}" alt="" loading="lazy" decoding="async">` : "";
 };
 
+/** 11-27 판매자가 켠 「첫 판 무료」(유료 게임만 — core arcadeFirstFree). 문서 모양이 틀리면 거짓. */
+export function firstFreeOf(p: Pick<ArcadeProduct, "doc">): boolean {
+  try { return arcadeFirstFree(p.doc); } catch { return false; }
+}
+const firstFreePill = (p: ArcadeProduct) => firstFreeOf(p) ? `<span class="ar-ff">${copyHtml("첫 판 무료")}</span>` : "";
+
+/** 게임 페이지 큰 그림 — 미리보기 영상이 있으면 표지 위에 영상(소리 없음·반복). 영상을 못 받으면 영상만 숨기고 표지는 그대로. 카드에서는 틀지 않는다. */
+export function heroHtml(p: ArcadeProduct): string {
+  const v = previewUrl(p), c = coverUrl(p);
+  const video = v ? `<video class="ar-hero-video" data-ar-preview="1" muted loop playsinline autoplay preload="metadata"${c ? ` poster="${esc(c)}"` : ""} src="${esc(v)}" aria-hidden="true"></video>` : "";
+  return `<div class="ar-hero ar-tone${toneOf(p.id)}">${coverImg(p) || ICON_PAD}${video}</div>`;
+}
+
 export function cardHtml(p: ArcadeProduct, resting = false): string {
   return `<li><button type="button" class="ar-card" data-ar-open="${esc(p.id)}" aria-label="${esc(cardLabel(p))}">` +
     `<span class="ar-cover ar-tone${toneOf(p.id)}">${coverImg(p) || ICON_PAD}</span>` +
     `<span class="ar-cbody">` +
-    `<span class="ar-price">${esc(priceText(p))}</span>` +
+    `<span class="ar-pricerow"><span class="ar-price">${esc(priceText(p))}</span>${firstFreePill(p)}</span>` +
     `<span class="ar-title" translate="no">${esc(p.title)}</span>` +
     `<span class="ar-shop"><span translate="no">${esc(p.sellerName)}</span> · ${copyHtml(genreLabel(p.genre))}</span>` +
     `<span class="ar-who">${sellerLine(p)}</span>` +
@@ -202,9 +215,9 @@ export function mountArcade(page: HTMLElement, host: HTMLElement, deps: ArcadeDe
     host.innerHTML =
       `<div class="ar-head"><button type="button" class="ghost ar-back" data-ar-back="1">${copyHtml(cameFromAll ? "목록으로" : "장터로")}</button></div>` +
       `<article class="ar-page">` +
-      `<div class="ar-hero ar-tone${toneOf(p.id)}">${coverImg(p) || ICON_PAD}</div>` +
+      heroHtml(p) +
       `<div class="ar-info">` +
-      `<div class="ar-big">${esc(priceText(p))}${free ? "" : ` <span class="ar-per">${copyHtml("한 판")}</span>`}</div>` +
+      `<div class="ar-big">${esc(priceText(p))}${free ? "" : ` <span class="ar-per">${copyHtml("한 판")}</span>`}${firstFreePill(p)}</div>` +
       `<h3 translate="no">${esc(p.title)}</h3>` +
       `<p class="ar-who">${sellerLine(p)}</p>` +
       (restingNow(p) ? `<p class="ar-note">${restBadge} ${copyHtml(RESTING_TEXT)}</p>` : "") +
@@ -222,6 +235,8 @@ export function mountArcade(page: HTMLElement, host: HTMLElement, deps: ArcadeDe
       `</div></article>` +
       `<div class="ar-stage" data-ar-stage="1" hidden></div>`;
     wire();
+    const pv = host.querySelector<HTMLVideoElement>("[data-ar-preview]");
+    if (pv) { pv.addEventListener("error", () => { pv.hidden = true; }); pv.muted = true; void pv.play?.()?.catch(() => { /* 자동 재생 막힘 — 표지 그대로 */ }); }
     host.querySelector<HTMLElement>("[data-ar-play]")?.addEventListener("click", (e) => {
       const btn = e.currentTarget as HTMLButtonElement;
       if (needsOpenNotice(p, readKeys(NOTICE_KEY))) askOpenNotice(p, () => void openGame(p, btn)); else void openGame(p, btn);

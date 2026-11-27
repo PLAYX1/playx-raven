@@ -214,6 +214,12 @@ for (const width of [1120, 1440]) {
   });
 }
 
+/** 칸을 비우고 다시 적는다(라비가 먼저 채운 칸). */
+async function retype(page, sel, text) {
+  await page.$eval(sel, (e) => { e.value = ''; e.dispatchEvent(new Event('input')); });
+  await page.type(sel, text);
+}
+
 for (const width of [1120, 1440]) {
   test(`게임 올리기 ${width}: 폴더 → 검사 → 확인 칸(소각 5 RVN) → 「올리기」 뒤에만 붙잡기·서명·발행`, async () => {
     const page = await openMarket({ width, sources: { assets: [], docs: {} } });
@@ -225,16 +231,26 @@ for (const width of [1120, 1440]) {
     // 첫 칸은 「일반 판매자(0 RVN)」 — 확인 판매자 길은 내 가게를 골라야 한다.
     assert.equal(await page.$eval('#ar-host [data-up-target]', e => e.value), 'open:new');
     await page.select('#ar-host [data-up-target]', 'new:TESTARCADE');
-    await page.type('#ar-host [data-up-title]', 'Star Run');
+    // 11-27 라비가 폴더를 고르자마자 빈 이름을 채운다(폴더 이름 「star-run」 → 「Star Run」) — 사람이 고쳐 적는다.
+    await page.waitForFunction(() => document.querySelector('#ar-host [data-up-title]').value === 'Star Run', { timeout: 8000 });
+    // 라비 칸: 단계 4개 · 미리보기 칸이 없으면(가짜 노드) 정직하게 「못 했어요」 · 단추 한 줄.
+    await page.waitForFunction(() => /라비가 할 수 있는 만큼|다 했어요/.test(document.querySelector('#ar-host [data-mk-say]').textContent), { timeout: 30000 });
+    assert.equal(await page.$$eval('#ar-host [data-mk-steps] li', l => l.length), 4);
+    assert.deepEqual(await noWrapButtons(page), []);
+    await page.$eval('#ar-host .ar-maker', e => e.scrollIntoView());
+    await shot(page, `upload/upload-maker-${width}.png`);
+    await retype(page, '#ar-host [data-up-title]', 'Star Run');
     assert.equal(await page.$eval('#ar-host [data-up-tag]', e => e.value), 'STAR_RUN');
+    assert.equal(await page.$eval('#ar-host [data-up-ff]', e => e.disabled), true, '무료(빈 값)일 때 「첫 판 무료」는 꺼짐');
     await page.type('#ar-host [data-up-price]', '0.5');
+    assert.deepEqual(await page.$eval('#ar-host [data-up-ff]', e => [e.checked, e.disabled]), [true, false], '유료면 「첫 판 무료」 기본 켬');
     assert.deepEqual(await noWrapButtons(page), []);
     assert.ok(await overflowX(page) <= 1);
     await shot(page, `upload/upload-form-${width}.png`);
     await page.click('#ar-host [data-up-review]');
     await page.waitForSelector('#ar-host [data-up-go]');
     const box = await page.$eval('#ar-host .ar-confirm', e => e.textContent);
-    assert.match(box, /RVLT\/TESTARCADE#STAR_RUN/); assert.match(box, /5 RVN/);
+    assert.match(box, /RVLT\/TESTARCADE#STAR_RUN/); assert.match(box, /5 RVN/); assert.match(box, /첫 판무료 \(사는 사람이 먼저 한 판 해 봐요\)/);
     assert.equal(await page.$eval('#ar-host [data-up-go]', b => b.disabled), true);
     assert.deepEqual(await page.evaluate(() => window.__upCalls.map(c => c[0])), ['arcade_pick_folder'], '확인 전에는 고르기만');
     await page.$eval('#ar-host .ar-confirm', e => e.scrollIntoView());
@@ -334,7 +350,8 @@ for (const width of [1120, 1440]) {
       await page.click('#ar-host [data-up-pick]');
       await page.waitForSelector('#ar-host [data-up-review]');
       assert.equal(await page.$eval('#ar-host [data-up-target]', e => e.value), 'open:new');
-      await page.type('#ar-host [data-up-title]', 'Star Run');
+      await page.waitForFunction(() => document.querySelector('#ar-host [data-up-title]').value === 'Star Run', { timeout: 8000 });
+      await retype(page, '#ar-host [data-up-title]', 'Star Run');
       await page.type('#ar-host [data-up-price]', '0.5');
       await shot(page, `desktop-open-upload-form-${width}-${theme}.png`);
       await page.click('#ar-host [data-up-review]');
