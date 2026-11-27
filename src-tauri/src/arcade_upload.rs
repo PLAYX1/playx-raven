@@ -27,6 +27,53 @@ pub struct Scanned {
 }
 
 static PICKED: Mutex<Option<PathBuf>> = Mutex::new(None);
+/// 11-27 「라비가 다 해 줄게요」 미리보기 열쇠 — 폴더를 고를 때마다 새로 만든다(arcade_preview.rs 가 이 열쇠의 길만 내준다).
+static PREVIEW_TOKEN: Mutex<String> = Mutex::new(String::new());
+
+fn new_token() -> String {
+    use rand::RngCore;
+    let mut b = [0u8; 24];
+    rand::rngs::OsRng.fill_bytes(&mut b);
+    hex(&b)
+}
+
+/// 고른 폴더를 기억하고 미리보기 열쇠를 새로 만든다(옛 열쇠의 주소는 그 순간 죽는다).
+fn remember_picked(dir: PathBuf) {
+    if let Ok(mut p) = PICKED.lock() { *p = Some(dir); }
+    if let Ok(mut t) = PREVIEW_TOKEN.lock() { *t = new_token(); }
+}
+
+/// 미리보기 길의 열쇠가 지금 열쇠와 같으면 고른 폴더. 같은 길이 비교(시간 차로 새지 않게).
+pub(crate) fn preview_root(token: &str) -> Option<PathBuf> {
+    let now = PREVIEW_TOKEN.lock().ok()?.clone();
+    if now.len() != 48 || token.len() != now.len() { return None; }
+    let diff = now.bytes().zip(token.bytes()).fold(0u8, |d, (a, b)| d | (a ^ b));
+    if diff != 0 { return None; }
+    PICKED.lock().ok()?.clone()
+}
+
+pub(crate) fn preview_token() -> Option<String> {
+    let t = PREVIEW_TOKEN.lock().ok()?.clone();
+    (t.len() == 48 && PICKED.lock().ok()?.is_some()).then_some(t)
+}
+
+/// 라비가 고른 폴더에 쓸 수 있는 파일 — 이름 · 크기 상한 · 첫 바이트 모양(JPEG · MP4 ftyp · WebM EBML).
+pub const WRITE_RULES: [(&str, usize); 3] = [("cover.jpg", 1024 * 1024), ("preview.mp4", 2 * 1024 * 1024), ("preview.webm", 2 * 1024 * 1024)];
+
+/// 쓰기 규칙(순수). exists = 같은 이름 파일이 이미 있다 · replace = 사람이 「바꾸기」를 골랐다.
+pub fn write_check(name: &str, bytes: &[u8], exists: bool, replace: bool) -> Result<(), String> {
+    let Some(&(_, cap)) = WRITE_RULES.iter().find(|(n, _)| *n == name) else { return Err("라비가 쓸 수 없는 파일 이름이에요.".into()) };
+    if bytes.is_empty() { return Err("빈 파일이에요.".into()); }
+    if bytes.len() > cap { return Err(format!("파일이 너무 커요({}MB까지).", cap / (1024 * 1024))); }
+    let shape = match name {
+        "cover.jpg" => bytes.starts_with(&[0xFF, 0xD8, 0xFF]),
+        "preview.mp4" => bytes.len() > 8 && &bytes[4..8] == b"ftyp",
+        _ => bytes.starts_with(&[0x1A, 0x45, 0xDF, 0xA3]),
+    };
+    if !shape { return Err("파일 모양이 이름과 맞지 않아요.".into()); }
+    if exists && !replace { return Err("EXISTS: 같은 이름 파일이 이미 있어요.".into()); }
+    Ok(())
+}
 
 /// core limits.ts safePath 와 같은 규칙: 영문·숫자·점·밑줄·빼기, 숨김(.)·빈 칸·..·앞뒤 / 없음.
 pub fn safe_path(p: &str) -> bool {
@@ -88,7 +135,7 @@ pub(crate) fn scan_answer(root: &Path) -> Result<Value, String> {
 
 /// 폰 연결 올리기(arcade_phone.rs)가 받은 폴더를 「고른 폴더」로 둔다 — 화면이 경로를 보내지 않는 규칙은 그대로.
 pub(crate) fn set_picked(dir: PathBuf) {
-    if let Ok(mut p) = PICKED.lock() { *p = Some(dir); }
+    remember_picked(dir);
 }
 
 /// 이 컴퓨터 대화상자로 게임 폴더를 고른다. 고른 폴더만 기억한다(다음 고르기 전까지).
@@ -101,8 +148,35 @@ pub async fn arcade_pick_folder(app: tauri::AppHandle) -> Result<Value, String> 
     let Some(fp) = picked else { return Ok(Value::Null) };
     let path = fp.into_path().map_err(|_| "폴더 경로를 읽지 못했습니다.".to_string())?;
     let answer = tokio::task::spawn_blocking({ let p = path.clone(); move || scan_answer(&p) }).await.map_err(|_| "폴더를 읽지 못했습니다.".to_string())??;
-    *PICKED.lock().map_err(|_| "상태 오류")? = Some(path);
+    remember_picked(path);
     Ok(answer)
+}
+
+/// 11-27 라비가 만든 표지·미리보기를 **고른 폴더**에 쓴다(이름 3개만 · 크기 상한 · 모양 확인 · 있던 파일은 replace 일 때만).
+/// 쓴 뒤 다시 훑은 답을 돌려준다 — 화면의 scan 이 arcade_pin_folder 가 다시 잴 값과 같게.
+#[tauri::command]
+pub async fn arcade_picked_write(name: String, bytes: Vec<u8>, replace: Option<bool>) -> Result<Value, String> {
+    if crate::app_lock::is_locked() { return Err("앱이 잠겨 있습니다.".into()); }
+    let root = PICKED.lock().map_err(|_| "상태 오류")?.clone().ok_or("먼저 게임 폴더를 골라 주세요.")?;
+    tokio::task::spawn_blocking(move || -> Result<Value, String> {
+        let target = root.join(&name);
+        let meta = std::fs::symlink_metadata(&target).ok();
+        if meta.as_ref().is_some_and(|m| !m.file_type().is_file()) { return Err("같은 이름의 폴더나 링크가 있어요.".into()); }
+        write_check(&name, &bytes, meta.is_some(), replace == Some(true))?;
+        let tmp = root.join(format!(".rv-maker-{}", new_token()));
+        std::fs::write(&tmp, &bytes).map_err(|_| "파일을 쓰지 못했어요.".to_string())?;
+        if std::fs::rename(&tmp, &target).is_err() { let _ = std::fs::remove_file(&tmp); return Err("파일을 쓰지 못했어요.".into()); }
+        scan_answer(&root)
+    }).await.map_err(|_| "파일을 쓰지 못했어요.".to_string())?
+}
+
+/// 미리보기 칸 주소(이 컴퓨터 127.0.0.1 전용 작은 서버). 고른 폴더가 없으면 오류.
+#[tauri::command]
+pub async fn arcade_preview_open() -> Result<Value, String> {
+    if crate::app_lock::is_locked() { return Err("앱이 잠겨 있습니다.".into()); }
+    let token = preview_token().ok_or("먼저 게임 폴더를 골라 주세요.")?;
+    crate::arcade_preview::ensure_started().await?;
+    Ok(json!({ "base": crate::arcade_preview::base_url(&token) }))
 }
 
 /// 방금 고른 폴더를 이 컴퓨터 IPFS 에 붙잡는다(공개). `expect` = 화면이 문서에 적을 files — 다시 잰 값과 같아야 한다.
@@ -173,6 +247,46 @@ mod tests {
         assert_eq!(skipped, vec![".DS_Store"]);
         assert_eq!(bad, vec!["bad name.png"]);
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn 라비_쓰기는_이름_크기_모양_덮어쓰기_규칙을_지킨다() {
+        let jpg = [0xFF, 0xD8, 0xFF, 0xE0, 0, 0];
+        let mp4 = *b"\0\0\0\x18ftypisom";
+        let webm = [0x1A, 0x45, 0xDF, 0xA3, 1, 2];
+        assert!(write_check("cover.jpg", &jpg, false, false).is_ok());
+        assert!(write_check("preview.mp4", &mp4, false, false).is_ok());
+        assert!(write_check("preview.webm", &webm, false, false).is_ok());
+        for bad in ["index.html", "cover.png", "../cover.jpg", "a/cover.jpg", "COVER.JPG", ""] { assert!(write_check(bad, &jpg, false, false).is_err(), "{bad}"); }
+        assert!(write_check("cover.jpg", &mp4, false, false).is_err(), "모양이 다르면 거절");
+        assert!(write_check("preview.mp4", &webm, false, false).is_err());
+        assert!(write_check("cover.jpg", &[], false, false).is_err());
+        let mut big = vec![0u8; 1024 * 1024 + 1]; big[..3].copy_from_slice(&[0xFF, 0xD8, 0xFF]);
+        assert!(write_check("cover.jpg", &big, false, false).is_err(), "표지 1MB 넘으면 거절");
+        let mut vid = vec![0u8; 2 * 1024 * 1024]; vid[4..8].copy_from_slice(b"ftyp");
+        assert!(write_check("preview.mp4", &vid, false, false).is_ok());
+        vid.push(0);
+        assert!(write_check("preview.mp4", &vid, false, false).is_err(), "미리보기 2MB 넘으면 거절");
+        let e = write_check("cover.jpg", &jpg, true, false).unwrap_err();
+        assert!(e.starts_with("EXISTS"), "있던 파일은 replace 없이 안 덮는다");
+        assert!(write_check("cover.jpg", &jpg, true, true).is_ok());
+    }
+
+    #[test]
+    fn 미리보기_열쇠는_고를_때마다_바뀌고_틀리면_닫힌다() {
+        let dir = std::env::temp_dir().join(format!("rv-arcade-token-{}", std::process::id()));
+        remember_picked(dir.clone());
+        let a = preview_token().unwrap();
+        assert_eq!(a.len(), 48);
+        assert_eq!(preview_root(&a), Some(dir.clone()));
+        let flip = format!("{}{}", &a[..47], if a.ends_with('0') { '1' } else { '0' });
+        assert_eq!(preview_root(&flip), None, "한 글자만 달라도 닫힌다");
+        assert_eq!(preview_root(""), None);
+        assert_eq!(preview_root(&a[..47]), None);
+        remember_picked(dir.clone());
+        let b = preview_token().unwrap();
+        assert_ne!(a, b);
+        assert_eq!(preview_root(&a), None, "옛 열쇠는 죽는다");
     }
 
     #[test]

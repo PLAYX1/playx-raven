@@ -190,6 +190,7 @@ mod arcade;
 mod maju;
 // 11-13 「게임 올리기」 — 고른 폴더만 살펴보고 붙잡는다(화면이 경로를 못 준다).
 mod arcade_upload;
+mod arcade_preview;
 mod arcade_listing;
 mod arcade_phone;
 mod arcade_keep;
@@ -374,6 +375,8 @@ pub fn run() {
             arcade_keep::arcade_share_apply,
             arcade_upload::arcade_pick_folder,
             arcade_upload::arcade_pin_folder,
+            arcade_upload::arcade_picked_write,
+            arcade_upload::arcade_preview_open,
             upload::ipfs_add_file,
             upload::ipfs_add_bundle,
             upload::build_metadata,
