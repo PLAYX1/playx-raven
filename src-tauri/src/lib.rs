@@ -196,6 +196,8 @@ mod arcade_phone;
 mod arcade_keep;
 mod arcade_gw;
 mod arcade_invoice;
+// 11-28 판매자 상태판: 「지금 열려 있다」 신호(kind 31407) 5분마다.
+mod seller_status;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -974,6 +976,8 @@ pub fn run() {
             node_keeper::start();
             relay_share::start();
             arcade_keep::start();
+            // 11-28 판매자 상태판 — 내 게임을 내주는 동안 5분마다 「지금 영업 중」 신호(seller_status.rs).
+            seller_status::start();
             // 11-12 이야기를 카톡처럼: 켜자마자 기본 릴레이에 미리 붙어 둔다(relay_pool.rs). 안 쓰면 2분 뒤 저절로 닫힌다.
             tauri::async_runtime::spawn(async { nostrpub::warm_all() });
             // 11-12 알림 지킴이(기본 꺼짐 · 켠 컴퓨터만): 바깥 릴레이의 새 쪽지·방 글을 알림 서버에 곧바로 넘긴다.
@@ -1120,6 +1124,8 @@ pub fn run() {
                 //    ⚠️ 껐다고 믿는 사람에게 열린 문은 가장 나쁜 종류의 구멍이다.
                 // 지도의 「영업 중」을 거둔다(3초까지만 시도 — 종료를 붙잡지 않는다).
                 crate::map::stop_on_exit();
+                // 판매자 상태판도 「closed」(3초까지만).
+                crate::seller_status::stop_on_exit();
                 crate::tunnel::stop_on_exit();
                 // 승인을 기다리던 테일스케일 CLI 만 끝낸다. 퍼널 설정은 남는다 — 앱이 꺼지면
                 // 8790 이 안 받으니 문은 닫힌 것과 같고, 다시 켜면 같은 주소로 바로 열린다.

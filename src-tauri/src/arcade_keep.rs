@@ -254,6 +254,8 @@ async fn mine_round_inner() -> Result<Value, String> {
             for (cid, deep) in to_provide { provide(&cid, deep).await; }
         });
     }
+    // 11-28 판매자 상태판: 바깥 주소·내줄 목록을 방금 정했다 — 5분 박동을 기다리지 않고 새 gw 로 신호를 한 번(seller_status.rs).
+    crate::seller_status::kick();
     let games_empty = games.is_empty();
     let mut out = json!({ "at": now(), "games": games, "kept": kept, "bytes": bytes, "gateway": gateway, "reannounced": reannounced });
     // 체인 쪽만 실패하고 일반 판매자 게임은 본 경우 화면이 「확인하지 못했어요」로 덮지 않게 chainError 로 따로 둔다.
