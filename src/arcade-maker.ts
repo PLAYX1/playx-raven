@@ -285,15 +285,18 @@ export function mountMaker(box: HTMLElement, deps: MakerDeps) {
       if (!wantPreview) mark("preview", "skip", tf("내가 넣은 미리보기({0})를 그대로 써요.", ownPrev));
       else mark("preview", "doing");
       let cap: Awaited<ReturnType<typeof capture>> = { cover: null, preview: null, why: "" };
-      if (wantCover || wantPreview) {
+      // 11-27 페이블·네온 결정: 맥(WKWebView)은 사파리 실측에서 캔버스 붙잡기가 검은 화면·무응답이었다 →
+      //   맥에서는 게임을 돌리지 않고 바로 이름 카드 표지(10초 기다림·실패 경험 없음). 윈도우(WebView2)·리눅스만 붙잡는다.
+      const captureOk = !isMacWebView();
+      if (captureOk && (wantCover || wantPreview)) {
         try { cap = await capture(entry, wantCover, wantPreview, deadline); } catch (e) { cap.why = deps.errText(e); }
-      }
+      } else if (!captureOk) cap.why = t("이 컴퓨터에서는 화면을 못 떠요. 윈도우에서 올리면 떠 드려요.");
       if (wantCover) {
         let cover = cap.cover;
         let note = t("게임 화면에서 떴어요.");
         if (!cover || await coverIsBlank(cover)) {
           cover = await titleCardCover(title, t(ARCADE_GENRE_LABELS[genre]), toneOfText(title || scan.folder));
-          note = t("게임 화면을 못 떠서 이름 카드로 만들었어요.");
+          note = captureOk ? t("게임 화면을 못 떠서 이름 카드로 만들었어요.") : t("이 맥에서는 이름 카드로 만들었어요.");
         }
         try {
           if (await write("cover.jpg", cover)) { made.cover = cover; mark("cover", "done", note); }
@@ -308,6 +311,7 @@ export function mountMaker(box: HTMLElement, deps: MakerDeps) {
             else mark("preview", "skip", t("같은 이름 파일이 있어 그대로 둬요."));
           } catch (e) { mark("preview", "fail", deps.errText(e)); }
         } else {
+          if (!captureOk) mark("preview", "skip", cap.why); else
           mark("preview", "fail", t(cap.why === "no-canvas" ? "캔버스로 그리는 게임이 아니라 영상을 못 떴어요." : "영상을 못 떴어요. 표지만으로도 올릴 수 있어요."));
         }
       }
@@ -339,3 +343,8 @@ export function mountMaker(box: HTMLElement, deps: MakerDeps) {
 }
 
 const fmtKb = (n: number) => n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
+
+/** 맥 앱(WKWebView)인가 — 붙잡기를 건너뛴다. */
+export function isMacWebView(): boolean {
+  try { return /Mac/.test(navigator.platform) || document.documentElement.classList.contains("rv-mac"); } catch { return false; }
+}

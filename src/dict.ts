@@ -5762,3 +5762,17 @@ for (const [source, values] of Object.entries({
 } as Record<string, [string, string, string]>)) {
   (["en", "ja", "zh"] as const).forEach((language, index) => { DICT[language][source] ??= values[index]; });
 }
+
+// 11-27 「업데이트」 줄·6초 알림·설치 확인 창(main.ts showUpdateRow). 이미 있는 번역은 덮지 않는다.
+const UPDATE_ROW_COPY: Record<string, [string, string, string]> = {
+  "업데이트": ["Update", "アップデート", "更新"],
+  "{0} 업데이트": ["Update to {0}", "{0} にアップデート", "更新到 {0}"],
+  "{0} 로 업데이트": ["Update to {0}", "{0} にアップデート", "更新到 {0}"],
+  "지금 설치": ["Install now", "今すぐインストール", "立即安装"],
+  "설치하는 동안 앱과 노드가 잠시 꺼졌다가 저절로 다시 켜져요. 그동안 손님 결제·게임도 잠깐 멈춰요. 손님이 없을 때 눌러 주세요.": ["While installing, the app and node briefly turn off and restart on their own. Customer payments and games pause for a moment, so press this when no customers are waiting.", "インストール中、アプリとノードが一時的に止まり、自動で再起動します。その間はお客様の決済・ゲームも少し止まるので、お客様がいないときに押してください。", "安装期间，应用和节点会短暂关闭并自动重启，期间顾客付款和游戏也会暂停。请在没有顾客时点击。"],
+  "새 버전 {0}이 나왔어요. 「업데이트」를 누르면 설치해요.": ["Version {0} is out. Press “Update” to install it.", "新しいバージョン {0} が出ました。「アップデート」を押すとインストールします。", "新版本 {0} 已发布。点击“更新”即可安装。"],
+  "확인 중…": ["Checking…", "確認中…", "正在检查…"],
+};
+for (const [source, values] of Object.entries(UPDATE_ROW_COPY)) {
+  (["en", "ja", "zh"] as const).forEach((language, index) => { DICT[language][source] ??= values[index]; });
+}

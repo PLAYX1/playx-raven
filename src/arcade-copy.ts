@@ -291,6 +291,8 @@ export const ARCADE_COPY: Record<string, [string, string, string]> = {
   "내가 넣은 표지({0})를 그대로 써요.": ["Using your own cover ({0}).", "自分で入れた表紙（{0}）をそのまま使います。", "沿用你自己放的封面（{0}）。"],
   "내가 넣은 미리보기({0})를 그대로 써요.": ["Using your own preview ({0}).", "自分で入れたプレビュー（{0}）をそのまま使います。", "沿用你自己放的预览（{0}）。"],
   "게임 화면에서 떴어요.": ["Taken from the game screen.", "ゲーム画面から撮りました。", "取自游戏画面。"],
+  "이 맥에서는 이름 카드로 만들었어요.": ["On this Mac, Ravi made a title card.", "このMacでは名前カードにしました。", "在这台 Mac 上做成了名称卡片。"],
+  "이 컴퓨터에서는 화면을 못 떠요. 윈도우에서 올리면 떠 드려요.": ["This computer can’t capture the game screen. Upload from Windows to get a preview.", "このコンピューターではゲーム画面を撮れません。Windowsからアップすると撮れます。", "这台电脑无法截取游戏画面。从 Windows 上传就能生成预览。"],
   "게임 화면을 못 떠서 이름 카드로 만들었어요.": ["Couldn’t capture the game screen, so Ravi made a title card.", "ゲーム画面を撮れなかったので、名前カードにしました。", "没能截取游戏画面，所以做成了名称卡片。"],
   "같은 이름 파일이 있어 그대로 둬요.": ["A file with the same name exists, so it was kept.", "同じ名前のファイルがあるので、そのままにします。", "已有同名文件，保持不变。"],
   "{0}초 · {1}": ["{0} s · {1}", "{0}秒 · {1}", "{0} 秒 · {1}"],
