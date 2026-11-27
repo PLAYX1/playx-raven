@@ -2,8 +2,9 @@ import { mountRaviRig, type RaviMode } from "./ravi-rig";
 import { createRaviVoice, type RecognitionConstructor } from "./ravi-voice";
 import { mountRaviMicrophone } from "./ravi-microphone";
 import { createRaviPanel } from "./ravi-panel";
-import { t } from "./i18n";
+import { t, lang } from "./i18n";
 import type { RaviTts } from "./ravi-tts";
+import { isKoreanText } from "./ravi-ko-g2p";
 import "./ravi-home.css";
 
 const labels: Record<RaviMode, string> = {
@@ -45,15 +46,27 @@ export function createRaviHome(api: { afterLanding?(run: () => void): void; wake
   // 불러오기·합성이 어떤 이유로든 안 되면 「fallback」 → 기기 목소리.
   let ttsLoad: Promise<RaviTts> | null = null, ttsNow: RaviTts | null = null, speakToken = 0;
   const tts = () => ttsLoad ??= Promise.all([import("./ravi-tts"), import("./ravi-tts-real")]).then(([m, r]) => ttsNow = m.createRaviTts(r.realDeps(api.invoke!)));
+  // 11-27 한국어는 작은 라비 목소리(ko-v2, 앱 안 19MB — 「라비」를 「나비」로 읽던 것 고침)가 먼저 읽는다.
+  // 한국어가 아니거나 작은 목소리가 못 하면 위 Supertonic → 그래도 안 되면 기기 목소리.
+  let koLoad: Promise<RaviTts> | null = null, koNow: RaviTts | null = null;
+  const ko = () => koLoad ??= Promise.all([import("./ravi-tts"), import("./ravi-tts-real")]).then(([m, r]) => koNow = m.createRaviTts(r.realDeps(api.invoke!, "ko")));
   const aiTag = byId("ravi-ai-voice");
   const raviSpeech = api.invoke ? {
     async speak(text: string, hooks: { started?(): void }) {
       const mine = ++speakToken;
-      try { const engine = await tts(); return mine === speakToken ? await engine.speak(text, hooks) : "cancelled" as const; } catch { return "fallback" as const; }
+      try {
+        if (isKoreanText(text)) {
+          const small = await ko(); if (mine !== speakToken) return "cancelled" as const;
+          const r = await small.speak(text, hooks);
+          if (r !== "fallback" || mine !== speakToken) return mine === speakToken ? r : "cancelled" as const;
+        }
+        const engine = await tts(); return mine === speakToken ? await engine.speak(text, hooks) : "cancelled" as const;
+      } catch { return "fallback" as const; }
     },
     // 동기로 취소한다: 늦게 도착하는 취소가 새 말을 죽이지 않게(실제로 겪은 일 — 시험이 잡았다).
-    cancel() { speakToken++; ttsNow?.cancel(); },
-    async warm() { try { return await (await tts()).warm(); } catch { return false; } },
+    cancel() { speakToken++; koNow?.cancel(); ttsNow?.cancel(); },
+    // 작은 목소리만 미리 올린다(가볍다). 그게 안 될 때만 무거운 Supertonic 을 올린다.
+    async warm() { try { return await (await ko()).warm() || await (await tts()).warm(); } catch { return false; } },
   } : undefined;
   const voice = createRaviVoice({
     ravi: raviSpeech,
@@ -120,11 +133,13 @@ export function createRaviHome(api: { afterLanding?(run: () => void): void; wake
     void pack?.then(p => p?.setWant(wantRavi));
     if (kind.value !== "ravi" || !api.invoke) return;
     // 아직 안 받았거나 파일이 깨졌으면 미리 알려 준다(말은 기기 목소리로 나온다).
+    // 11-27 한국어 화면은 받지 않아도 앱 안 작은 목소리가 읽으니 이 안내가 틀린 말이 된다 → 한국어가 아닐 때만.
+    if (lang === "ko") return;
     void api.invoke("ravi_tts_status").then(r => { if (kind.value === "ravi" && !(r as { ok?: boolean } | null)?.ok) kindNote.textContent = t("라비 목소리를 아직 받지 않아서 지금은 기기 목소리로 말해요. 아래 「받기」를 누르면 받아요."); }).catch(() => {});
   };
   kind.onchange = () => {
     try { localStorage.setItem("rv-ravi-voice", kind.value); } catch { /* 저장 못 해도 이번 실행엔 기본값으로 */ }
-    if (kind.value === "device") { voice.stop(); ttsNow?.dispose(); aiTag.hidden = true; }
+    if (kind.value === "device") { voice.stop(); koNow?.dispose(); ttsNow?.dispose(); aiTag.hidden = true; }
     else if (readEnabled) void raviSpeech?.warm();
     kindHint();
   };

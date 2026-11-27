@@ -62,12 +62,15 @@ function hookWake() {
 }
 
 /** 진짜 환경에서 쓰는 의존물(워커·소리 재생). 시험은 가짜를 넣는다. */
-export function realDeps(invoke: RaviTtsDeps["invoke"]): RaviTtsDeps {
+export function realDeps(invoke: RaviTtsDeps["invoke"], kind: "supertonic" | "ko" = "supertonic"): RaviTtsDeps {
   hookWake();
   return {
-    invoke,
+    invoke, kind,
     base: new URL("./ravi-tts/", document.baseURI).href,
-    newWorker: () => new Worker(new URL("./ravi-tts-worker.ts", import.meta.url), { type: "module" }) as unknown as WorkerLike,
+    // Vite 가 워커 파일을 찾도록 new URL(...) 을 글자 그대로 둔다.
+    newWorker: () => (kind === "ko"
+      ? new Worker(new URL("./ravi-ko-worker.ts", import.meta.url), { type: "module" })
+      : new Worker(new URL("./ravi-tts-worker.ts", import.meta.url), { type: "module" })) as unknown as WorkerLike,
     async queue() {
       hookWake();
       const c = audioContext();

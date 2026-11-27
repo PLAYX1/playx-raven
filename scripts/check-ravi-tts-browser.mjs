@@ -30,6 +30,8 @@ const server = http.createServer((q, r) => {
     const o = Number(u.searchParams.get('o')), l = Number(u.searchParams.get('l')), fd = openSync(resolve(modelDir, rel), 'r'), buf = Buffer.alloc(l); readSync(fd, buf, 0, l, o); closeSync(fd);
     r.setHeader('content-type', 'application/octet-stream'); return r.end(buf);
   }
+  // 11-27 한국어는 작은 목소리(ko-v2)가 먼저 읽는다 — 이 시험은 Supertonic 을 보므로 작은 모델을 없는 셈 친다(→ 폴백 줄도 함께 시험). 작은 목소리는 check-ravi-ko-browser.mjs.
+  if (path.endsWith('/ravi-ko-v2.int8.onnx')) { r.statusCode = 404; return r.end(); }
   if (path.startsWith('/api/')) { r.setHeader('content-type', 'application/json'); return r.end('{}'); }
   const file = resolve(dist, '.' + (path === '/' ? '/index.html' : path));
   if (!file.startsWith(dist + '/') || !existsSync(file) || statSync(file).isDirectory()) { r.statusCode = 404; return r.end(); }

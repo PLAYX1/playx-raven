@@ -19,6 +19,8 @@ export interface RaviTtsDeps {
   /** 재생 줄을 연다. 막히면 던진다(→ 기기 목소리). */
   queue(): Promise<AudioQueue>;
   base: string;
+  /** "ko" = 작은 한국어 목소리(앱 안 정적 모델, 워커가 직접 읽음). 없으면 Supertonic(내려받은 모델을 Rust 로 읽어 넘김). */
+  kind?: "supertonic" | "ko";
   setTimer?(fn: () => void, ms: number): number;
   clearTimer?(id: number): void;
 }
@@ -60,14 +62,8 @@ export function createRaviTts(deps: RaviTtsDeps) {
     return out;
   }
 
-  async function load(): Promise<boolean> {
-    const status = await deps.invoke("ravi_tts_status") as { ok?: boolean; sizes?: [string, number][] } | null;
-    if (!status?.ok || !status.sizes) return false;
-    const size = Object.fromEntries(status.sizes) as Record<string, number>;
-    const text = async (k: string) => new TextDecoder().decode(await readAll(k, size[k]));
-    const models = { dp: await readAll("dp", size.dp), enc: await readAll("enc", size.enc), vec: await readAll("vec", size.vec), voc: await readAll("voc", size.voc), cfg: await text("cfg"), indexer: await text("indexer"), style: await text("style") };
-    const w = worker = deps.newWorker();
-    const ready = new Promise<boolean>(resolve => {
+  function waitReady(w: WorkerLike): Promise<boolean> {
+    return new Promise<boolean>(resolve => {
       readyResolve = resolve;
       const timer = setT(() => resolve(false), LOAD_TIMEOUT_MS);
       w.onerror = () => resolve(false);
@@ -78,6 +74,21 @@ export function createRaviTts(deps: RaviTtsDeps) {
         else if (m.id && pending.has(m.id)) { const f = pending.get(m.id)!; pending.delete(m.id); f(m); }
       };
     });
+  }
+
+  async function load(): Promise<boolean> {
+    if (deps.kind === "ko") {   // 작은 목소리: 모델은 워커가 같은 출처 정적 파일에서 직접 읽는다
+      const w = worker = deps.newWorker(); const ready = waitReady(w);
+      w.postMessage({ type: "init", base: deps.base });
+      return ready;
+    }
+    const status = await deps.invoke("ravi_tts_status") as { ok?: boolean; sizes?: [string, number][] } | null;
+    if (!status?.ok || !status.sizes) return false;
+    const size = Object.fromEntries(status.sizes) as Record<string, number>;
+    const text = async (k: string) => new TextDecoder().decode(await readAll(k, size[k]));
+    const models = { dp: await readAll("dp", size.dp), enc: await readAll("enc", size.enc), vec: await readAll("vec", size.vec), voc: await readAll("voc", size.voc), cfg: await text("cfg"), indexer: await text("indexer"), style: await text("style") };
+    const w = worker = deps.newWorker();
+    const ready = waitReady(w);
     w.postMessage({ type: "init", models, base: deps.base }, [models.dp.buffer, models.enc.buffer, models.vec.buffer, models.voc.buffer]);
     return ready;
   }
