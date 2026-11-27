@@ -21730,11 +21730,13 @@ async function paintHelping(): Promise<void> {
         const r = await invoke<any>("help_round");
         /* 숫자를 정직하게 적는다. 「도왔습니다」만 적으면 아무것도 안 해도
            같은 글이 뜬다 — 그건 화면이 거짓말하는 것이다. */
+        /* 11-28: 러스트(helping.rs help_round)는 `new_blocks`·`no_file` 로 답한다. 예전에는 없는 칸(`fetched`·`skipped`)을
+           읽어서 「받은 조각」·「사진 없는 가게」가 늘 0 이었다 — 받은 것을 받았다고 말하지 못했다. */
         if (자리)
           setCopyText(자리, () => t("가게 {a}곳 · 받은 조각 {b}개 · 사진 없는 가게 {c}곳")
             .replace("{a}", String(r?.shops ?? 0))
-            .replace("{b}", String(r?.fetched ?? 0))
-            .replace("{c}", String(r?.skipped ?? 0)));
+            .replace("{b}", String(r?.new_blocks ?? 0))
+            .replace("{c}", String(r?.no_file ?? 0)));
       } catch (e) {
         if (자리) 자리.textContent = errText(e);
       } finally {

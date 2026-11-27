@@ -7,3 +7,9 @@
 .ar-keep .row { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 8px; }
 .ar-keep button { white-space: nowrap; flex-shrink: 0; }
 .ar-keep input[type="text"] { width: 100%; box-sizing: border-box; min-height: 44px; padding: 8px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--text); }
+/* 11-28 「○대가 지키는 중」 — 게임마다 한 줄. 제목이 길면 줄이고 대수 글자는 줄바꿈하지 않는다. */
+.ar-keep .ar-keepers { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.ar-keep .ar-keepers li { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.ar-keep .ar-keepers .ar-kt { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ar-keep .ar-keepers .meta { flex: 0 0 auto; white-space: nowrap; }
+.ar-keep .ar-keepers .ar-few { color: var(--warn, #b45309); }

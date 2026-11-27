@@ -187,36 +187,34 @@ fn file_cids(
 ///
 /// 🔴 남(폰·다른 컴퓨터)이 만든 원본 지문은 모양으로 가려낼 수 없다. 그대로
 ///    `pin_add` 를 부르면 하나마다 5분을 기다린다. 먼저 20초만 물어보고(자산
-///    화면의 「확인」과 같은 잣대), 없으면 6시간 동안은 건너뛴다.
-static MISSED: std::sync::Mutex<Option<std::collections::HashMap<String, std::time::Instant>>> =
-    std::sync::Mutex::new(None);
-const MISS_QUIET: std::time::Duration = std::time::Duration::from_secs(6 * 3600);
+///    화면의 「확인」과 같은 잣대), 없으면 한동안 건너뛴다.
+///
+/// 11-28 「서로 지켜 주기」: 예전에는 늘 6시간이었다 — 잠깐 끊겼던 것도 6시간을 기다렸고, 영영 없는 것도 6시간마다
+///    다시 5분씩 붙잡았다. 이제 물러서기(`keep_together::Backoff`): 30분 → 1시간 → 2시간 … 최대 하루. 찾으면 잊는다.
+static MISSED: std::sync::Mutex<Option<crate::keep_together::Backoff>> = std::sync::Mutex::new(None);
+const MISS_BASE_SECS: i64 = 30 * 60;
+const MISS_MAX_SECS: i64 = 24 * 3600;
+
+fn unix_now() -> i64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
+}
+
+fn with_missed<R>(f: impl FnOnce(&mut crate::keep_together::Backoff) -> R) -> Option<R> {
+    let mut g = MISSED.lock().ok()?;
+    Some(f(g.get_or_insert_with(|| crate::keep_together::Backoff::new(MISS_BASE_SECS, MISS_MAX_SECS))))
+}
 
 fn recently_missed(cid: &str) -> bool {
-    MISSED
-        .lock()
-        .ok()
-        .and_then(|g| g.as_ref().and_then(|m| m.get(cid).map(|t| t.elapsed() < MISS_QUIET)))
-        .unwrap_or(false)
+    with_missed(|b| !b.ready(cid, unix_now())).unwrap_or(false)
 }
 
 fn note_missed(cid: &str) {
-    if let Ok(mut g) = MISSED.lock() {
-        let m = g.get_or_insert_with(Default::default);
-        if m.len() > 5_000 {
-            m.clear();
-        }
-        m.insert(cid.to_string(), std::time::Instant::now());
-    }
+    with_missed(|b| b.fail(cid, unix_now()));
 }
 
-/// 사용자가 「보관하기」를 눌렀다 — 6시간 기다리지 않고 다음 주기에 곧바로 다시 찾는다(`asset_keep.rs`).
+/// 사용자가 「보관하기」를 눌렀다 — 기다리지 않고 다음 주기에 곧바로 다시 찾는다(`asset_keep.rs`). 붙잡으면 기록도 지운다.
 pub(crate) fn forget_missed(cid: &str) {
-    if let Ok(mut g) = MISSED.lock() {
-        if let Some(m) = g.as_mut() {
-            m.remove(cid);
-        }
-    }
+    with_missed(|b| b.ok(cid));
 }
 
 /// 로컬 파일창고(kubo) HTTP API. `ipfs.rs` 와 같은 주소다(그 파일은 0.3.8 그대로 둔다).
@@ -296,6 +294,8 @@ async fn pin_these(items: Vec<String>) -> Result<Value, String> {
     let fingerprints = crate::create_history::fingerprint_set();
 
     let mut declined = 0usize;
+    // 11-28 곡·책 파일: 매니페스트 안에 글자로만 적혀 있던 CID 도 붙잡는다(예전에는 매니페스트만 붙잡혀 곡이 아무 데도 없었다).
+    let (mut contents_kept, mut contents_failed) = (0usize, 0usize);
     for (name, cid) in assets {
         // 이 컴퓨터가 원본 지문으로 만든 것 — 파일이 아니다.
         if fingerprints.contains(&cid) {
@@ -345,7 +345,13 @@ async fn pin_these(items: Vec<String>) -> Result<Value, String> {
                 let _ = crate::ipfs::pin_remove(cid.clone()).await;
                 declined += 1;
             }
-            Ok(true) => pinned.push(json!({ "asset": name, "cid": cid })),
+            Ok(true) => {
+                forget_missed(&cid);
+                let (k, f) = crate::keep_together::keep_manifest_files(&cid).await;
+                contents_kept += k;
+                contents_failed += f;
+                pinned.push(json!({ "asset": name, "cid": cid }));
+            }
             // 붙들지 못했으면 한동안 다시 묻지 않는다 — 안 그러면 돌 때마다 5분씩 기다린다.
             Ok(false) | Err(_) => {
                 note_missed(&cid);
@@ -360,6 +366,8 @@ async fn pin_these(items: Vec<String>) -> Result<Value, String> {
         "no_file": skipped,
         "fingerprints": fingerprints_skipped,
         "declined": declined,
+        "contents_kept": contents_kept,
+        "contents_failed": contents_failed,
         "note": "공개 장부가 가리키는 것만 받았습니다. 이 컴퓨터가 계속 갖고 있으니, 발행한 컴퓨터가 꺼져 있어도 손님 화면에서 열립니다.",
     }))
 }
@@ -554,5 +562,7 @@ mod tests {
         assert!(!super::recently_missed(cid));
         super::note_missed(cid);
         assert!(super::recently_missed(cid));
+        super::forget_missed(cid);
+        assert!(!super::recently_missed(cid), "「보관하기」를 누르면 곧바로 다시 찾는다");
     }
 }

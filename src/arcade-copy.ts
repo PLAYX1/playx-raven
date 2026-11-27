@@ -6,6 +6,10 @@ export const ARCADE_COPY: Record<string, [string, string, string]> = {
   "지금 쉬는 중": ["Resting now", "いまお休み中", "暂时休息中"],
   "돈은 받지 않았어요. 나중에 다시 눌러 주세요.": ["No money was taken. Please try again later.", "お金は受け取っていません。あとでもう一度押してください。", "没有收取任何费用。请稍后再试。"],
   "내 게임 보관": ["Keeping my games", "自分のゲームの保管", "保管我的游戏"],
+  // 11-28 「서로 지켜 주기」 — 게임마다 지키는 컴퓨터 수
+  "지키는 컴퓨터를 세는 중…": ["Counting the computers keeping it…", "保管しているパソコンを数えています…", "正在统计保管它的电脑…"],
+  "{0}대가 지키는 중": ["Kept by {0} computers", "{0}台が保管中", "{0} 台电脑在保管"],
+  "{0}대가 지키는 중 · 목표 {1}대": ["Kept by {0} computers · goal {1}", "{0}台が保管中 · 目標{1}台", "{0} 台电脑在保管 · 目标 {1} 台"],
   "게임은 내 컴퓨터에 있어요. 내 컴퓨터가 꺼져 있으면 손님이 게임을 못 해요. 손님이 많은 시간에는 켜 두세요.": [
     "Your games live on your computer. If it is off, customers can’t play them. Keep it on during busy hours.",
     "ゲームは自分のパソコンにあります。パソコンが切れているとお客さんは遊べません。お客さんが多い時間は付けておいてください。",

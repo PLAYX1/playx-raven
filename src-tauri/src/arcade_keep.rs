@@ -28,6 +28,16 @@
 //! - **이 기능이 붙잡은 것만 적어 두고(`arcade-share.json`) 그것만 푼다.** 원래 붙잡혀 있던 것(내 게임·내가 보관하기로 한 파일)은 적어도
 //!   `pre` 표시가 붙어 절대 풀지 않는다. 자산이 더는 그 문서를 가리키지 않으면 푼다. 끄면 전부 푼다.
 //! - 목록을 못 읽은 바퀴에서는 아무것도 풀지 않는다(잠깐의 실패로 지운 뒤 다시 받는 일이 없게).
+//!
+//! ## 11-28 「서로 지켜 주기」 1단계 (`keep_together.rs`)
+//!
+//! - 「모든 게임」 방식은 **HRW 로 내 몫만** 붙잡는다 — 게임(문서 CID)마다 돕는 사람 줄의 위 3명. 예전처럼 모두가
+//!   확인 판매자 → 이름 순으로 같은 게임에 몰리지 않는다. 이미 지키던 것은 5등까지 둔다(새 사람이 받기 전에 사본이 줄지 않게).
+//!   「이 가게만 보관」은 사람이 고른 것이라 HRW 를 보지 않고 다 지킨다.
+//! - 못 붙잡은 게임은 10분 → 20분 → … 최대 하루 쉬었다가 다시(바퀴마다 900초씩 다시 기다리지 않는다).
+//! - 「모든 게임」으로 켜 두면 6시간마다 지킴이 알림을 올린다(이야기 열쇠가 있을 때만). 끄면 「꺼짐」 한 번.
+//! - 내 게임 보관(①)은 바퀴 끝에 폴더를 몇 대가 갖고 있는지 세어(`routing/findprovs`) 「○대가 지키는 중」으로 보여 주고,
+//!   3대보다 적으면 다시 알린다.
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -145,9 +155,43 @@ static PROVIDED_DEEP: Mutex<Option<HashSet<String>>> = Mutex::new(None);
 
 async fn ensure_kept(cid: &str, skip: bool) -> bool {
     if is_pinned(cid).await {
+        crate::keep_together::fetch_ok(cid);
         return true;
     }
-    !skip && pin(cid).await
+    // 11-28: 못 붙잡은 것은 물러서기 — 바퀴마다 900초씩 다시 기다리지 않는다.
+    if skip || !crate::keep_together::fetch_ready(cid) {
+        return false;
+    }
+    let ok = pin(cid).await;
+    if ok { crate::keep_together::fetch_ok(cid) } else { crate::keep_together::fetch_failed(cid) }
+    ok
+}
+
+/// 바퀴 끝(알리기 뒤): 내 게임 폴더를 몇 대가 갖고 있나 센다. 3대보다 적으면 문서·폴더를 다시 알린다.
+async fn verify_keepers(folders: Vec<(String, String)>) {
+    let at = now();
+    for (doc, folder) in folders {
+        if !crate::keep_together::verify_due(&folder, at) {
+            continue;
+        }
+        if let Some(n) = crate::keep_together::count_keepers(&folder, true).await {
+            if n < crate::keep_together::KEEP_TARGET {
+                provide(&doc, false).await;
+                provide(&folder, false).await;
+            }
+        }
+    }
+}
+
+/// 게임 한 줄에 「몇 대가 지키나」를 붙인다(지난번에 센 값 · 아직 안 셌으면 null).
+fn with_keepers(mut g: Value, folder: &str) -> Value {
+    if let Some((n, at)) = crate::keep_together::keepers_of(folder) {
+        g["keepers"] = json!(n);
+        g["keepersAt"] = json!(at);
+    } else {
+        g["keepers"] = Value::Null;
+    }
+    g
 }
 
 async fn mine_round_inner() -> Result<Value, String> {
@@ -173,6 +217,8 @@ async fn mine_round_inner() -> Result<Value, String> {
     // 11-26 0.9.49: DHT 알리기(provide)는 CID 하나에 최대 2분×2 — 예전에는 붙잡은 게임마다 그 자리에서 기다려서
     //   게임 7개면 바깥 /ipfs/ 길을 열고 gw 를 다시 알리기까지 수십 분 걸렸다(키오스크 실측). 모아 두었다가 바퀴 끝에 뒤에서 한다.
     let mut to_provide: Vec<(String, bool)> = Vec::new();
+    // 11-28: 알리기가 끝난 뒤 「몇 대가 지키나」를 셀 (문서, 폴더).
+    let mut to_verify: Vec<(String, String)> = Vec::new();
     for (name, hash) in list.iter().filter(|(n, _)| names.contains(n)) {
         let Some(doc) = hash.clone() else {
             games.push(json!({ "asset": name, "problem": "no-doc" }));
@@ -196,11 +242,12 @@ async fn mine_round_inner() -> Result<Value, String> {
             serve.insert(f.folder.clone());
             if let Some(p) = f.price_sats { serve_prices.insert(doc.clone(), (p, f.title.clone())); }
         }
-        games.push(json!({
+        if doc_kept && folder_kept { to_verify.push((doc.clone(), f.folder.clone())); }
+        games.push(with_keepers(json!({
             "asset": name, "title": f.title, "docCid": doc, "folderCid": f.folder, "bytes": f.declared,
             "docKept": doc_kept, "folderKept": folder_kept,
             "problem": if doc_kept && folder_kept { Value::Null } else { json!("not-kept") },
-        }));
+        }), &f.folder));
     }
     // 일반 판매자로 올린 내 게임(0 RVN · 체인 자산 없음) — 내 겉봉투 열쇠로 서명된 지금 쪽지가 가리키는 문서·폴더.
     let mut reannounced = 0usize;
@@ -228,11 +275,12 @@ async fn mine_round_inner() -> Result<Value, String> {
                 serve.insert(f.folder.clone());
                 if let Some(p) = f.price_sats { serve_prices.insert(doc.clone(), (p, f.title.clone())); }
             }
-            games.push(json!({
+            if doc_kept && folder_kept { to_verify.push((doc.clone(), f.folder.clone())); }
+            games.push(with_keepers(json!({
                 "asset": name, "listing": "open", "title": f.title, "docCid": doc, "folderCid": f.folder, "bytes": f.declared,
                 "docKept": doc_kept, "folderKept": folder_kept,
                 "problem": if doc_kept && folder_kept { Value::Null } else { json!("not-kept") },
-            }));
+            }), &f.folder));
         }
         // 바깥 /ipfs/ 길이 지금 붙잡힌 내 게임만 내주게(server.rs ipfs_relay) — 다시 알리기 전에 먼저 연다.
         crate::arcade_gw::set_serving(&serve, chain_error.is_none() && listings_read);
@@ -252,12 +300,14 @@ async fn mine_round_inner() -> Result<Value, String> {
     if !to_provide.is_empty() {
         tauri::async_runtime::spawn(async move {
             for (cid, deep) in to_provide { provide(&cid, deep).await; }
+            // 알린 뒤에 센다(먼저 세면 방금 붙잡은 나도 DHT 에 아직 없다). 결과는 다음 바퀴·「지금 확인」에 보인다.
+            verify_keepers(to_verify).await;
         });
     }
     // 11-28 판매자 상태판: 바깥 주소·내줄 목록을 방금 정했다 — 5분 박동을 기다리지 않고 새 gw 로 신호를 한 번(seller_status.rs).
     crate::seller_status::kick();
     let games_empty = games.is_empty();
-    let mut out = json!({ "at": now(), "games": games, "kept": kept, "bytes": bytes, "gateway": gateway, "reannounced": reannounced });
+    let mut out = json!({ "at": now(), "games": games, "kept": kept, "bytes": bytes, "gateway": gateway, "reannounced": reannounced, "keepTarget": crate::keep_together::KEEP_TARGET });
     // 체인 쪽만 실패하고 일반 판매자 게임은 본 경우 화면이 「확인하지 못했어요」로 덮지 않게 chainError 로 따로 둔다.
     if let Some(e) = chain_error { out[if games_empty { "error" } else { "chainError" }] = json!(e); }
     Ok(out)
@@ -475,8 +525,12 @@ pub(crate) struct Plan {
 /// 무엇을 새로 붙잡고 무엇을 풀까 — 순수 함수.
 /// `chain` = 방금 읽은 체인 목록(이름 → 문서 CID). 이미 지키는 것은 그 자산이 아직 그 문서를 가리키면 남긴다
 /// (이번 바퀴에 문서를 못 받았어도 — 잠깐의 실패로 풀지 않는다). 남긴 것이 먼저 용량을 차지한다.
-pub(crate) fn plan(cur: &BTreeMap<String, Entry>, chain: &HashMap<String, String>, cands: &[Cand], budget: u64, mine: &HashSet<String>, mode: Mode, picks: &[String]) -> Plan {
+///
+/// 11-28 `hrw`: 「모든 게임」 방식에서만 본다 — 새 게임은 내 순위가 위 3명 안일 때만(`not-assigned`),
+/// 이미 지키던 것은 5등까지 둔다. None(시험·옛 길)이면 예전처럼 다 고른다. 「이 가게만」은 사람이 고른 것이라 보지 않는다.
+pub(crate) fn plan(cur: &BTreeMap<String, Entry>, chain: &HashMap<String, String>, cands: &[Cand], budget: u64, mine: &HashSet<String>, mode: Mode, picks: &[String], hrw: Option<&crate::keep_together::Hrw>) -> Plan {
     let mut p = Plan::default();
+    let hrw = hrw.filter(|_| mode == Mode::All);
     // 확인 판매자 = 체인 자산이 이 문서를 가리킨다 · 일반 판매자 = 화면이 서명을 본 지금 쪽지가 이 문서를 가리킨다(「open:<key>」 · 내리면 빠진다).
     let anchored = |doc: &str, asset: &str| (product_like(asset) || asset.starts_with("open:")) && chain.get(asset).map(String::as_str) == Some(doc);
     let wanted = |asset: &str, seller: &str| match mode {
@@ -486,7 +540,7 @@ pub(crate) fn plan(cur: &BTreeMap<String, Entry>, chain: &HashMap<String, String
     };
     let (mut count, mut used) = (0usize, 0u64);
     for (doc, e) in cur {
-        if anchored(doc, &e.asset) && !mine.contains(&e.asset) && wanted(&e.asset, &e.seller) {
+        if anchored(doc, &e.asset) && !mine.contains(&e.asset) && wanted(&e.asset, &e.seller) && hrw.is_none_or(|h| h.wants_kept(doc)) {
             count += 1;
             used += e.bytes;
         } else {
@@ -494,7 +548,9 @@ pub(crate) fn plan(cur: &BTreeMap<String, Entry>, chain: &HashMap<String, String
         }
     }
     let mut order: Vec<&Cand> = cands.iter().filter(|c| !cur.contains_key(&c.doc)).collect();
-    order.sort_by(|a, b| a.tier.cmp(&b.tier).then(a.asset.cmp(&b.asset)).then(a.doc.cmp(&b.doc)));
+    // 확인 판매자 먼저 → (HRW) 내 순위가 높은 것 먼저 → 이름 순. 용량이 모자랄 때 내가 1등인 게임부터 지킨다.
+    let rank = |c: &Cand| hrw.map(|h| h.rank(&c.doc)).unwrap_or(0);
+    order.sort_by(|a, b| a.tier.cmp(&b.tier).then(rank(a).cmp(&rank(b))).then(a.asset.cmp(&b.asset)).then(a.doc.cmp(&b.doc)));
     let mut seen = HashSet::new();
     for c in order {
         if !seen.insert(c.doc.clone()) {
@@ -506,6 +562,8 @@ pub(crate) fn plan(cur: &BTreeMap<String, Entry>, chain: &HashMap<String, String
             Some("mine")
         } else if !anchored(&c.doc, &c.asset) {
             Some("not-anchored")
+        } else if hrw.is_some_and(|h| !h.wants_new(&c.doc)) {
+            Some("not-assigned")
         } else if c.bytes > PER_GAME_MAX {
             Some("too-large")
         } else if count >= MAX_SHARED {
@@ -578,6 +636,7 @@ pub fn arcade_share_get() -> Value {
 #[tauri::command]
 pub async fn arcade_share_set(mode: Option<String>, picks: Option<Vec<String>>, budget_mb: Option<u64>) -> Result<Value, String> {
     let mut s = load_share();
+    let was_all = s.mode == Mode::All;
     if let Some(m) = mode {
         s.mode = Mode::parse(&m).ok_or("고를 수 있는 방식이 아닙니다.")?;
     }
@@ -602,6 +661,10 @@ pub async fn arcade_share_set(mode: Option<String>, picks: Option<Vec<String>>, 
         }
     }
     save_share(&s)?;
+    // 11-28 「모든 게임」을 그만두면 지킴이 알림을 「꺼짐」으로 — 남들이 나에게 몫을 맡기지 않게.
+    if was_all && s.mode != Mode::All {
+        tauri::async_runtime::spawn(async { crate::keep_together::heartbeat_withdraw().await; });
+    }
     Ok(share_view(&s))
 }
 
@@ -691,7 +754,17 @@ async fn share_apply_inner(checked: Vec<Value>) -> Result<Value, String> {
             c.bytes = c.bytes.max(real);
         }
     }
-    let p = plan(&s.games, &chain, &cands, s.budget_mb * 1024 * 1024, &mine, s.mode, &s.picks);
+    // 11-28 물러서기: 지난번에 못 붙잡은 게임은 쉬는 동안 후보에서 뺀다(용량 자리도 차지하지 않게).
+    let mut cooling: Vec<(String, &'static str)> = Vec::new();
+    cands.retain(|c| {
+        let ready = s.games.contains_key(&c.doc) || crate::keep_together::fetch_ready(&c.doc);
+        if !ready { cooling.push((c.asset.clone(), "backoff")); }
+        ready
+    });
+    // 11-28 HRW: 「모든 게임」이면 돕는 사람 줄에서 내 몫만.
+    let hrw = if s.mode == Mode::All { Some(crate::keep_together::hrw_now().await) } else { None };
+    let mut p = plan(&s.games, &chain, &cands, s.budget_mb * 1024 * 1024, &mine, s.mode, &s.picks, hrw.as_ref());
+    p.skipped.extend(cooling);
     let dropped: Vec<(String, Entry)> = p.drop.iter().filter_map(|d| s.games.remove(d).map(|e| (d.clone(), e))).collect();
     let keep_prefs = crate::asset_keep::load();
     for cid in unpin_targets(&s.games, &dropped) {
@@ -705,6 +778,7 @@ async fn share_apply_inner(checked: Vec<Value>) -> Result<Value, String> {
     for c in &p.add {
         let doc_pre = is_pinned(&c.doc).await;
         if !doc_pre && !pin(&c.doc).await {
+            crate::keep_together::fetch_failed(&c.doc);
             failed += 1;
             continue;
         }
@@ -713,9 +787,11 @@ async fn share_apply_inner(checked: Vec<Value>) -> Result<Value, String> {
             if !doc_pre {
                 let _ = unpin(&c.doc).await;
             }
+            crate::keep_together::fetch_failed(&c.doc);
             failed += 1;
             continue;
         }
+        crate::keep_together::fetch_ok(&c.doc);
         provide(&c.doc, false).await;
         provide(&c.folder, true).await;
         s.games.insert(c.doc.clone(), Entry { asset: c.asset.clone(), seller: c.seller.clone(), folder: c.folder.clone(), bytes: c.bytes, doc_pre, folder_pre });
@@ -725,7 +801,13 @@ async fn share_apply_inner(checked: Vec<Value>) -> Result<Value, String> {
     s.last_at = Some(now());
     s.last_note = Some(format!("added={added} removed={} skipped={} failed={failed}", dropped.len(), p.skipped.len()));
     save_share(&s)?;
+    // 11-28 지킴이 알림 — 「모든 게임」일 때만(6시간마다 · 꽉 차면 바로). 바퀴 결과를 붙잡지 않게 뒤에서.
+    let used: u64 = s.games.values().map(|e| e.bytes).sum();
+    let full = used.saturating_mul(100) >= s.budget_mb * 1024 * 1024 * 95;
+    let on = s.mode == Mode::All;
+    tauri::async_runtime::spawn(async move { crate::keep_together::heartbeat_step(on, full).await; });
     let mut v = share_view(&s);
+    v["helpers"] = json!(hrw.as_ref().map(|h| h.helpers.len()));
     v["added"] = json!(added);
     v["removed"] = json!(dropped.len());
     v["failed"] = json!(failed);
@@ -768,7 +850,7 @@ mod tests {
         Cand { doc: doc.into(), asset: asset.into(), folder: folder.into(), seller: String::new(), bytes, tier }
     }
     fn all(cur: &BTreeMap<String, Entry>, chain: &HashMap<String, String>, cands: &[Cand], budget: u64, mine: &HashSet<String>) -> Plan {
-        plan(cur, chain, cands, budget, mine, Mode::All, &[])
+        plan(cur, chain, cands, budget, mine, Mode::All, &[], None)
     }
     const MB: u64 = 1024 * 1024;
 
@@ -919,21 +1001,60 @@ mod tests {
         other.seller = seller.into();
         let cands = vec![c(&q(b'a'), "RVLT/PLAYX#RUN", &q(b'A'), MB, 0), c(&q(b'b'), "RVLT/PLAYX/JUMP", &q(b'B'), MB, 0), other];
         let picks = vec![clean_pick("playx").unwrap()];
-        let p = plan(&BTreeMap::new(), &chain, &cands, 1024 * MB, &HashSet::new(), Mode::Shops, &picks);
+        let p = plan(&BTreeMap::new(), &chain, &cands, 1024 * MB, &HashSet::new(), Mode::Shops, &picks, None);
         assert_eq!(p.add.iter().map(|c| c.asset.as_str()).collect::<Vec<_>>(), vec!["RVLT/PLAYX#RUN", "RVLT/PLAYX/JUMP"]);
         assert_eq!(p.skipped, vec![("RVLT/OTHER#X".to_string(), "not-picked")]);
-        let by_addr = plan(&BTreeMap::new(), &chain, &cands, 1024 * MB, &HashSet::new(), Mode::Shops, &[seller.to_string()]);
+        let by_addr = plan(&BTreeMap::new(), &chain, &cands, 1024 * MB, &HashSet::new(), Mode::Shops, &[seller.to_string()], None);
         assert_eq!(by_addr.add.len(), 1);
         assert_eq!(by_addr.add[0].asset, "RVLT/OTHER#X");
         // 이미 지키던 PLAYX 게임은 PLAYX 를 목록에서 빼면 풀린다.
         let mut cur = BTreeMap::new();
         cur.insert(q(b'a'), e("RVLT/PLAYX#RUN", &q(b'A'), MB));
-        assert_eq!(plan(&cur, &chain, &[], 1024 * MB, &HashSet::new(), Mode::Shops, &[]).drop, vec![q(b'a')]);
+        assert_eq!(plan(&cur, &chain, &[], 1024 * MB, &HashSet::new(), Mode::Shops, &[], None).drop, vec![q(b'a')]);
         // 가게 이름 정리: RVLT/ 떼기 · 대문자 · 주소는 그대로 · 이상한 글자 거절
         assert_eq!(clean_pick(" RVLT/playx ").as_deref(), Some("PLAYX"));
         assert_eq!(clean_pick(seller).as_deref(), Some(seller));
         assert!(clean_pick("a b").is_none() && clean_pick("").is_none() && clean_pick("PLAYX#RUN").is_none());
         assert_eq!(shop_of("RVLT/PLAYX#RUN"), "PLAYX");
+    }
+
+    /// 11-28 🔴 「모든 게임」은 HRW 로 내 몫만 — 모두가 같은 게임에 몰리지 않는다. 「이 가게만」은 고른 대로 다.
+    #[test]
+    fn 모든_게임은_hrw_로_내_몫만_고른다() {
+        use crate::keep_together::Hrw;
+        let helpers: Vec<String> = (1..=9).map(|i| format!("{i:064x}")).collect();
+        let n = 60u8;
+        let docs: Vec<String> = (0..n).map(|i| format!("Qm{}{:02}", "x".repeat(42), i)).collect();
+        let chain: HashMap<String, String> = docs.iter().enumerate().map(|(i, d)| (format!("RVLT/S{i}#X"), d.clone())).collect();
+        let cands: Vec<Cand> = docs.iter().enumerate().map(|(i, d)| c(d, &format!("RVLT/S{i}#X"), &q(b'F'), MB, 0)).collect();
+        // 10명(나 포함)이 같은 60개를 보면 각자 약 18개(= 60 × 3 / 10) — 예전에는 모두 60개 전부.
+        let mut total = 0;
+        for me in &helpers {
+            let others: Vec<String> = helpers.iter().filter(|x| *x != me).cloned().chain([format!("{:064x}", 100)]).collect();
+            let h = Hrw::new(me.clone(), others);
+            let p = plan(&BTreeMap::new(), &chain, &cands, 10_000 * MB, &HashSet::new(), Mode::All, &[], Some(&h));
+            assert!(p.add.len() < 40, "{me} 가 {}개 — 몰렸다", p.add.len());
+            assert!(p.add.iter().all(|c| h.wants_new(&c.doc)));
+            assert!(p.skipped.iter().all(|(_, w)| *w == "not-assigned"));
+            total += p.add.len();
+        }
+        // 9명이 계산한 몫의 합 ≈ 60 × 3 × 9/10 = 162.
+        assert!((120..=200).contains(&total), "합: {total}");
+        // 목록을 못 읽은 바퀴(나 혼자)는 예전처럼 다 고른다.
+        let alone = Hrw::new("me".into(), vec![]);
+        assert_eq!(plan(&BTreeMap::new(), &chain, &cands, 10_000 * MB, &HashSet::new(), Mode::All, &[], Some(&alone)).add.len(), n as usize);
+        // 이미 지키던 것은 5등까지 둔다 · 그보다 밀리면 푼다.
+        let h = Hrw::new(helpers[0].clone(), helpers[1..].to_vec());
+        let mut cur = BTreeMap::new();
+        for (i, d) in docs.iter().enumerate() { cur.insert(d.clone(), e(&format!("RVLT/S{i}#X"), &q(b'F'), MB)); }
+        let p = plan(&cur, &chain, &[], 10_000 * MB, &HashSet::new(), Mode::All, &[], Some(&h));
+        for d in &docs {
+            assert_eq!(p.drop.contains(d), !h.wants_kept(d), "여유 안이면 남기고 밖이면 푼다");
+        }
+        // 「이 가게만 보관」은 HRW 를 보지 않는다.
+        let picks = vec!["S1".to_string()];
+        let p = plan(&BTreeMap::new(), &chain, &cands, 10_000 * MB, &HashSet::new(), Mode::Shops, &picks, Some(&h));
+        assert_eq!(p.add.len(), 1);
     }
 
     #[test]

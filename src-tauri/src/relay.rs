@@ -560,6 +560,11 @@ fn smells_bad(e: &Value) -> Option<String> {
     if kind == crate::seller_status::SELLER_STATUS_KIND {
         return crate::seller_status::shape(e).err();
     }
+    // 11-28 「서로 지켜 주기」 지킴이 알림(kind 30078 · d=ravenvault/keeper/v1) — 가게 공지가 아니다. 아래 ③(d=자산 이름)에 대면
+    //   우리 릴레이가 전부 버린다. 같은 모양 검사(`keep_together::heartbeat_shape`)를 통과한 것만 받는다. 서명은 store 가 본다.
+    if kind == crate::keep_together::HEARTBEAT_KIND && has_d(e, crate::keep_together::KEEPER_D) {
+        return crate::keep_together::heartbeat_shape(e).err();
+    }
     if kind == 30402 && has_t(e, "rv-swap") {
         let size = serde_json::to_string(e).map(|s| s.len()).unwrap_or(0);
         if size > MAX_EVENT_BYTES {
@@ -596,6 +601,12 @@ fn smells_bad(e: &Value) -> Option<String> {
         return Some("어느 가게 것인지 적혀 있지 않습니다".into());
     }
     None
+}
+
+fn has_d(e: &Value, val: &str) -> bool {
+    e.get("tags").and_then(Value::as_array).is_some_and(|t| {
+        t.iter().any(|x| x.get(0).and_then(Value::as_str) == Some("d") && x.get(1).and_then(Value::as_str) == Some(val))
+    })
 }
 
 fn has_t(e: &Value, val: &str) -> bool {
@@ -2071,6 +2082,18 @@ mod tests {
     fn person_lists_are_kept_only_for_raven_people() {
         use super::*;
         for k in [0, 3, 5, 10003] { assert!(KINDS.contains(&k), "kind {k} 를 받는다"); }
+    }
+
+    /// 11-28 「서로 지켜 주기」 지킴이 알림은 받고(가게 공지 잣대로 버리지 않는다), 모양이 틀린 것은 버린다.
+    #[test]
+    fn 지킴이_알림은_받고_이상한_것은_버린다() {
+        let tags = json!([["d", crate::keep_together::KEEPER_D], ["t", crate::keep_together::KEEPER_TAG]]);
+        let ok = json!({ "kind": 30078, "pubkey": "a".repeat(64), "tags": tags, "content": crate::keep_together::heartbeat_content(true, None, false) });
+        assert!(smells_bad(&ok).is_none());
+        let bad = json!({ "kind": 30078, "pubkey": "a".repeat(64), "tags": tags, "content": "아무 글" });
+        assert!(smells_bad(&bad).is_some());
+        let big = json!({ "kind": 30078, "pubkey": "a".repeat(64), "tags": tags, "content": format!(r#"{{"v":1,"mode":"all","x":"{}"}}"#, "x".repeat(2000)) });
+        assert!(smells_bad(&big).is_some(), "크기 상한");
     }
 
     #[test]
