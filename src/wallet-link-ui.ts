@@ -5,6 +5,7 @@
 import { getCurrentWindow, UserAttentionType } from "@tauri-apps/api/window";
 import { t, tf } from "./i18n";
 import { MATCH_BEAT_MS, MATCH_COLOR_HEX, MATCH_COLOR_NAME, MATCH_SHAPE_NAME, MATCH_SHAPE_PATH, matchSymbols } from "../core/wallet-link/match-symbols";
+import { oneLinkText } from "./one-link";
 
 type Invoke = <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
 type Offer = { v: 1; chain: "rvn-main"; account: 0; desktopKey: string; name: string; xpub: string; firstAddress: string; nonce: string; expires: number };
@@ -113,11 +114,25 @@ export function wireWalletLink(deps: { invoke: Invoke; ask: (why: "link" | "limi
   agree.onchange = () => { make.disabled = !agree.checked; $("wl-agree-hint").hidden = agree.checked; };
   make.disabled = true;
   function stopOffer() { offer = null; clearInterval(offerTimer); $("wl-qr").hidden = true; $("wl-confirm").hidden = true; make.hidden = false; }
+  // ── 11-28 「폰 연결」 한 QR: 지갑 제안 + (가게 서버가 켜져 있고 봉함 키가 있으면) 직원 연결 주소 ──
+  // 직원 주소는 러스트 phone_staff_link 가 읽기만 해서 준다(서버를 켜거나 열쇠를 새로 만들지 않는다 · 사장 주소는 절대 아님).
+  // QR 은 지갑 제안과 같이 1분 뒤 화면에서 숨긴다. 체크를 끄면 옛 폰도 읽는 지갑 QR 그대로.
+  const shopBox = $("wl-shop") as HTMLInputElement;
+  async function staffLink(): Promise<string | null> {
+    try { const r = await invoke<{ staff_url?: string | null }>("phone_staff_link"); return typeof r?.staff_url === "string" ? r.staff_url : null; }
+    catch { return null; }
+  }
+  async function paintShopRow() {
+    const on = !!(await staffLink());
+    $("wl-shop-row").hidden = !on; $("wl-shop-hint").hidden = !on;
+  }
   async function showOffer(o: Offer) {
     // 러스트가 준 제안을 폰과 같은 규격 코드로 한 번 더 읽는다: 첫 주소가 이 xpub 에서 나온 것인지까지.
     const link = await import("../core/wallet-link/link");
-    const text = link.encodeLinkOffer(o);
-    link.parseLinkOffer(text, Date.now());
+    const walletText = link.encodeLinkOffer(o);
+    link.parseLinkOffer(walletText, Date.now());
+    const staff = shopBox.checked && !$("wl-shop-row").hidden ? await staffLink() : null;
+    const text = oneLinkText(walletText, staff);
     const svg = await invoke<string>("qr_svg", { text });
     offer = o;
     const img = $("wl-qrimg") as HTMLImageElement;
@@ -136,8 +151,10 @@ export function wireWalletLink(deps: { invoke: Invoke; ask: (why: "link" | "limi
     clearInterval(offerTimer); offerTimer = setInterval(tick, 1000); tick();
     schedule(1500);
   }
+  void paintShopRow();
   make.onclick = async () => {
     if (!agree.checked) return;
+    await paintShopRow();
     msg("");
     const password = await deps.ask("link");
     if (!password) return;
@@ -145,7 +162,7 @@ export function wireWalletLink(deps: { invoke: Invoke; ask: (why: "link" | "limi
     try {
       const pendingOffer = invoke<Offer>("wallet_link_offer", { passphrase: password, name: ($("wl-name") as HTMLInputElement).value });
       await showOffer(await pendingOffer);
-      msg(t("폰의 지갑 고르기 → 「데스크탑 지갑 연결」에서 이 QR 을 찍어 주세요."));
+      msg(t("폰의 「내 데스크탑」 → 「데스크탑 QR 읽기」에서 이 QR 을 찍어 주세요."));
     } catch (e) { msg(errOf(e), true); }
     finally { make.disabled = !agree.checked; }
   };
