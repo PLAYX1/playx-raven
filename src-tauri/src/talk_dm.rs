@@ -268,6 +268,13 @@ pub(crate) fn wrap_chat(my: &[u8; 32], receivers: &[String], text: &str, subject
 
 // ── 푼 쪽지 기억(메모리만) ────────────────────────────────────────────
 
+/// 11-28 쪽지함 둘 — 사람 열쇠(talk::signing_key)와 가게 간판 열쇠(shopkey.rs). **기억도 따로**(섞이지 않는다 · 하나를 열어도 다른 하나가 안 비워진다).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum Inbox {
+    Person,
+    Shop,
+}
+
 #[derive(Default)]
 struct Book {
     me: String,
@@ -278,10 +285,11 @@ struct Book {
     remote_at: i64,
 }
 static BOOK: Mutex<Option<Book>> = Mutex::new(None);
+static SHOP_BOOK: Mutex<Option<Book>> = Mutex::new(None);
 const MAX_TRIED: usize = 20_000;
 
-fn with_book<T>(me: &str, f: impl FnOnce(&mut Book) -> T) -> T {
-    let mut g = BOOK.lock().unwrap_or_else(|e| e.into_inner());
+fn with_book_in<T>(inbox: Inbox, me: &str, f: impl FnOnce(&mut Book) -> T) -> T {
+    let mut g = match inbox { Inbox::Person => &BOOK, Inbox::Shop => &SHOP_BOOK }.lock().unwrap_or_else(|e| e.into_inner());
     if g.as_ref().map(|b| b.me != me).unwrap_or(true) {
         *g = Some(Book { me: me.to_string(), ..Default::default() });
     }
@@ -289,8 +297,8 @@ fn with_book<T>(me: &str, f: impl FnOnce(&mut Book) -> T) -> T {
 }
 
 /// 처음 보는 겉봉만 푼다. 돌려줌: 새로 생긴 쪽지들.
-fn ingest(my: &[u8; 32], me: &str, wraps: &[Value]) -> Vec<Dm> {
-    let fresh: Vec<&Value> = with_book(me, |b| {
+fn ingest_in(inbox: Inbox, my: &[u8; 32], me: &str, wraps: &[Value]) -> Vec<Dm> {
+    let fresh: Vec<&Value> = with_book_in(inbox, me, |b| {
         wraps
             .iter()
             .filter(|w| w.get("id").and_then(Value::as_str).is_some_and(|id| !b.tried.contains_key(id)))
@@ -303,7 +311,7 @@ fn ingest(my: &[u8; 32], me: &str, wraps: &[Value]) -> Vec<Dm> {
         .into_iter()
         .map(|w| (w.get("id").and_then(Value::as_str).unwrap_or_default().to_string(), open_wrap(my, w)))
         .collect();
-    with_book(me, |b| {
+    with_book_in(inbox, me, |b| {
         if b.tried.len() > MAX_TRIED {
             b.tried.retain(|_, v| v.is_some());
         }
@@ -322,48 +330,69 @@ fn ingest(my: &[u8; 32], me: &str, wraps: &[Value]) -> Vec<Dm> {
 }
 
 /// 보낸 쪽지를 곧바로 기억한다(바깥 답을 기다리지 않고 그린다).
+#[cfg(test)]
 fn remember_sent(me: &str, m: Dm) {
-    with_book(me, |b| {
+    remember_sent_in(Inbox::Person, me, m)
+}
+
+fn remember_sent_in(inbox: Inbox, me: &str, m: Dm) {
+    with_book_in(inbox, me, |b| {
         b.tried.insert(m.wrap.clone(), Some(m.id.clone()));
         b.msgs.entry(m.id.clone()).or_insert(m);
     });
 }
 
 fn all_msgs(me: &str) -> Vec<Dm> {
-    with_book(me, |b| b.msgs.values().cloned().collect())
+    all_msgs_in(Inbox::Person, me)
+}
+
+fn all_msgs_in(inbox: Inbox, me: &str) -> Vec<Dm> {
+    with_book_in(inbox, me, |b| b.msgs.values().cloned().collect())
 }
 
 /// 이 컴퓨터 릴레이에 보관된 나에게 온 겉봉(웹소켓 안 거침 · 몇 ms).
-fn local_wraps(me: &str) -> Vec<Value> {
-    crate::relay::query_local(&[json!({ "kinds": [KIND_WRAP], "#p": [me], "limit": 500 })])
+/// 가게 쪽지함은 보관된 가게 겉봉 전부(relay.rs 가 가게 칸 한도 MAX_WRAPS 로 지킨다).
+fn local_wraps_in(inbox: Inbox, me: &str) -> Vec<Value> {
+    match inbox {
+        Inbox::Person => crate::relay::query_local(&[json!({ "kinds": [KIND_WRAP], "#p": [me], "limit": 500 })]),
+        Inbox::Shop => crate::relay::shop_wraps(me),
+    }
 }
 
 /// 바깥(기본 릴레이 + 이 컴퓨터)에서 새 겉봉을 읽어 이 컴퓨터 릴레이에 남기고 푼다. 닿은 곳이 없으면 Err.
-async fn fetch_remote(my: &[u8; 32], me: &str) -> Result<usize, String> {
+/// 🔴 가게 쪽지함은 가게 칸 연결로 묻는다(nostrpub::shop_query_inbox) — 사람 열쇠 물음과 같은 REQ·같은 웹소켓에 안 섞인다.
+async fn fetch_remote(inbox: Inbox, my: &[u8; 32], me: &str) -> Result<usize, String> {
     let started = now();
-    let since = with_book(me, |b| if b.remote_at > 0 { b.remote_at - FUZZ_SECS } else { 0 });
-    let (wraps, complete) = crate::nostrpub::nostr_query_inbox(me, since).await?;
+    let since = with_book_in(inbox, me, |b| if b.remote_at > 0 { b.remote_at - FUZZ_SECS } else { 0 });
+    let (wraps, complete) = match inbox {
+        Inbox::Person => crate::nostrpub::nostr_query_inbox(me, since).await?,
+        Inbox::Shop => crate::nostrpub::shop_query_inbox(me, since).await?,
+    };
     crate::relay::absorb(wraps.clone());
     let sk = *my;
     let me2 = me.to_string();
-    let added = tokio::task::spawn_blocking(move || ingest(&sk, &me2, &wraps).len()).await.unwrap_or(0);
+    let added = tokio::task::spawn_blocking(move || ingest_in(inbox, &sk, &me2, &wraps).len()).await.unwrap_or(0);
     if complete {
-        with_book(me, |b| b.remote_at = started);
+        with_book_in(inbox, me, |b| b.remote_at = started);
     }
     Ok(added)
 }
 
 async fn load(my: &[u8; 32], me: &str, local: bool) -> (bool, Option<String>) {
-    let empty = with_book(me, |b| b.tried.is_empty());
+    load_in(Inbox::Person, my, me, local).await
+}
+
+async fn load_in(inbox: Inbox, my: &[u8; 32], me: &str, local: bool) -> (bool, Option<String>) {
+    let empty = with_book_in(inbox, me, |b| b.tried.is_empty());
     if empty || local {
         let sk = *my;
         let me2 = me.to_string();
-        let _ = tokio::task::spawn_blocking(move || ingest(&sk, &me2, &local_wraps(&me2))).await;
+        let _ = tokio::task::spawn_blocking(move || ingest_in(inbox, &sk, &me2, &local_wraps_in(inbox, &me2))).await;
     }
     if local {
         return (true, None);
     }
-    match fetch_remote(my, me).await {
+    match fetch_remote(inbox, my, me).await {
         Ok(_) => (true, None),
         Err(e) => (false, Some(e)),
     }
@@ -556,10 +585,15 @@ pub async fn talk_dm_send(to: Vec<String>, text: String, subject: Option<String>
         return Err("받는 사람을 골라 주세요.".into());
     }
     let mut sk = crate::talk::signing_key()?;
-    let me = crate::shopkey::pubkey_of(&sk)?;
-    let made = wrap_chat(&sk, &receivers, &text, subject.as_deref().unwrap_or(""), now());
+    let out = send_from(Inbox::Person, &sk, &receivers, &text, subject.as_deref().unwrap_or("")).await;
     crate::words::wipe_bytes(&mut sk);
-    let (wraps, rumor) = made?;
+    out
+}
+
+/// 봉해 올리고 기억한다(사람 쪽지·가게 쪽지 공통). 가게는 가게 칸 연결로 올린다(nostrpub::shop_publish).
+async fn send_from(inbox: Inbox, sk: &[u8; 32], receivers: &[String], text: &str, subject: &str) -> Result<Value, String> {
+    let me = crate::shopkey::pubkey_of(sk)?;
+    let (wraps, rumor) = wrap_chat(sk, receivers, text, subject, now())?;
     let mine = wraps.last().map(|(_, w)| w.clone());
     // 🔴 내 사본을 **먼저** 이 컴퓨터 릴레이에 둔다 — 다음에 켜도 내가 보낸 말이 보인다.
     if let Some(w) = &mine {
@@ -568,7 +602,13 @@ pub async fn talk_dm_send(to: Vec<String>, text: String, subject: Option<String>
     let runs = wraps.iter().map(|(who, w)| {
         let w = w.clone();
         let who = who.clone();
-        async move { (who, crate::nostrpub::nostr_publish(w).await) }
+        async move {
+            let r = match inbox {
+                Inbox::Person => crate::nostrpub::nostr_publish(w).await,
+                Inbox::Shop => crate::nostrpub::shop_publish(w).await,
+            };
+            (who, r)
+        }
     });
     let results = futures_util::future::join_all(runs).await;
     let others: Vec<&(String, Result<Value, String>)> = results.iter().filter(|(who, _)| *who != me).collect();
@@ -597,19 +637,137 @@ pub async fn talk_dm_send(to: Vec<String>, text: String, subject: Option<String>
         from: me.clone(),
         to: tags.iter().find(|t| t.get(0).and_then(Value::as_str) == Some("p")).and_then(|t| t.get(1).and_then(Value::as_str)).unwrap_or_default().to_string(),
         at: rumor["created_at"].as_i64().unwrap_or(0),
-        text: text.clone(),
+        text: text.to_string(),
         wrap: mine.as_ref().and_then(|w| w.get("id").and_then(Value::as_str)).unwrap_or_default().to_string(),
         members: if members.len() > 2 { members } else { vec![] },
         subject: tag_value(&tags, "subject").to_string(),
         photo: false,
     };
-    remember_sent(&me, m.clone());
+    remember_sent_in(inbox, &me, m.clone());
     Ok(json!({ "message": m, "key": chat_key_of(&m, &me), "delivered": delivered, "total": total, "failed": failed }))
+}
+
+// ── 가게 쪽지(11-28 · docs/SHOP-ROOMS.md §3·§6) ─────────────────────────────
+//
+// 손님은 가게 간판 공개키(체인 가게 자산의 nostr_pubkey)로 보통 NIP-17 쪽지를 보낸다. 여태 그 쪽지를 **아무도 못 읽었다**
+// (talk_dm 은 사람 열쇠 받은편지함만 열었다). 여기서 가게 열쇠로 따로 연다.
+// 🔴 사람 쪽지함과 섞지 않는다 — 기억(SHOP_BOOK)·물음(가게 칸 연결)·화면 목록(「가게 쪽지」)이 다 따로다.
+// 🔴 가게 열쇠로는 **먼저 말 건 손님에게만** 답한다. 한 사람씩 · 단톡 없음 · 한꺼번에 보내기 없음(카톡 채널식 광고 쪽지를 만들지 않는다).
+
+/// 가게 간판 열쇠(이미 있을 때만 — 쪽지함을 연다고 간판이 태어나지 않는다).
+fn shop_key() -> Result<[u8; 32], String> {
+    crate::shopkey::key_on_disk().ok_or_else(|| "가게 간판 열쇠가 아직 없어요. 「가게 정보」에서 가게를 먼저 열어 주세요.".to_string())
+}
+
+/// 이 손님이 가게에 먼저 말을 걸었나: 그 손님이 가게에게 보낸 1:1 쪽지가 하나라도 있나.
+pub(crate) fn customer_wrote_first(msgs: &[Dm], shop: &str, customer: &str) -> bool {
+    customer != shop && msgs.iter().any(|m| m.from == customer && m.to == shop && m.members.is_empty())
+}
+
+/// 가게 쪽지 목록: 손님과의 1:1 만(단톡·가게가 자기에게 쓴 메모는 뺀다). 먼저 말 건 손님만 줄이 생긴다
+/// (가게가 보낸 글만 있는 줄은 생길 수 없다 — 보내기가 막는다 · 그래도 옛 기록이 있으면 뺀다).
+pub(crate) fn shop_threads_from(msgs: &[Dm], shop: &str, read: &HashMap<String, i64>) -> Vec<Thread> {
+    let one: Vec<Dm> = msgs.iter().filter(|m| m.members.is_empty() && !(m.from == shop && m.to == shop)).cloned().collect();
+    threads_from(&one, shop, read, &[])
+        .into_iter()
+        .filter(|t| t.kind == "dm" && customer_wrote_first(&one, shop, &t.with))
+        .collect()
+}
+
+fn shop_view(shop: &str) -> Value {
+    let npub = crate::talk_social::npub_of(shop).unwrap_or_default();
+    json!({ "shop": shop, "npub": npub, "fingerprint": crate::shop_room::fingerprint(&npub) })
+}
+
+/// 가게 쪽지 목록 한 판. 가게 열쇠가 없으면 `{ none: true }`. `local: true` 면 이 컴퓨터 저장분만.
+#[tauri::command]
+pub async fn shop_dm_threads(local: Option<bool>, read: Option<HashMap<String, i64>>) -> Result<Value, String> {
+    let Some(mut sk) = crate::shopkey::key_on_disk() else {
+        return Ok(json!({ "none": true, "threads": [] }));
+    };
+    let shop = crate::shopkey::pubkey_of(&sk)?;
+    let (reached, why) = load_in(Inbox::Shop, &sk, &shop, local == Some(true)).await;
+    crate::words::wipe_bytes(&mut sk);
+    let msgs = all_msgs_in(Inbox::Shop, &shop);
+    let mut v = shop_view(&shop);
+    // 손님 이름표(kind 0)는 묻지 않는다 — 가게 칸에서 손님 이름을 물으면 「이 가게 = 이 손님들」이 한 번 더 바깥에 남는다. 지문만 보인다.
+    let threads: Vec<Value> = shop_threads_from(&msgs, &shop, &read.unwrap_or_default())
+        .into_iter()
+        .map(|t| {
+            let npub = crate::talk_social::npub_of(&t.with).unwrap_or_default();
+            let mut j = json!(t);
+            j["with_npub"] = json!(npub);
+            j["with_fp"] = json!(crate::shop_room::fingerprint(&npub));
+            j
+        })
+        .collect();
+    v["threads"] = json!(threads);
+    v["reached"] = json!(reached);
+    if let Some(w) = why {
+        v["why"] = json!(w);
+    }
+    Ok(v)
+}
+
+/// 가게와 한 손님의 쪽지(오래된 것이 앞, 최근 300개). `can_reply` = 그 손님이 먼저 말을 걸었나.
+#[tauri::command]
+pub async fn shop_dm_read(key: String, local: Option<bool>) -> Result<Value, String> {
+    let key = key.trim().to_ascii_lowercase();
+    if !hex64(&key) {
+        return Err("대화를 찾지 못했습니다.".into());
+    }
+    let mut sk = shop_key()?;
+    let shop = crate::shopkey::pubkey_of(&sk)?;
+    let (reached, why) = load_in(Inbox::Shop, &sk, &shop, local == Some(true)).await;
+    crate::words::wipe_bytes(&mut sk);
+    let all = all_msgs_in(Inbox::Shop, &shop);
+    let can_reply = customer_wrote_first(&all, &shop, &key);
+    let mut list: Vec<Dm> = all.into_iter().filter(|m| m.members.is_empty() && chat_key_of(m, &shop) == key).collect();
+    list.sort_by(|a, b| a.at.cmp(&b.at).then(a.id.cmp(&b.id)));
+    let skip = list.len().saturating_sub(300);
+    let list: Vec<Dm> = list.into_iter().skip(skip).collect();
+    let mut v = shop_view(&shop);
+    let npub = crate::talk_social::npub_of(&key).unwrap_or_default();
+    v["with_npub"] = json!(npub);
+    v["with_fp"] = json!(crate::shop_room::fingerprint(&npub));
+    v["messages"] = json!(list);
+    v["can_reply"] = json!(can_reply);
+    v["reached"] = json!(reached);
+    if let Some(w) = why {
+        v["why"] = json!(w);
+    }
+    Ok(v)
+}
+
+/// 가게 열쇠로 답하기 — **한 손님에게만**, 그 손님이 먼저 말을 걸었을 때만. 받는 사람 목록(여러 명)은 받지 않는다.
+#[tauri::command]
+pub async fn shop_dm_send(to: String, text: String) -> Result<Value, String> {
+    let text = text.trim().to_string();
+    if text.is_empty() {
+        return Err("보낼 말을 적어 주세요.".into());
+    }
+    if text.chars().count() > MAX_TEXT_CHARS {
+        return Err(format!("쪽지가 너무 깁니다. {MAX_TEXT_CHARS}자 아래로 나눠 보내 주세요."));
+    }
+    let to = clean_pub(&to).ok_or("받는 손님을 확인해 주세요.")?;
+    let mut sk = shop_key()?;
+    let shop = crate::shopkey::pubkey_of(&sk)?;
+    // 이 컴퓨터 저장분으로 먼저 본다(몇 ms) — 처음 켠 직후라도 손님 쪽지를 읽은 뒤에 판정한다.
+    let _ = load_in(Inbox::Shop, &sk, &shop, true).await;
+    if !customer_wrote_first(&all_msgs_in(Inbox::Shop, &shop), &shop, &to) {
+        crate::words::wipe_bytes(&mut sk);
+        return Err("먼저 말을 건 손님에게만 가게 이름으로 답할 수 있어요.".into());
+    }
+    let out = send_from(Inbox::Shop, &sk, std::slice::from_ref(&to), &text, "").await;
+    crate::words::wipe_bytes(&mut sk);
+    out
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    /// 쪽지 기억(BOOK)은 프로세스 하나 — 그것을 건드리는 시험끼리 차례로.
+    static BOOK_TEST_LOCK: Mutex<()> = Mutex::new(());
 
     fn vectors() -> Value {
         serde_json::from_str(include_str!("../../scripts/fixtures/talk-dm-vectors.json")).unwrap()
@@ -761,6 +919,65 @@ mod tests {
     }
 
     #[test]
+    fn 가게_쪽지는_먼저_말_건_손님만_줄이_되고_단톡은_뺀다() {
+        let shop = pubk(1);
+        let (a, b, c) = (pubk(2), pubk(3), pubk(4));
+        let dm = |id: &str, from: &str, to: &str, at: i64, members: Vec<String>| Dm {
+            id: id.into(), from: from.into(), to: to.into(), at, text: id.into(), wrap: format!("w{id}"), members, subject: String::new(), photo: false,
+        };
+        let mut g = vec![shop.clone(), a.clone(), c.clone()];
+        g.sort();
+        let msgs = vec![
+            dm("1", &a, &shop, 100, vec![]),
+            dm("2", &shop, &a, 110, vec![]),
+            // 가게가 먼저 보낸 옛 기록(b 는 말을 건 적이 없다) — 줄이 생기지 않는다.
+            dm("3", &shop, &b, 120, vec![]),
+            // 단톡에 가게가 끼어 있어도 가게 쪽지함에는 안 넣는다.
+            dm("4", &c, &a, 130, g),
+            // 가게가 자기에게 쓴 메모.
+            dm("5", &shop, &shop, 140, vec![]),
+        ];
+        assert!(customer_wrote_first(&msgs, &shop, &a));
+        assert!(!customer_wrote_first(&msgs, &shop, &b), "가게가 먼저 보낸 손님");
+        assert!(!customer_wrote_first(&msgs, &shop, &c), "단톡만 있는 손님");
+        assert!(!customer_wrote_first(&msgs, &shop, &shop));
+        let t = shop_threads_from(&msgs, &shop, &HashMap::new());
+        assert_eq!(t.len(), 1);
+        assert_eq!(t[0].with, a);
+        assert_eq!(t[0].unread, 1, "손님 글 하나");
+        assert_eq!(t[0].last.id, "2");
+    }
+
+    #[test]
+    fn 사람_쪽지함과_가게_쪽지함은_기억이_따로다() {
+        let _g = BOOK_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let me = "d".repeat(64);
+        let shop = "e".repeat(64);
+        let m = |who: &str| Dm { id: format!("id-{who}"), from: who.into(), to: who.into(), at: 1, text: "t".into(), wrap: format!("w-{who}"), members: vec![], subject: String::new(), photo: false };
+        remember_sent_in(Inbox::Person, &me, m(&me));
+        remember_sent_in(Inbox::Shop, &shop, m(&shop));
+        assert_eq!(all_msgs_in(Inbox::Shop, &shop).len(), 1, "가게를 열어도 사람 기억이 안 비워진다");
+        assert_eq!(all_msgs_in(Inbox::Person, &me).len(), 1, "사람을 열어도 가게 기억이 안 비워진다");
+        assert!(all_msgs_in(Inbox::Shop, &shop).iter().all(|x| x.from == shop));
+        assert!(all_msgs_in(Inbox::Person, &me).iter().all(|x| x.from == me));
+    }
+
+    #[test]
+    fn 가게_열쇠로_봉한_답을_손님이_열고_보낸_이는_가게다() {
+        let (shop_sk, cust_sk) = (sk(21), sk(22));
+        let (shop, cust) = (pubk(21), pubk(22));
+        // 손님 → 가게.
+        let (w, _) = wrap_chat(&cust_sk, std::slice::from_ref(&shop), "영업하세요?", "", 1_793_600_000).unwrap();
+        let got = open_wrap(&shop_sk, &w[0].1).unwrap();
+        assert_eq!((got.from.as_str(), got.to.as_str()), (cust.as_str(), shop.as_str()));
+        // 가게 → 손님: 한 장 + 가게 사본, 손님이 연 보낸 이 = 가게 공개키(사람 열쇠가 아니다).
+        let (r, _) = wrap_chat(&shop_sk, std::slice::from_ref(&cust), "네, 9시까지요", "", 1_793_600_100).unwrap();
+        assert_eq!(r.len(), 2);
+        assert_eq!(open_wrap(&cust_sk, &r[0].1).unwrap().from, shop);
+        assert_eq!(r[1].0, shop, "사본은 가게 열쇠에게");
+    }
+
+    #[test]
     fn 이모티콘_표() {
         assert_eq!(sticker_tags("hi :ravi_love: :ravi_love: :nope: :ravi_ok:").len(), 2);
         assert_eq!(sticker_tags(":ravi_ok::ravi_sad:").len(), 2);
@@ -769,6 +986,7 @@ mod tests {
 
     #[test]
     fn 기억은_주인이_바뀌면_비운다() {
+        let _g = BOOK_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let a = "a".repeat(64);
         let b = "b".repeat(64);
         remember_sent(&a, Dm { id: "x".into(), from: a.clone(), to: a.clone(), at: 1, text: "t".into(), wrap: "w".into(), members: vec![], subject: String::new(), photo: false });

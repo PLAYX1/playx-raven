@@ -763,11 +763,17 @@ fn looks_like_asset(d: &str) -> bool {
 fn store(e: Value) -> (bool, String) {
     // 11-08 쪽지 보관(docs/SYNC-ARCHIVE.md §1): 겉봉(1059)은 **주인에게 온 것만** 받는다. 남의 겉봉은 디스크를 채울 뿐이다.
     let me = owner();
+    // 11-28 가게 간판 열쇠에게 온 겉봉(손님이 가게에 보낸 쪽지)도 주인 것처럼 영원히 지킨다 — 우체국 칸(시한·한도)이 아니다.
+    let shop = shop_owner();
+    let shop_wrap = owner_wrap(&e, shop.as_deref());
     // 11-23 우체국: 남의 겉봉·「나만·친구만」 글·열쇠 꾸러미는 따로 센 「맡은 글」 칸으로(post_office.rs). 꺼져 있으면 예전처럼 거절.
-    if let Some(k) = crate::post_office::classify(&e, me.as_deref()) {
-        return crate::post_office::take(e, k);
+    if !shop_wrap {
+        if let Some(k) = crate::post_office::classify(&e, me.as_deref()) {
+            return crate::post_office::take(e, k);
+        }
     }
-    let wrap = owner_wrap(&e, me.as_deref());
+    let person_wrap = owner_wrap(&e, me.as_deref());
+    let wrap = person_wrap || shop_wrap;
     // 11-23 비공개 글(4470)은 **주인 글만** 받는다(남의 비공개 글을 이 디스크에 쌓지 않는다).
     let owner_private = e.get("kind").and_then(Value::as_i64) == Some(KIND_PRIVATE_NOTE)
         && me.as_deref().is_some_and(|o| e.get("pubkey").and_then(Value::as_str) == Some(o));
@@ -914,11 +920,14 @@ fn store(e: Value) -> (bool, String) {
         // 11-07 감사: 오래된 것부터 자르면 한 사람이 재접속하며 5,000개를 채워 남의 글(가게 공지 포함)을 모두 밀어낸다.
         //   → 넘칠 때는 **가장 많이 쓴 사람의 가장 오래된 글**부터 뺀다. 한 열쇠의 도배는 자기 글만 밀어낸다.
         //   11-07: **주인 글은 밀어내지 않는다** — 주인이 가장 많이 쓴 사람이어도 남의 글부터 뺀다. 한도는 남의 글에만 걸린다.
-        let is_mine = |x: &Value| me.as_deref().is_some_and(|o| x.get("pubkey").and_then(Value::as_str) == Some(o)) || owner_wrap(x, me.as_deref());
+        let is_mine = |x: &Value| me.as_deref().is_some_and(|o| x.get("pubkey").and_then(Value::as_str) == Some(o))
+            || owner_wrap(x, me.as_deref()) || owner_wrap(x, shop.as_deref());
         // 주인 겉봉은 따로 한도(MAX_WRAPS) — 넘치면 가장 오래된 겉봉부터. 남이 주인에게 쪽지를 쏟아도 이 칸만 찬다.
-        if wrap {
-            while v.iter().filter(|x| owner_wrap(x, me.as_deref())).count() > MAX_WRAPS {
-                let oldest = v.iter().enumerate().filter(|(_, x)| owner_wrap(x, me.as_deref()))
+        // 11-28 가게 겉봉은 **가게 칸 따로**(같은 한도) — 가게 공개키는 체인에 공개돼 있어 누구나 쏟을 수 있다. 그래도 내 쪽지는 안 밀린다.
+        for (hit, who) in [(person_wrap, me.as_deref()), (shop_wrap, shop.as_deref())] {
+            if !hit { continue; }
+            while v.iter().filter(|x| owner_wrap(x, who)).count() > MAX_WRAPS {
+                let oldest = v.iter().enumerate().filter(|(_, x)| owner_wrap(x, who))
                     .min_by_key(|(_, x)| x.get("created_at").and_then(Value::as_i64).unwrap_or(0)).map(|(i, _)| i);
                 match oldest { Some(i) => { v.remove(i); } None => break }
             }
@@ -962,6 +971,30 @@ fn owner() -> Option<String> {
         g.1 = now;
     }
     g.0.clone()
+}
+
+/// 11-28 이 컴퓨터 가게 간판 열쇠 공개키(shopkey.json 이 있을 때만 · 만들지 않는다). 1분 기억(owner 와 같다).
+#[cfg_attr(test, allow(dead_code))]
+static SHOP_OWNER: Mutex<(Option<String>, i64)> = Mutex::new((None, 0));
+#[cfg(test)]
+static TEST_SHOP_OWNER: Mutex<Option<String>> = Mutex::new(None);
+pub(crate) fn shop_owner() -> Option<String> {
+    #[cfg(test)]
+    return TEST_SHOP_OWNER.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    #[cfg(not(test))]
+    {
+        let now = now_secs();
+        let mut g = SHOP_OWNER.lock().unwrap_or_else(|e| e.into_inner());
+        if now - g.1 >= 60 || (g.0.is_none() && now - g.1 >= 5) {
+            g.0 = crate::shopkey::pubkey_on_disk();
+            g.1 = now;
+        }
+        g.0.clone()
+    }
+}
+/// 가게 쪽지함(talk_dm.rs)이 쓴다: 이 컴퓨터가 지켜 둔 가게 간판 열쇠에게 온 겉봉(봉한 그대로).
+pub(crate) fn shop_wraps(shop: &str) -> Vec<Value> {
+    peek(|v| v.iter().filter(|x| owner_wrap(x, Some(shop))).cloned().collect())
 }
 
 /// 내 글 서랍(my_drawer.rs)이 쓴다: 주인 공개키.
@@ -1158,6 +1191,39 @@ pub(crate) async fn backup_my_notes_once() -> Result<usize, String> {
     Ok(added)
 }
 
+/// 11-28 가게 쪽지 모으기 — 가게 간판 열쇠에게 온 겉봉을 바깥 릴레이에서 모아 이 컴퓨터에 남긴다(풀지 않는다 · 영원히).
+/// 🔴 사람 열쇠 모으기와 **따로**(다른 차례 · 가게 칸 연결 relay_pool::LANE_SHOP) — 한 물음·한 연결에 두 공개키를 싣지 않는다.
+/// (가게 공개키, 끝까지 모은 시각). 가게 열쇠가 바뀌면 처음부터.
+static SHOP_DM_BACKUP: Mutex<Option<(String, i64)>> = Mutex::new(None);
+fn shop_backup_file() -> std::path::PathBuf {
+    file().with_file_name("shop-dm-backup.json")
+}
+pub(crate) async fn backup_shop_wraps_once() -> Result<usize, String> {
+    let Some(shop) = shop_owner() else { return Ok(0) };
+    let at = SHOP_DM_BACKUP.lock().unwrap_or_else(|e| e.into_inner()).as_ref().filter(|(p, _)| *p == shop).map(|(_, t)| *t);
+    let since = at.map(|t| t - WRAP_OVERLAP_SECS);
+    let started = now_secs();
+    let lane = crate::relay_pool::LANE_SHOP;
+    let urls: Vec<String> = crate::nostrpub::outside_relays().into_iter().map(|u| format!("{lane}{u}")).collect();
+    let got = futures_util::future::join_all(urls.iter().map(|u| read_from(|until| crate::nostrpub::read_wraps_page(u, &shop, since, until)))).await;
+    if got.iter().all(|r| r.is_err()) {
+        return Err("바깥 릴레이에 닿지 못했습니다".into());
+    }
+    let done = got.iter().all(|r| match r { Ok((_, d)) => *d, Err(_) => true });
+    let added: usize = got.iter().filter_map(|r| r.as_ref().ok().map(|(n, _)| *n)).sum();
+    if !flush_now() {
+        return Err("디스크에 쓰지 못했습니다".into());
+    }
+    if done {
+        *SHOP_DM_BACKUP.lock().unwrap_or_else(|e| e.into_inner()) = Some((shop.clone(), started));
+        let tmp = shop_backup_file().with_extension("json.tmp");
+        if std::fs::write(&tmp, serde_json::to_vec(&json!({ "pubkey": shop, "at": started })).unwrap_or_default()).is_ok() {
+            let _ = std::fs::rename(&tmp, shop_backup_file());
+        }
+    }
+    Ok(added)
+}
+
 /// 앱이 켜져 있는 동안: 30초 뒤 한 번, 그다음 15분마다 내 글을 모은다. 프로세스마다 한 번만 시작한다(GPT P2).
 pub fn start_own_backup() {
     static STARTED: std::sync::Once = std::sync::Once::new();
@@ -1174,10 +1240,19 @@ pub fn start_own_backup() {
                 }
             }
         }
+        if let Ok(s) = std::fs::read_to_string(shop_backup_file()) {
+            if let Ok(v) = serde_json::from_str::<Value>(&s) {
+                if let (Some(p), Some(t)) = (v.get("pubkey").and_then(Value::as_str), v.get("at").and_then(Value::as_i64)) {
+                    *SHOP_DM_BACKUP.lock().unwrap_or_else(|e| e.into_inner()) = Some((p.to_string(), t));
+                }
+            }
+        }
         tauri::async_runtime::spawn(async {
             tokio::time::sleep(std::time::Duration::from_secs(30)).await;
             loop {
                 let _ = backup_my_notes_once().await;
+                // 11-28 가게 쪽지 — 사람 열쇠 모으기가 끝난 **뒤에** 따로(가게 칸 연결).
+                let _ = backup_shop_wraps_once().await;
                 // 11-23 내 사진 사본 — 모은 글·쪽지의 사진을 이 컴퓨터 일반 폴더에(my_photos.rs).
                 crate::my_photos::sync_once().await;
                 tokio::time::sleep(std::time::Duration::from_secs(15 * 60)).await;
@@ -2671,6 +2746,47 @@ mod tests {
         ));
         assert_eq!(n, MAX_WRAPS, "겉봉 한도가 지켜지지 않았다");
         assert!(has_new && !has_first, "가장 오래된 겉봉부터 빠져야 한다");
+        *TEST_OWNER.lock().unwrap() = None;
+        *STORE.lock().unwrap() = None;
+    }
+
+    /// 11-28 가게 쪽지: 가게 간판 열쇠에게 온 겉봉도 주인 것처럼 남긴다(우체국 칸이 아니다) · 오래된 것도 · 가게 칸 한도는 따로 —
+    /// 가게에 쪽지를 쏟아도 내 쪽지는 안 밀린다. 가게 열쇠가 없으면(가게 안 연 컴퓨터) 예전 그대로 거절.
+    #[test]
+    fn relay_keeps_shop_key_wraps_like_owner_wraps() {
+        use super::*;
+        let _g = OWNER_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let me = crate::shopkey::pubkey_of(&[7u8; 32]).unwrap();
+        let shop = crate::shopkey::pubkey_of(&[9u8; 32]).unwrap();
+        let once = [12u8; 32];
+        *TEST_OWNER.lock().unwrap() = Some(me.clone());
+        *TEST_SHOP_OWNER.lock().unwrap() = None;
+        *STORE.lock().unwrap() = Some(vec![]);
+        let to_shop = crate::shopkey::sign_with(&once, 1059, json!([["p", shop.clone()]]), "to-shop", now_secs()).unwrap();
+        assert_eq!(crate::post_office::classify(&to_shop, Some(&me)), Some(crate::post_office::Kind::Wrap), "가게 열쇠 없으면 남의 겉봉");
+        *TEST_SHOP_OWNER.lock().unwrap() = Some(shop.clone());
+        assert!(store(to_shop.clone()).0, "가게에 온 겉봉을 버렸다");
+        let old = crate::shopkey::sign_with(&once, 1059, json!([["p", shop.clone()]]), "to-shop-old", now_secs() - 500 * 86_400).unwrap();
+        assert!(store(old).0, "가게에 온 옛 겉봉을 버렸다(영원 보관)");
+        assert_eq!(shop_wraps(&shop).len(), 2);
+        assert!(owner_wraps(&me).is_empty(), "가게 겉봉이 사람 쪽지함에 섞였다");
+        let to_me = crate::shopkey::sign_with(&once, 1059, json!([["p", me.clone()]]), "to-me", now_secs() - 100).unwrap();
+        assert!(store(to_me.clone()).0);
+        // 가게 칸이 넘쳐도 가게 겉봉만 빠지고 내 쪽지는 남는다.
+        with(|v| {
+            for i in 0..MAX_WRAPS {
+                v.push(json!({ "id": format!("s{i}"), "pubkey": "c".repeat(64), "kind": 1059, "created_at": 2_000 + i as i64, "tags": [["p", shop.clone()]] }));
+            }
+        });
+        let newest = crate::shopkey::sign_with(&once, 1059, json!([["p", shop.clone()]]), "to-shop-new", now_secs()).unwrap();
+        assert!(store(newest).0);
+        assert_eq!(shop_wraps(&shop).len(), MAX_WRAPS);
+        assert_eq!(owner_wraps(&me).len(), 1, "가게 칸 한도가 내 쪽지를 밀어냈다");
+        // 남의 글 한도(MAX_EVENTS)는 가게 겉봉을 밀어내지 않는다(주인 것).
+        let first = crate::shopkey::sign_with(&[13u8; 32], 1, json!([["t", "ravencoin"]]), "hi", now_secs()).unwrap();
+        assert!(store(first).0);
+        assert_eq!(shop_wraps(&shop).len(), MAX_WRAPS);
+        *TEST_SHOP_OWNER.lock().unwrap() = None;
         *TEST_OWNER.lock().unwrap() = None;
         *STORE.lock().unwrap() = None;
     }

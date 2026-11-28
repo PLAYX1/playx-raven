@@ -139,6 +139,22 @@ fn load_or_make() -> Result<[u8; 32], String> {
     Ok(bytes)
 }
 
+/// 11-28 가게 쪽지·공지 방(docs/SHOP-ROOMS.md): 이미 있는 가게 열쇠만 읽는다 — **만들지 않는다.**
+/// 가게를 안 여는 사람의 컴퓨터에서 쪽지함·릴레이 보관이 간판 열쇠를 태어나게 하지 않게(talk::key_on_disk 와 같은 규칙).
+pub(crate) fn key_on_disk() -> Option<[u8; 32]> {
+    let s = std::fs::read_to_string(key_file()).ok()?;
+    let v: Value = serde_json::from_str(&s).ok()?;
+    let b = hex::decode(v.get("sk")?.as_str()?).ok()?;
+    let sk: [u8; 32] = b.try_into().ok()?;
+    secp256k1::SecretKey::from_byte_array(&sk).ok()?;
+    Some(sk)
+}
+
+/// 이미 있는 가게 간판 열쇠의 공개키(없으면 None · 만들지 않는다).
+pub(crate) fn pubkey_on_disk() -> Option<String> {
+    key_on_disk().and_then(|sk| pubkey_of(&sk).ok())
+}
+
 /// 가게 열쇠의 비밀값 — **이 프로그램 안에서만** 쓴다(`map.rs` 가 지도 서명 열쇠를 뽑는 씨앗).
 ///
 /// 🔴 화면·로그·릴레이로 절대 내보내지 않는다. 밖으로 나가는 것은 여기서 뽑은

@@ -44,6 +44,7 @@ import { WALLET_LINK_COPY } from "./wallet-link-copy";
 import { LISTING_MARKET_COPY } from "./listing-market-copy";
 import { TALK_SOCIAL_COPY } from "./talk-social-copy";
 import { TALK_DESK_COPY } from "./talk-desk-copy";
+import { SHOP_TALK_COPY } from "./shop-talk-copy";
 import { ARCADE_COPY } from "./arcade-copy";
 import { MAJU_COPY } from "./maju-copy";
 import { SEED_SAFETY_COPY } from "./seed-safety-copy";
@@ -5748,6 +5749,10 @@ for (const [source, values] of Object.entries(TALK_SOCIAL_COPY)) {
 }
 // 11-12 이야기 카톡 PC 결 — 그림 줄·목록 찾기·말풍선 메뉴·쪽지(src/talk-desk.ts · src/talk-dm.ts). 이미 있는 번역은 덮지 않는다.
 for (const [source, values] of Object.entries(TALK_DESK_COPY)) {
+  (["en", "ja", "zh"] as const).forEach((language, index) => { DICT[language][source] ??= values[index]; });
+}
+// 11-28 가게 대화방 — 가게 공지 방·가게 쪽지(src/shop-talk.ts). 이미 있는 번역은 덮지 않는다.
+for (const [source, values] of Object.entries(SHOP_TALK_COPY)) {
   (["en", "ja", "zh"] as const).forEach((language, index) => { DICT[language][source] ??= values[index]; });
 }
 // 11-18 노드가 「장부(코인 상태) 여는 중」에서 30분 넘게 멈췄을 때 — 장부 다시 만들기(src/main.ts bootTroubleHtml). 이미 있는 번역은 덮지 않는다.

@@ -488,12 +488,79 @@ pub(crate) async fn nostr_query_ids(kinds: Vec<i64>, ids: Vec<String>) -> Result
 ///    어느 릴레이에서든 끝(EOSE)까지 못 읽었으면 「다 읽음」이 아니라고 돌려준다(부르는 쪽은 커서를 안 옮긴다).
 /// 돌려주는 값: (겉봉들, 끝까지 읽은 릴레이가 있나). 한 곳도 안 닿으면 Err.
 pub(crate) async fn nostr_query_inbox(pubkey: &str, since: i64) -> Result<(Vec<Value>, bool), String> {
+    inbox_from(targets(), pubkey, since).await
+}
+
+/// 11-28 가게 간판 열쇠의 받은 쪽지함 — 같은 읽기를 **가게 칸 연결**로(relay_pool::LANE_SHOP · 사람 열쇠 물음과 한 연결에 안 섞인다).
+pub(crate) async fn shop_query_inbox(pubkey: &str, since: i64) -> Result<(Vec<Value>, bool), String> {
+    inbox_from(shop_targets(), pubkey, since).await
+}
+
+/// 가게 칸 주소들 — 기본 릴레이(+이 컴퓨터) 앞에 칸 표. 붙는 곳은 같다.
+pub(crate) fn shop_targets() -> Vec<String> {
+    targets().into_iter().map(|u| format!("{}{u}", crate::relay_pool::LANE_SHOP)).collect()
+}
+
+/// 가게 칸으로 올린다(가게 공지 방·공지·가게 쪽지 겉봉). 이 컴퓨터 릴레이에는 곧바로 둔다(40·41·42 · 겉봉은 부르는 쪽이 absorb).
+/// 🔴 이웃 전파(relay_share::forward)는 하지 않는다 — 이웃 연결은 사람 열쇠 글과 같은 길이다.
+/// 한 곳이라도 받으면 성공(nostr_publish 와 같은 규칙 · 바깥 한 곳 받으면 나머지는 뒤에서).
+pub(crate) async fn shop_publish(event: Value) -> Result<Value, String> {
+    validate_publish_event(&event)?;
+    if matches!(event.get("kind").and_then(Value::as_i64), Some(5 | 40 | 41 | 42)) {
+        crate::relay::absorb(vec![event.clone()]);
+    }
+    let msg = serde_json::to_string(&json!(["EVENT", event])).map_err(|e| format!("보낼 것을 만들지 못했습니다: {e}"))?;
+    use futures_util::stream::{FuturesUnordered, StreamExt};
+    let all = shop_targets();
+    let local = all.first().cloned().unwrap_or_default();
+    let mut runs: FuturesUnordered<_> = all.into_iter().map(|url| { let msg = msg.clone(); async move { let r = send_one(&url, &msg).await; (url, r) } }).collect();
+    let (mut ok, mut why) = (Vec::new(), String::new());
+    let mut outside_ok = false;
+    while let Some((url, r)) = runs.next().await {
+        match r {
+            Ok(()) => { if url != local { outside_ok = true; } ok.push(crate::relay_pool::real_url(&url).to_string()); }
+            Err(e) => why = e,
+        }
+        if outside_ok { break; }
+    }
+    if !runs.is_empty() {
+        tokio::spawn(async move { while runs.next().await.is_some() {} });
+    }
+    if ok.is_empty() {
+        return Err(format!("릴레이가 받지 않았습니다. 인터넷이 되는지 확인해 주세요. 마지막 이유: {}", if why.is_empty() { "알 수 없음" } else { &why }));
+    }
+    Ok(json!({ "ok": ok }))
+}
+
+/// 가게 칸으로 묻는다(가게 공지 방·공지 읽기). 닿은 곳이 하나도 없으면 Err. 같은 번호는 한 번 · 새 글이 앞.
+pub(crate) async fn shop_query(filters: Vec<Value>) -> Result<Vec<Value>, String> {
+    if filters.is_empty() || filters.iter().any(|f| f.get("kinds").and_then(Value::as_array).is_none_or(|k| k.is_empty())) {
+        return Err("무엇을 읽을지 알려 주세요.".into());
+    }
+    let mut req = vec![json!("REQ"), json!("s1")];
+    req.extend(filters);
+    let req = serde_json::to_string(&Value::Array(req)).map_err(|e| format!("보낼 것을 만들지 못했습니다: {e}"))?;
+    let runs = shop_targets().into_iter().map(|url| { let req = req.clone(); async move { read_one(&url, &req, "s1").await } });
+    let got = futures_util::future::join_all(runs).await;
+    if got.iter().all(|r| r.is_err()) {
+        return Err("릴레이에 닿지 못했습니다. 인터넷을 확인해 주세요.".into());
+    }
+    let mut seen: std::collections::HashMap<String, Value> = std::collections::HashMap::new();
+    for e in got.into_iter().flatten().flatten() {
+        if let Some(id) = e.get("id").and_then(Value::as_str) { seen.entry(id.to_string()).or_insert(e); }
+    }
+    let mut out: Vec<Value> = seen.into_values().collect();
+    out.sort_by_key(|e| -(e.get("created_at").and_then(Value::as_i64).unwrap_or(0)));
+    Ok(out)
+}
+
+async fn inbox_from(urls: Vec<String>, pubkey: &str, since: i64) -> Result<(Vec<Value>, bool), String> {
     if pubkey.len() != 64 || !pubkey.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
         return Err("받는 열쇠가 올바르지 않습니다.".into());
     }
     let pubkey = pubkey.to_string();
     use futures_util::stream::{FuturesUnordered, StreamExt};
-    let mut runs: FuturesUnordered<_> = targets().into_iter().map(|url| {
+    let mut runs: FuturesUnordered<_> = urls.into_iter().map(|url| {
         let pubkey = pubkey.clone();
         async move {
             page_all(|until| {
