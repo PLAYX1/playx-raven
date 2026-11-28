@@ -1744,6 +1744,8 @@ pub async fn serve_with(mut ws: WebSocket, ip: Option<std::net::IpAddr>, private
                         } else if r.0 && r.1 == crate::post_office::TOOK {
                             // 손님·폰이 맡긴 겉봉은 다른 핵심 우체국에도 곧바로(핵심일 때만 줄이 있다). 상대에게서 온 것은 다시 안 보낸다.
                             if !peer { crate::post_core::forward_new(&e); }
+                            // 핵심 우체국이면 알림 서버에 (p, 번호)만 알린다(post_bridge · 200ms 모아서 · 평문 없음).
+                            if !peer { crate::post_bridge::note(&e); }
                             deliver_taken(&e);
                         }
                         r

@@ -184,6 +184,7 @@ mod node_keeper;
 mod relay_share;
 mod post_office;
 mod post_core;
+mod post_bridge;
 mod post_wraps;
 mod talk_live;
 mod relay_keeper;

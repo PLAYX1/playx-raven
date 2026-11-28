@@ -279,6 +279,7 @@ pub fn health_json() -> Value {
         "disk_total": total,
         "nip77": true,
         "core_peers": peer_stats_public(),
+        "bridge": crate::post_bridge::state_json(),
     })
 }
 
