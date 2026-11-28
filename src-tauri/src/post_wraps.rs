@@ -361,9 +361,26 @@ pub fn answer_for(ps: &[String], f: &Value, cap: usize) -> Vec<Value> {
     if cap == 0 || ps.is_empty() {
         return vec![];
     }
+    // 11-28 맞물림 시험(앱 scripts/neg-interop.mts): 폰은 NIP-77 로 빠진 id 를 알아낸 뒤 `{kinds:[1059], #p:[나], ids:[…]}` 로 받는다.
+    // 예전엔 새것 cap×2 통만 읽고 ids 로 걸러서, 빠진 겉봉이 조금만 옛것이어도 영영 못 받았다 → ids 가 있으면 id 로 바로 찾는다
+    // (그래도 적은 받는 사람(#p) 것만 — 노출은 예전과 같다).
+    let want_ids: Option<Vec<Id>> = f.get("ids").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).filter_map(id_of).collect());
     let locs: Vec<(u32, u64, u32)> = with(|s| {
         s.sweep(now_secs(), crate::post_office::WRAP_KEEP_SECS);
         let mut v: Vec<(u32, u32, u64, u32)> = Vec::new();
+        if let Some(ids) = &want_ids {
+            let allowed: std::collections::HashSet<u32> = ps.iter().filter_map(|p| s.p_index.get(p).copied()).collect();
+            for id in ids {
+                let Some(m) = s.items.get(id) else { continue };
+                if allowed.contains(&m.p) && time_ok(m, f) {
+                    v.push((m.at, m.seg, m.off, m.len));
+                }
+            }
+            v.sort_unstable_by_key(|x| std::cmp::Reverse(x.0));
+            v.dedup();
+            v.truncate(cap);
+            return v.into_iter().map(|(_, s, o, l)| (s, o, l)).collect();
+        }
         for p in ps {
             let Some(pi) = s.p_index.get(p) else { continue };
             let Some(set) = s.by_p.get(pi) else { continue };
@@ -519,6 +536,16 @@ mod tests {
         assert_eq!(all.len(), 3);
         assert_eq!(neg_items(Some(&[q.clone()]), 0, i64::MAX, 100).unwrap().len(), 1);
         assert!(neg_items(None, 0, i64::MAX, 2).is_err(), "너무 많으면 거절");
+        // 11-28 맞물림 시험: ids 로 물으면 새것 cap×2 밖의 옛것도 바로 찾는다(폰이 NIP-77 로 알아낸 빠진 겉봉을 받는 길).
+        // 예전 코드는 새것 cap×2(=2)통 — 아래 새 겉봉 셋 — 만 읽고 ids 로 걸러 옛 a 를 못 줬다.
+        for (i, at) in [(20u8, now - 9), (21, now - 8), (22, now - 7)] {
+            assert_eq!(take(&wrap(i, &p, "n", at), &p, now).1, crate::post_office::TOOK);
+        }
+        let old_a = answer_for(&[p.clone()], &json!({ "#p": [p], "kinds": [1059], "ids": [a["id"]], "limit": 1 }), 1);
+        assert_eq!(old_a.len(), 1, "cap=1 이어도 옛 겉봉 a 를 ids 로 찾아야 한다");
+        assert_eq!(old_a[0]["id"], a["id"]);
+        assert!(answer_for(&[p.clone()], &json!({ "#p": [p], "ids": [c["id"]] }), 10).is_empty(), "q 에게 온 c 를 p 물음에 내줬다");
+        assert!(answer_for(&[p.clone()], &json!({ "#p": [p], "ids": [a["id"]], "since": now - 20 }), 10).is_empty(), "since 를 무시했다");
         clear();
         assert_eq!(counts(), (0, 0));
         assert!(!dir().exists(), "끄면 폴더째 지운다");

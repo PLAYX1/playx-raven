@@ -2908,7 +2908,9 @@ mod tests {
                     .read_buffer_size(super::WS_BUFFER).write_buffer_size(super::WS_BUFFER).max_write_buffer_size(super::WS_MAX_BACKLOG)
                     .on_upgrade(|s| super::serve_with(s, None, false))
             }))
-            .route("/relay/health", axum::routing::get(|| async { axum::Json(crate::post_core::health_json()) }));
+            .route("/relay/health", axum::routing::get(|| async { axum::Json(crate::post_core::health_json()) }))
+            // 11-28 앱 맞물림 시험(scripts/neg-interop.mts)이 NIP-11 rv_post_office 를 앱 해석기로 읽어 본다.
+            .route("/nip11", axum::routing::get(|| async { axum::Json(crate::post_core::nip11_json()) }));
         let l = tokio::net::TcpListener::bind(("127.0.0.1", port)).await.unwrap();
         eprintln!("[bench] relay ws://127.0.0.1:{port}/r role={} secs={secs}", role.as_str());
         let srv = tokio::spawn(async move { axum::serve(l, app).await.unwrap() });
