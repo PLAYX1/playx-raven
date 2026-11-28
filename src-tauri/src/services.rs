@@ -446,6 +446,9 @@ pub async fn start_parts(files: bool) -> Result<Value, String> {
             //    그래서 이때만 `-reindex` 를 붙인다. 이미 받은 장부에는 절대 안 붙는다.
             cmd.arg("-reindex");
         }
+        // 0.9.60 지갑 출생 기록 — 켜기 직전에 지갑 자리가 비었으면 노드가 새 지갑(새 단어)을 만든다.
+        //   지갑 파일은 있나 없나만 본다(wallet_origin.rs).
+        crate::wallet_origin::note_node_start();
         match spawn_node(cmd, &datadir).await {
             Ok(child) => {
                 if let Some(c) = child {

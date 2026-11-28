@@ -12,6 +12,7 @@
 import { debounce as liveDebounce, liveUp, onTalkLive } from "./talk-live";
 import { avatarImgHtml, fillPreviews, roomPictureSrc, setAvatarPicture } from "./talk-media";
 import "./talk-dm.css";
+import { NEVER_ASKS } from "./seed-leak-rule";
 import { copyHtml, setCopyText, t, tf } from "./i18n";
 import { applyFilter, talkIdle, unreadPill } from "./talk-desk";
 
@@ -36,6 +37,8 @@ export type DmDeps = {
   openRoom: (id: string) => void;
   openSquare: () => void;
   showPerson: (pk: string) => void;
+  /** 0.9.60 보내기 전 복구 단어 경고(seed-leak.ts confirmSeedLeak). false 면 보내지 않는다. 없으면 묻지 않는다. */
+  seedGuard?: (text: string) => Promise<boolean>;
   follows: () => Promise<Set<string> | null>;
   muted: () => string[];
   notify: (from: string, count: number) => void;
@@ -332,6 +335,8 @@ export function wireTalkDm(d: DmDeps) {
       return;
     }
     const day = (at: number) => new Date(at * 1000).toDateString();
+    // 0.9.60 상대가 보낸 첫 쪽지 위에 한 줄 — 한 대화에 한 번(받는 쪽 사기 예방).
+    const firstIn = list.findIndex((m) => m.from !== me);
     box.innerHTML = list.map((m, i) => {
       const mine = m.from === me;
       const prev = list[i - 1], next = list[i + 1];
@@ -348,7 +353,8 @@ export function wireTalkDm(d: DmDeps) {
         : pending ? `<time class="tstamp rv-send-status">${copyHtml("보내는 중…")}</time>`
         : showClock ? `<time class="tstamp" title="${esc(new Date(m.at * 1000).toLocaleString())}">${esc(new Date(m.at * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }))}</time>` : "";
       const body = m.photo ? `<span class="tkc-photo">${copyHtml("사진 쪽지 — 지금은 폰에서 볼 수 있어요")}</span>` : d.bodyHtml(m.text);
-      return sep + head +
+      const safety = i === firstIn ? `<div class="tkc-safety" role="note">${copyHtml(NEVER_ASKS)}</div>` : "";
+      return sep + safety + head +
         `<div class="line${mine ? " me" : ""}${joined ? " cont" : ""}${pending && !failed ? " pending" : ""}"><div class="bub${mine ? " me" : ""}${!m.photo && d.stickerOnly(m.text) ? " stk" : ""}" data-dm="${esc(m.id)}" data-author="${esc(m.from)}">${body}</div>${clock}</div>`;
     }).join("");
     box.dataset.dmPainted = o.key;
@@ -371,6 +377,9 @@ export function wireTalkDm(d: DmDeps) {
     const box = $("tk-text") as HTMLTextAreaElement;
     const text = box.value.trim();
     if (!text) return;
+    // 0.9.60 복구 단어처럼 보이면 한 번 묻는다(기본 「보내지 않기」 — 글은 칸에 그대로 둔다).
+    if (d.seedGuard && !(await d.seedGuard(text))) return;
+    if (open !== o) return;
     const to = o.members.length > 2 ? o.members.filter((m) => m !== d.me()) : [o.with];
     const temp: DmMsg = { id: `pending:${Date.now()}:${Math.random()}`, from: d.me(), to: to[0] || "", at: Math.floor(Date.now() / 1000), text, wrap: "" };
     msgs.set(o.key, [...(msgs.get(o.key) || []), temp]);

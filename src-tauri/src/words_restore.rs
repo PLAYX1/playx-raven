@@ -980,6 +980,9 @@ pub(crate) async fn run_flow(ctx: &Ctx, phrase: Phrase, pass: Secret, opts: Opts
     };
     st.stage = "created".into();
     let keypool = rpc(ctx, "getwalletinfo", json!([])).await.ok();
+    // 0.9.60 지갑 출생 기록 — 단어가 정말 들어간 것을 확인한 뒤에만 「복구 단어로 되살림」이라 적는다.
+    let node_version = rpc(ctx, "getnetworkinfo", json!([])).await.ok().and_then(|v| crate::wallet_origin::version_from_networkinfo(&v));
+    let _ = crate::wallet_origin::apply_in(&ctx.app_dir, crate::wallet_origin::Event::Restored, node_version.as_deref());
     write_state(&ctx.app_dir, &st)?;
 
     // ── 5. 끄고 보통대로 다시 켜기 — 여기서부터 노드는 단어를 모른다 ─────────
@@ -1161,6 +1164,7 @@ pub(crate) async fn undo(ctx: &Ctx) -> Result<Value, String> {
     })?;
     st.stage = "undone".into();
     st.aside = None;
+    crate::wallet_origin::undo_restore_in(&ctx.app_dir);
     write_state(&ctx.app_dir, &st)?;
     let _ = start_normal(ctx, &mut st).await;
     Ok(json!({ "stage": "undone" }))

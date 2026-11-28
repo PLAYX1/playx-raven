@@ -157,6 +157,7 @@ async fn run() -> Result<Value, String> {
         }
         return Err("ravend 를 찾지 못했습니다.".into());
     };
+    crate::wallet_origin::note_node_start();
     let datadir = crate::paths::raven_dir().to_string_lossy().to_string();
     crate::quiet::cmd(&path)
         .arg(format!("-datadir={datadir}"))

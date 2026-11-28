@@ -25,6 +25,8 @@ export interface ListingDeps {
   ensureUnlocked: (why: string) => Promise<boolean>;
   errText: (e: unknown) => string;
   fmtQty: (n: number) => string;
+  /** 0.9.60 올리기 전 복구 단어 경고(seed-leak.ts). false 면 올리지 않는다. 없으면 묻지 않는다. */
+  seedGuard?: (text: string) => Promise<boolean>;
 }
 
 export const LISTING_CATEGORIES: readonly (readonly [string, string])[] = [
@@ -390,6 +392,7 @@ export function mountPublishForm(host: HTMLElement, offer: { hex: string; asset:
     const go = $<HTMLButtonElement>("lm-pub-go"), edit = $<HTMLButtonElement>("lm-pub-edit"), gosay = $("lm-pub-gosay");
     edit.onclick = () => { check.hidden = true; check.innerHTML = ""; form.hidden = false; };
     go.onclick = async () => {
+      if (deps.seedGuard && !(await deps.seedGuard(`${f.title}\n${f.summary}`))) return;
       go.disabled = true; edit.disabled = true;
       setCopyText(gosay, () => t("장터에 올리는 중…"));
       try {

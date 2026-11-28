@@ -260,3 +260,7 @@ main:has(> #page-talk.on) { padding:0 !important; }
 #page-talk #tk-list.feedcards .trow .ttext { font-size:15px; line-height:1.55; margin-top:2px; overflow-wrap:anywhere; }
 #page-talk #tk-list.feedcards .trow .treply { margin:2px 0 0 -8px; min-height:32px !important; height:32px; padding:0 8px !important; border:0 !important; background:transparent !important; box-shadow:none !important; color:var(--muted); font-size:13px !important; font-weight:500; white-space:nowrap; flex-shrink:0; border-radius:16px; }
 #page-talk #tk-list.feedcards .trow .treply:hover { background:var(--ravi-tint) !important; color:var(--ravi); }
+
+/* 0.9.60 받는 쪽 한 줄 — 쪽지 대화의 첫 받은 쪽지 위 */
+.tkc-safety { margin: 8px auto 10px; max-width: 460px; padding: 6px 12px; border-radius: 10px; text-align: center;
+  font-size: 12.5px; line-height: 1.5; color: var(--muted); background: color-mix(in srgb, var(--line) 45%, transparent); }

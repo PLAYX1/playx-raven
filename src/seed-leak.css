@@ -1,0 +1,9 @@
+/* 0.9.60 복구 단어 유출 경고 창 — 묻는 창(#askwrap)과 같은 모양, 그보다 위에 뜬다. */
+.seedleak-wrap { position: fixed; inset: 0; z-index: 220; display: flex; align-items: center; justify-content: center;
+  padding: 24px; background: color-mix(in srgb, #000 42%, transparent); }
+.seedleak-box { border-color: color-mix(in srgb, var(--warn, #c2410c) 45%, var(--line)); }
+.seedleak-box h3 { color: var(--text); }
+.seedleak-more { margin-top: 10px; font-size: 14px; line-height: 1.6; color: var(--warn, #c2410c); }
+.seedleak-box .askrow button { white-space: nowrap; flex-shrink: 0; }
+.seedleak-box .askrow button.seedleak-keep { flex: 1.4; }
+.seedleak-box .seedleak-anyway[disabled] { opacity: .55; cursor: not-allowed; }

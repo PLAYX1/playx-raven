@@ -176,6 +176,7 @@ mod rehearse;
 // 0.4.9 — 복구 단어(12단어)로 지갑 되살리기. 검사·주소(words) · 흐름(words_restore).
 mod words;
 mod words_restore;
+mod wallet_origin;
 // 11-08 — 노드 지킴이: 하루 한 번 확인 서버가 이 노드에서 블록 하나를 받아 본다(켠 사람만).
 mod node_keeper;
 // 11-08 — 릴레이 나누기: 레이븐볼트 데스크탑끼리 서로 릴레이가 된다(켠 사람만). 규약 docs/RELAY-SHARE.md.
@@ -697,6 +698,7 @@ pub fn run() {
             words_restore::words_restore_check,
             words_restore::words_restore_start,
             words_restore::words_restore_status,
+            wallet_origin::wallet_origin,
             words_restore::words_restore_rescan,
             words_restore::words_restore_abort,
             words_restore::words_restore_undo,

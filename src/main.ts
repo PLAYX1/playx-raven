@@ -111,6 +111,8 @@ import { requireWalletBackup, restoreIsComplete } from "./backup-result";
 import { paintWalletNotes, walletWelcome } from "./wallet-notes";
 import { wireSeedCheck } from "./seed-check";
 import { wireWordsRestore } from "./words-restore";
+import { confirmSeedLeak } from "./seed-leak";
+import { walletOriginLine } from "./wallet-origin";
 import { wireMapCard } from "./map-card";
 import { wirePostHelp } from "./ravi-post-help";
 import "./ravi-post-help.css";
@@ -5359,7 +5361,7 @@ function myNotesLine(r: any): string {
 }
 
 /* ── 0.9.17 장터·「내 글」·피드 메뉴 (src/listing-market.ts — 처음 쓸 때 따로 내려받는다) ── */
-const listingDeps = () => ({ invoke: <T = any>(cmd: string, args?: Record<string, unknown>) => invoke<T>(cmd, args), ensureUnlocked, errText, fmtQty });
+const listingDeps = () => ({ invoke: <T = any>(cmd: string, args?: Record<string, unknown>) => invoke<T>(cmd, args), ensureUnlocked, errText, fmtQty, seedGuard: (text: string) => confirmSeedLeak(text) });
 let listingMarket: { enter(open?: "browse" | "mine"): void } | undefined;
 let arcadeMarket: { enter(): void; refresh(): void; upload(p?: import("./arcade-upload").PhonePreset): void } | undefined;
 /** 다음에 장터를 열 때 「게임 올리기」부터(「바로 팔기」 안내에서). */
@@ -8352,6 +8354,8 @@ async function talkSend() {
   const text = box.value.trim();
   // 사진이 걸려 있으면 글이 비어도 보낸다 — 사진 한 장이 곧 본문인 나이대다.
   if (!text && !tkPhoto) return;
+  // 0.9.60 복구 단어처럼 보이면 보내기 전에 한 번 묻는다(기본 「보내지 않기」 — 글은 칸에 그대로).
+  if (text && !(await confirmSeedLeak(text))) return;
   // 11-10 페이블: 돈·비밀 단어·딴 데로 끌어내는 말이 있던 글에 답장하면 보내기 전에 한 번 더 묻는다(막지는 않는다).
   if (tkReply?.risky && !(await sure(t("돈·비밀 단어 이야기가 있던 글이에요"), t("그래도 이 답장을 보낼까요? 돈을 보내 달라거나 복구 단어·비밀번호를 묻는 사람은 사기일 수 있어요."), t("보내기")))) return;
   // 11-23 소식 글쓰기 「누구에게: 친구만 / 나만」 — 비공개 글(4470)로. 방·쪽지에는 이 칸이 없다.
@@ -12847,6 +12851,9 @@ async function chatSendExisting() {
     chatHtml("ai", `<div translate="no">${raviCopy(raviQuestionLanguage(q, (["ko", "en", "ja", "zh"].includes(lang) ? lang : "en") as CoreLang))("시드·키·토큰은 라비에게 보내지 마세요. 입력을 기록하지 않았어요.")}</div>`);
     return;
   }
+  // 0.9.60 단어만 있는 줄은 위에서 막았다. 글 속에 섞인 복구 단어(번호·쉼표·한글 사이)는 여기서 더 세게 묻는다 —
+  //   라비 글은 AI 회사로 나갈 수 있다. 기본은 「보내지 않기」, 「그래도 보내기」는 3초 뒤에야 눌린다.
+  if (!(await confirmSeedLeak(q, "ravi"))) return;
   // 11-10 화면 설정(글자·밝기·알림 소리·언어)은 라비+ 없이 라비가 바로 바꾼다(ravi-settings.ts).
   const setting = raviSettingIntent(q);
   if (setting) { ($("chat-q") as HTMLInputElement).value = ""; chatSay("me", q); void raviApplySetting(setting); return; }
@@ -15453,6 +15460,7 @@ async function sendDirect() {
   const topic = ($("ps-topic") as HTMLInputElement).value.trim();
   const text = ($("ps-text") as HTMLInputElement).value.trim();
   if (!topic || !text) return;
+  if (!(await confirmSeedLeak(text))) return;
   try {
     await invoke("pubsub_send", {
       topic,
@@ -16378,7 +16386,18 @@ async function newAddrWithName() {
 // 이 파일 하나뿐이고, 잃으면 자산이 남아 있는 채로 영원히 못 만진다.
 
 let latestAutomaticBackupIssue = "";
+async function paintWalletOrigin() {
+  const el = document.getElementById("bk-origin");
+  if (!el) return;
+  try {
+    const b = await invoke<any>("wallet_origin");
+    const line = () => walletOriginLine(b);
+    el.hidden = !line();
+    if (line()) setCopyText(el, line);
+  } catch { el.hidden = true; }
+}
 async function loadBackup() {
+  void paintWalletOrigin();
   try {
     const b = await invoke<any>("backup_survey");
     $("bk-list").innerHTML = (b.items || [])
@@ -17956,6 +17975,11 @@ async function registerShop() {
   // 발행이 조용히 실패한다 — 사장은 등록된 줄 알고 QR 을 붙인다.
   if (!(await ensureUnlocked("가게를 등록하려면 지갑을 열어야 합니다.")))
     return;
+  // 0.9.60 가게 소개는 체인·손님에게 공개된다 — 복구 단어처럼 보이면 한 번 묻는다.
+  {
+    const v = (id: string) => ($(id) as HTMLInputElement | null)?.value.trim() || "";
+    if (!(await confirmSeedLeak(["sh-ko", "sh-en", "sh-ja", "sh-zh", "sh-desc", "sh-loc"].map(v).join("\n")))) return;
+  }
 
   // 발행 마법사와 같은 취소 창. 여기도 500 RVN 이고, 여기도 되돌릴 수 없다.
   // 「내 가게」 화면은 입력칸이 21개라 사장이 오래 채우고 마지막에 누른다 —
@@ -20435,6 +20459,11 @@ window.addEventListener("DOMContentLoaded", async () => {
   // 11-03 감사 B10: 20초 → 10초(켜고 끈 직후는 아래 toggle 쪽에서 바로 다시 그린다).
   setInterval(() => void quietly(paintStatusDots), 10_000);
   loadBackup();
+  // 0.9.60 「만든 곳」은 노드가 켜진 뒤에야 판을 안다 — 백업과 복구 칸을 열 때마다 다시 읽는다(이 컴퓨터 안 파일 한 장).
+  {
+    const sec = document.querySelector<HTMLElement>('#page-settings section[data-sx-pane="backup"]');
+    if (sec) new MutationObserver(() => { if (!sec.hidden) void paintWalletOrigin(); }).observe(sec, { attributes: true, attributeFilter: ["hidden"] });
+  }
   $("abk-new").addEventListener("click", () => void newAddrWithName());
   $("up-check").addEventListener("click", () => {
     // 직접 누른 것이니 결과를 말한다. 배경 확인은 조용히 넘어간다.
@@ -21011,6 +21040,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     openRoom: (id) => document.querySelector<HTMLElement>(`#tk-rooms [data-room="${CSS.escape(id)}"]`)?.click(),
     openSquare: () => openFeed(),
     showPerson: (pk) => void tkShowPerson(pk),
+    seedGuard: (text: string) => confirmSeedLeak(text),
     follows: async () => { if (!tkFollows) await tkLoadFollows(); return tkFollows; },
     muted: () => Object.keys(tkMuted),
     // 0.9.46: 쪽지도 대화 소리 스위치를 따른다(옛 판은 꺼 둬도 「레볼!」·컴퓨터 알림이 났다).

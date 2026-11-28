@@ -91,6 +91,7 @@ async function open(width = 1440, height = 900, side = null) {
       if (cmd === 'talk_dm_peers') return args.ids.map((x) => x === 'npub1park' ? d.PARK : x);
       if (cmd === 'talk_dm_group_key') return d.GROUP;
       if (cmd === 'talk_os_notify') return false;
+      if (cmd === 'wallet_origin') return { origin: 'created', platform: 'desktop-node', nodeVersion: '4.8.0', appVersion: '0.9.60', createdAt: Date.UTC(2026, 10, 28, 3) };
       if (cmd === 'report_send') { (window.__reports ||= []).push(JSON.parse(JSON.stringify(args))); return { sent: true }; }
       return real(cmd, args);
     };
@@ -354,6 +355,103 @@ test('신고: 쪽지 말풍선 → 이유 고르기 → 「문제 알리기」 �
     assert.equal(r.attachLog, false);
     await page.waitForFunction(() => document.getElementById('tk-report').hidden && !document.querySelector('#page-talk.dmon'));
     assert.ok(await page.evaluate((k) => JSON.stringify(localStorage).includes(k), KIM), '그 사람은 안 보기 명단에');
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+// ── 0.9.60 복구 단어 안전(seed-leak.ts) ───────────────────────────────────
+// 🔴 실제 지갑 단어가 아니다 — BIP39 표준 시험 벡터.
+const SEED = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
+
+test('0.9.60 받는 쪽: 상대가 보낸 첫 쪽지 위에 「묻지 않습니다」 한 줄 — 한 대화에 한 번', async () => {
+  const { page, errors } = await open();
+  try {
+    await page.evaluate((k) => document.querySelector(`#tk-chats [data-chat-key="${k}"]`).click(), KIM);
+    await page.waitForFunction(() => document.querySelectorAll('#tk-list .bub').length === 3);
+    const lines = await page.$$eval('#tk-list .tkc-safety', (l) => l.map((x) => x.textContent.trim()));
+    assert.deepEqual(lines, ['레이븐볼트는 복구 단어나 비밀번호를 절대 묻지 않습니다']);
+    // 첫 받은 쪽지(김민수의 첫 말) 바로 위.
+    const nextBub = await page.$eval('#tk-list .tkc-safety', (s) => { let n = s.nextElementSibling; while (n && !n.querySelector('.bub')) n = n.nextElementSibling; return n?.querySelector('.bub')?.textContent || ''; });
+    assert.match(nextBub, /내일 수업 몇 시/);
+    await page.evaluate((k) => document.querySelector(`#tk-chats [data-chat-key="${k}"]`).click(), GROUP);
+    await page.waitForFunction(() => document.querySelectorAll('#tk-list .bub').length === 2);
+    assert.equal(await page.$$eval('#tk-list .tkc-safety', (l) => l.length), 1, '단톡도 한 번');
+    await shot(page, 'dm-safety-1440.png');
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('0.9.60 쪽지에 복구 단어 → 보내기 전 확인 창 · 기본(Enter)은 보내지 않기 · 「그래도 보내기」만 보낸다', async () => {
+  const { page, errors } = await open(1137, 780);
+  try {
+    await page.evaluate((k) => document.querySelector(`#tk-chats [data-chat-key="${k}"]`).click(), KIM);
+    await page.waitForFunction(() => document.querySelectorAll('#tk-list .bub').length === 3);
+    const typed = SEED.split(' ').map((w, i) => `${i + 1}. ${w}`).join('\n');
+    await page.$eval('#tk-text', (t, v) => { t.value = v; t.dispatchEvent(new Event('input', { bubbles: true })); }, typed);
+    await page.evaluate(() => document.getElementById('tk-send').click());
+    await page.waitForSelector('.seedleak-wrap .seedleak-box');
+    assert.equal(await page.$eval('.seedleak-box h3', (h) => h.textContent), '복구 단어처럼 보여요');
+    assert.equal(await page.$eval('.seedleak-box .msg', (m) => m.textContent), '레이븐볼트는 누구에게도 복구 단어를 묻지 않습니다. 그래도 보낼까요?');
+    await page.waitForFunction(() => document.activeElement?.classList.contains('seedleak-keep'));
+    assert.equal(await page.evaluate(() => document.activeElement.textContent), '보내지 않기');
+    for (const sel of ['.seedleak-keep', '.seedleak-anyway']) assert.equal(await page.$eval(sel, (b) => getComputedStyle(b).whiteSpace), 'nowrap');
+    await shot(page, 'dm-seedleak-1137.png');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => !document.querySelector('.seedleak-wrap'));
+    await settle();
+    assert.equal(await page.evaluate(() => window.__sent.length), 0, '보내지 않았다');
+    assert.equal(await page.$eval('#tk-text', (t) => t.value), typed, '글은 칸에 그대로');
+    // Esc 도 보내지 않는다.
+    await page.evaluate(() => document.getElementById('tk-send').click());
+    await page.waitForSelector('.seedleak-wrap');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('.seedleak-wrap'));
+    assert.equal(await page.evaluate(() => window.__sent.length), 0);
+    assert.ok(await page.$('#page-talk.dmon'), 'Esc 는 확인 창만 닫는다(대화는 그대로)');
+    // 그래도 보내기.
+    await page.evaluate(() => document.getElementById('tk-send').click());
+    await page.waitForSelector('.seedleak-wrap');
+    await page.click('.seedleak-anyway');
+    await page.waitForFunction(() => window.__sent.length === 1);
+    assert.equal(await page.evaluate(() => window.__sent[0].text), typed);
+    // 평범한 글은 묻지 않는다.
+    await page.type('#tk-text', '내일 봬요');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => window.__sent.length === 2);
+    assert.equal(await page.$('.seedleak-wrap'), null);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('0.9.60 라비에게 글 속 복구 단어 → 더 센 확인 창(AI 안내 한 줄 · 「그래도 보내기」 3초 잠금)', async () => {
+  const { page, errors } = await open(1440, 900);
+  try {
+    await page.evaluate(() => document.querySelector('nav a[data-page="home"]')?.click());
+    await page.waitForSelector('#rv-home-ravi-q');
+    await page.$eval('#rv-home-ravi-q', (q, v) => { q.value = v; }, `제 단어 ${SEED} 맞나요?`);
+    await page.evaluate(() => document.getElementById('rv-home-ravi-open').click());
+    await page.waitForSelector('.seedleak-box[data-kind="ravi"]');
+    assert.match(await page.$eval('.seedleak-more', (m) => m.textContent), /AI 회사로 나갈 수 있어요/);
+    assert.equal(await page.$eval('.seedleak-anyway', (b) => b.disabled), true, '처음엔 못 누른다');
+    assert.match(await page.$eval('.seedleak-anyway', (b) => b.textContent), /그래도 보내기 \(\d\)/);
+    await page.waitForFunction(() => document.activeElement?.classList.contains('seedleak-keep'));
+    await shot(page, 'ravi-seedleak-1440.png');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => !document.querySelector('.seedleak-wrap'));
+    assert.match(await page.$eval('#chat-q', (q) => q.value), /abandon/, '안 보냈다 — 글은 칸에 그대로');
+    assert.equal(await page.$$eval('#chat-log .msg.me', (m) => m.filter((x) => /abandon/.test(x.textContent)).length), 0, '대화에 올라가지 않았다');
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('0.9.60 설정 › 백업과 복구: 「만든 곳: 이 컴퓨터 노드 v4.8.0 · 앱 0.9.60 · 날짜」 한 줄', async () => {
+  const { page, errors } = await open(1440, 900);
+  try {
+    await page.evaluate(() => document.querySelector('nav a[data-page="settings"]').click());
+    await page.evaluate(() => document.querySelector('.sx-list [data-sx-go="backup"]').click());
+    await page.waitForFunction(() => { const e = document.getElementById('bk-origin'); return e && !e.hidden && /만든 곳/.test(e.textContent); });
+    assert.match(await page.$eval('#bk-origin', (e) => e.textContent), /^만든 곳: 이 컴퓨터 노드 v4\.8\.0 · 앱 0\.9\.60 · .*2026/);
+    await shot(page, 'settings-origin-1440.png');
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
