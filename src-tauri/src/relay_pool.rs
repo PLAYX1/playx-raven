@@ -84,6 +84,16 @@ impl Conn {
     }
 }
 
+/// 11-28 가게 쪽지(docs/SHOP-ROOMS.md §6): **열쇠마다 따로 연결.** 사람 열쇠와 가게 간판 열쇠의 물음이 같은 웹소켓에
+/// 섞이면 릴레이가 「이 연결 = 이 사람 = 이 가게」를 잇는다. 그래서 가게 열쇠 물음·올리기는 주소 앞에 이 표를 붙여
+/// 풀 안에서 **다른 칸**(다른 연결)으로 간다. 붙는 곳은 같은 주소다(표는 풀 열쇠일 뿐 바깥으로 안 나간다).
+pub(crate) const LANE_SHOP: &str = "lane-shop|";
+
+/// 풀 열쇠 → 실제로 붙을 주소(칸 표를 뗀다).
+pub(crate) fn real_url(key: &str) -> &str {
+    key.strip_prefix(LANE_SHOP).unwrap_or(key)
+}
+
 #[derive(Default)]
 struct Pool {
     conns: HashMap<String, Arc<Conn>>,
@@ -153,7 +163,7 @@ async fn run(url: String, mut rx: mpsc::UnboundedReceiver<Cmd>, conn: Arc<Conn>)
     use futures_util::{SinkExt, StreamExt};
     use tokio_tungstenite::tungstenite::Message;
 
-    let ws = match tokio::time::timeout(CONNECT_TIMEOUT, crate::relay_share::connect_ws(url.as_str())).await {
+    let ws = match tokio::time::timeout(CONNECT_TIMEOUT, crate::relay_share::connect_ws(real_url(&url))).await {
         // 11-23 제미나이 E4: 이웃·더한 곳은 확인한 공개 IP 로 직접 붙는다(DNS 바꿔치기 막기) — relay_share::connect_ws.
         Err(_) => Err("연결이 오래 걸립니다".to_string()),
         Ok(Err(e)) => Err(format!("연결 실패: {e}")),
@@ -464,6 +474,23 @@ mod tests {
         let closes = seen.lock().unwrap().iter().filter(|t| t.starts_with("[\"CLOSE\"")).count();
         assert!(closes >= 4, "물음이 끝나면 CLOSE 를 보낸다({closes})");
         assert!(is_open(&url));
+    }
+
+    /// 11-28 가게 칸: 같은 주소라도 가게 간판 열쇠 물음은 **다른 연결**로 간다(사람 열쇠 물음과 한 웹소켓에 안 섞인다).
+    #[tokio::test]
+    async fn 가게_칸은_같은_주소라도_따로_붙는다() {
+        let (url, conns, _) = fake_relay().await;
+        let lane = format!("{LANE_SHOP}{url}");
+        assert_eq!(real_url(&lane), url);
+        assert_eq!(real_url(&url), url);
+        let (a, b) = tokio::join!(ask(&url), ask(&lane));
+        assert!(a.1 && b.1);
+        let _ = (ask(&url).await, ask(&lane).await);
+        assert_eq!(conns.load(Ordering::SeqCst), 2, "사람 칸 하나 + 가게 칸 하나");
+        let msg = json!(["EVENT", {"id": "shop1"}]).to_string();
+        assert_eq!(publish(&lane, &msg, "shop1", Duration::from_secs(3)).await, Ok(()));
+        assert_eq!(conns.load(Ordering::SeqCst), 2, "올리기도 가게 칸 연결로");
+        assert!(is_open(&lane) && is_open(&url));
     }
 
     #[tokio::test]

@@ -17687,6 +17687,36 @@ async function previewOpen() {
   else 잇기();
 })();
 
+// 11-28 가게 대화방 — 가게 공지 방 + 가게 쪽지(src/shop-talk.ts). 탭을 처음 열 때 지연 묶음을 읽는다.
+let shopTalk: { refresh(): Promise<void>; quiet(): Promise<void> } | null = null;
+let shopTalkTick: number | undefined;
+async function openShopTalk() {
+  const host = document.getElementById("shoptab-talk");
+  if (!host) return;
+  try {
+    if (!shopTalk) {
+      const m = await import("./shop-talk");
+      shopTalk = m.mountShopTalk(host, {
+        invoke: <T = any>(cmd: string, args?: Record<string, unknown>) => invoke<T>(cmd, args),
+        errText,
+        escapeHtml,
+        seedGuard: (text: string) => confirmSeedLeak(text),
+        shopName: async () => { try { const sh = await invoke<any>("shop_load"); return String(sh?.name || sh?.name_en || ""); } catch { return ""; } },
+      });
+    }
+    await shopTalk.refresh();
+    // 탭이 열려 있는 동안만 1분마다 이 컴퓨터 저장분으로 배지를 맞춘다(바깥 묻기는 15분 「가게 쪽지 모으기」가 한다).
+    if (shopTalkTick === undefined) {
+      shopTalkTick = window.setInterval(() => {
+        if (!document.getElementById("shoptab-talk")?.classList.contains("on")) return;
+        void shopTalk?.quiet();
+      }, 60_000);
+    }
+  } catch (e) {
+    host.innerHTML = `<p class="meta">${escapeHtml(errText(e))}</p>`;
+  }
+}
+
 function shopTab(which: string) {
   document.querySelectorAll("[data-shoptab]").forEach((b) => {
     (b as HTMLElement).classList.toggle("on", (b as HTMLElement).dataset.shoptab === which);
@@ -17701,6 +17731,7 @@ function shopTab(which: string) {
     loadOrders();
   }
   if (which === "sales") loadSales();
+  if (which === "talk") void openShopTalk();
   if (which === "group") void loadGroup();
   if (which === "mine") {
     previewOpen();

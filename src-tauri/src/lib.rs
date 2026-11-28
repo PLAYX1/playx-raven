@@ -142,6 +142,7 @@ mod server;
 mod services;
 mod shop;
 mod shopkey;
+mod shop_room;
 mod storesign;
 mod shopmove;
 mod lan_proof;
@@ -848,6 +849,14 @@ pub fn run() {
             talk_dm::talk_dm_send,
             talk_dm::talk_dm_peers,
             talk_dm::talk_dm_group_key,
+            talk_dm::shop_dm_threads,
+            talk_dm::shop_dm_read,
+            talk_dm::shop_dm_send,
+            shop_room::shop_room_get,
+            shop_room::shop_room_create,
+            shop_room::shop_notice_post,
+            shop_room::shop_notice_products,
+            shop_room::shop_notice_check_link,
             talk_push::talk_push_get,
             talk_push::talk_push_set,
             talk_social::talk_notices,

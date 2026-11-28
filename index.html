@@ -5033,6 +5033,8 @@
           <button class="tab" id="sh-qrtab">손님 QR · 테이블</button>
           <button class="tab" data-goto="door">출입 · 회원</button>
           <button class="tab" data-goto="msg">공지</button>
+          <!-- 11-28 가게 대화방(src/shop-talk.ts): 가게 간판 열쇠의 공지 방 + 손님 쪽지. 개인 이야기 탭과 섞지 않는다. -->
+          <button class="tab" data-shoptab="talk">가게 대화방<span class="ordbadge" id="st-tab-n" hidden>0</span></button>
           <button class="tab" data-shoptab="sales">매출 · 장부</button>
           <button class="tab" data-shoptab="mine">가게 정보</button>
         </div>
@@ -5040,6 +5042,8 @@
         <!-- 매출장부. 체인은 "이체가 있었다"까지만 증명하고, 그게 얼마짜리였는지는
              말해 주지 못한다. 여기가 그 숫자를 보관하고 꺼내는 자리다. -->
         <!-- 0.6.0 공동구매 · 대기 신청 · 가게 사정 환불 · 송장(RV7 §16·§17·§18·§22). 계산은 groupbuy.rs. -->
+        <div class="shoptab" id="shoptab-talk"></div>
+
         <div class="shoptab" id="shoptab-group">
           <p class="meta">메뉴판 품목에 받는 날·마감일·최소 수량을 붙이면 공동구매가 돼요. 최대 수량은 「남은 수량」이에요. 결제한 분부터 확정되고, 다 차면 손님은 대기 신청만 할 수 있어요. 결제한 예약은 손님이 취소할 수 없어요. 마감까지 최소 수량이 안 모이면 「환불 대기」에 떠요.</p>
           <div id="gb-items"><p class="meta">읽는 중…</p></div>

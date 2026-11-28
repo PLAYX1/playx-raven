@@ -1,0 +1,46 @@
+/* 가게 대화방(src/shop-talk.ts) — 공지 방 + 가게 쪽지. 글자 15px 이상 · 단추 44px 이상 · 버튼 글자 두 줄 금지. */
+#shoptab-talk [hidden] { display: none !important; }
+#shoptab-talk .st-card { margin: 0 0 16px; }
+#shoptab-talk .st-card h3 { margin-top: 0; display: flex; align-items: center; gap: 8px; }
+#shoptab-talk .st-card h4 { font-size: var(--fs-lg, 17px); margin: 18px 0 6px; }
+#shoptab-talk button { min-height: var(--hit, 44px); white-space: nowrap; flex-shrink: 0; }
+#shoptab-talk .st-lbl { display: block; margin: 12px 0 4px; font-size: 15px; font-weight: 600; }
+#shoptab-talk input, #shoptab-talk textarea, #shoptab-talk select { font-size: 16px; width: 100%; max-width: 100%; box-sizing: border-box; }
+#shoptab-talk textarea { resize: vertical; min-height: 84px; line-height: 1.5; padding: 10px 12px; }
+#shoptab-talk .st-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 10px; }
+#shoptab-talk .st-say { min-height: 1.4em; margin: 6px 0 0; }
+#shoptab-talk .st-fp { font-family: ui-monospace, monospace; font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
+#shoptab-talk .st-roomhead { font-size: 17px; margin-bottom: 10px; }
+#shoptab-talk .st-share { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius, 10px); margin-bottom: 8px; }
+#shoptab-talk .st-qr { width: 132px; height: 132px; flex: none; background: #fff; border-radius: var(--radius-sm, 6px); overflow: hidden; }
+#shoptab-talk .st-qr svg { width: 100%; height: 100%; display: block; }
+#shoptab-talk .st-sharetext { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+#shoptab-talk .st-link { font-size: 14px; overflow-wrap: anywhere; padding: 6px 8px; border-radius: var(--radius-sm, 6px); background: var(--bg); }
+#shoptab-talk .st-attach { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; margin-top: 8px; }
+#shoptab-talk .st-notices { list-style: none; padding: 0; margin: 0; }
+#shoptab-talk .st-notices li { padding: 10px 0; border-top: 1px solid var(--line); }
+#shoptab-talk .st-when { font-size: 13px; color: var(--muted); }
+#shoptab-talk .st-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16px; margin-top: 2px; }
+#shoptab-talk .st-safe { font-size: 14px; color: var(--muted); margin: 4px 0 10px; }
+#shoptab-talk .st-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 21px; height: 21px; padding: 0 6px; border-radius: 11px; background: var(--danger, #d33); color: #fff; font-size: 12px; font-weight: 700; }
+#shoptab-talk .st-inbox-grid { display: grid; grid-template-columns: minmax(200px, 300px) minmax(0, 1fr); gap: 12px; }
+#shoptab-talk .st-threads { list-style: none; padding: 0; margin: 0; max-height: 460px; overflow: auto; border: 1px solid var(--line); border-radius: var(--radius, 10px); }
+#shoptab-talk .st-threads > li.meta { padding: 12px; }
+#shoptab-talk .st-th { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "who time" "last badge"; gap: 2px 8px; text-align: left; padding: 10px 12px; background: none; color: inherit; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; white-space: normal; }
+#shoptab-talk .st-th.on { background: var(--bg); }
+#shoptab-talk .st-who { grid-area: who; font-family: ui-monospace, monospace; font-size: 14px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#shoptab-talk .st-last { grid-area: last; font-size: 15px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#shoptab-talk .st-time { grid-area: time; font-size: 12px; color: var(--muted); white-space: nowrap; }
+#shoptab-talk .st-th .st-badge { grid-area: badge; justify-self: end; }
+#shoptab-talk .st-chat { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+#shoptab-talk .st-chathead { font-size: 14px; }
+#shoptab-talk .st-chathead b { font-family: ui-monospace, monospace; }
+#shoptab-talk .st-msgs { max-height: 360px; overflow: auto; display: flex; flex-direction: column; gap: 8px; padding: 4px 2px; }
+#shoptab-talk .st-msg { display: flex; flex-direction: column; align-items: flex-start; }
+#shoptab-talk .st-msg.mine { align-items: flex-end; }
+#shoptab-talk .st-bubble { max-width: var(--bubble-max, 72%); padding: 8px 12px; border-radius: var(--radius-bubble, 18px); background: var(--bg); border: 1px solid var(--line); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16px; }
+#shoptab-talk .st-msg.mine .st-bubble { background: var(--brand); color: #fff; border-color: transparent; }
+@media (max-width: 720px) {
+  #shoptab-talk .st-inbox-grid { grid-template-columns: 1fr; }
+  #shoptab-talk .st-attach { grid-template-columns: 1fr; }
+}
