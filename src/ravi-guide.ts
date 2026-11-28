@@ -82,9 +82,12 @@ export function raviHelpHtml(copyHtml: Copy): string {
     `<section><h4>${copyHtml("양식 초안·준비")}</h4><p>${copyHtml("일부 기능은 AI 키가 필요해요. 라비는 초안·준비만 도와드려요. 저장·승인은 해당 화면에서 직접 확인해 주세요.")}</p><div class="guidego">` +
     RAVI_ACTIONS.map(a => `<button type="button" class="ghost" data-ravi-action-input="${a.type}">${copyHtml(a.name)}</button>`).join("") + `</div></section></div>`;
 }
-export function raviStarterHtml(copyHtml: Copy): string {
-  return GUIDE.filter(g => g.starter).map(g => `<button type="button" data-ravi-input="${g.id}" data-ravi-starter>${copyHtml(g.name)}</button>`).join("") +
-    `<button type="button" data-ravi-help>${copyHtml("도움말")}</button>`;
+/** 빈 대화의 시작 칩. 11-29: 가게 칩(주문 보기)은 가게가 있거나 판매자 기능을 켠 사람만 · 최대 max 개 · 도움말은 머리 메뉴(help=false). */
+export function raviStarterHtml(copyHtml: Copy, opts: { shop?: boolean; max?: number; help?: boolean } = {}): string {
+  const { shop = true, max = Infinity, help = true } = opts;
+  return GUIDE.filter(g => g.starter && (shop || g.category !== "shop")).slice(0, max)
+    .map(g => `<button type="button" data-ravi-input="${g.id}" data-ravi-starter>${copyHtml(g.name)}</button>`).join("") +
+    (help ? `<button type="button" data-ravi-help>${copyHtml("도움말")}</button>` : "");
 }
 /** Refuse pasted secrets before echoing or sending input; ordinary safety questions still work. */
 export function containsRaviSecret(q: string): boolean {

@@ -66,7 +66,7 @@ try {
     await page.goto(origin,{waitUntil:'networkidle0'});
     await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-ravi-arriving'));
     await page.addStyleTag({content:'#onboard,#hello{display:none!important}'});
-    await page.click('#ravi-open');
+    await page.click('#rv-header-ravi');
     await page.type('#chat-q','오늘 특가 알려 줘'); await page.keyboard.press('Enter');
     await page.waitForFunction(()=>document.querySelector('.ravi-promo-card textarea')?.value.includes('example.test'));
     assert.equal(await page.evaluate(()=>window.__CALLS.filter(c=>c.command==='ai_promo').length),0);
@@ -126,7 +126,7 @@ try {
     await page.evaluate(saved=>{window.__SHOP=saved;window.__KEYED=true;},saved);
     // Provider refresh is the existing model/key UI flow; invoke its change handler.
     await page.$eval('#ai-pick',el=>{el.value='openai';el.dispatchEvent(new Event('change'));});
-    await page.click('#ravi-promo-open');
+    await page.click('#ravi-more'); await page.click('#ravi-promo-open');
     await page.waitForFunction(()=>window.__CALLS.some(c=>c.command==='ai_promo'));
     await page.waitForFunction(()=>[...document.querySelectorAll('.ravi-promo-card')].at(-1).textContent.includes('AI로 만든 초안'));
     assert.ok(await page.$$eval('.ravi-promo-card',els=>els.at(-1).textContent.includes('메뉴 가격')));

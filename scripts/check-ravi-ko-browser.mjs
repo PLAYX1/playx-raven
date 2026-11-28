@@ -112,7 +112,7 @@ try {
     await page.goto(origin, { waitUntil: 'networkidle0' });
     await page.waitForFunction(() => !document.documentElement.hasAttribute('data-ravi-arriving'));
     await page.addStyleTag({ content: '#onboard,#hello,.ravi-lifecycle{display:none!important}' });
-    await settle(page); await page.$eval('#ravi-open', el => el.click()); await settle(page);
+    await settle(page); await page.$eval('#rv-header-ravi', el => el.click()); await settle(page);
     try { await body(page); } catch (e) { console.log('FAIL', name, 'errors=', errors.slice(0, 5), 'log=', await page.$eval('#chat-log', x => x.textContent.slice(0, 300)).catch(() => '?'), 'lic=', await page.evaluate(() => document.getElementById('about-supertonic-license-text')?.textContent.slice(0, 60) + '|' + document.getElementById('about-supertonic-license')?.open + '|' + window.__CALLS.filter(c => c === 'ravi_tts_read').length), 'dbg=', await page.evaluate(() => JSON.stringify(window.__ttsdbg)), 'state=', await page.evaluate(() => JSON.stringify({ hidden: document.hidden, focus: document.hasFocus(), panel: [document.getElementById('ravi-panel').hidden, getComputedStyle(document.getElementById('ravi-panel')).display, document.getElementById('ravi-panel').getClientRects().length], approval: Array.from(document.querySelectorAll('.ravi-lifecycle[open], .sheet:not(.hidden), #askwrap.on, #rpwrap, #onboard:not(.hidden), #hello, #send-review, #qrwrap, #phone-tx-send:not([hidden])')).filter(e => e.getClientRects().length).map(e => e.id || e.className) })), 'worker=', await page.evaluate(() => JSON.stringify(window.__WLOG)), 'tts-calls=', await page.evaluate(() => window.__CALLS.filter(c => c.startsWith('ravi_tts')).length).catch(() => '?')); throw e; }
     const r = { name, errors }; report.push(r);
     assert.deepEqual(errors, [], name + ' 오류 없음'); await context.close();
@@ -135,5 +135,19 @@ try {
     assert.deepEqual(r.device, [], '기기 목소리로 안 넘어감');
     assert.ok(r.wavs.length >= 2 && r.wavs.every(w => w.rate === 22050), '작은 목소리 22050Hz 조각들');
     assert.equal(r.reads, 0, '큰 모델 안 읽음');
+  });
+  // 11-29 앱이 켜지고 한가할 때 ko-v2 를 미리 올린다(ravi-home.ts) → 첫 소리 목표 ≤ 0.5초(헤드리스 맥 참고값, 실제 기기 아님).
+  //   여기서는 「글로 물어도 읽기」를 켜지 않고 미리 올라오기를 기다린 뒤 켠다 — 켜는 순간의 warm 은 이미 올라와 있으면 시간만 늘린다.
+  await scenario('K2 미리 올린 뒤 첫 소리', { missing: true }, async page => {
+    await new Promise(r => setTimeout(r, 9000));   // 4초 뒤 + 한가할 때 미리 올리기
+    await page.$eval('#ravi-read', el => el.click());
+    const t0 = Date.now(); await ask(page);
+    const answered = Date.now() - t0;
+    await page.waitForFunction(() => window.__PLAYED.length >= 1 || window.__DEVICE.length >= 1, { timeout: 30000 });
+    const first = Date.now() - t0;
+    const r = await page.evaluate(() => ({ device: window.__DEVICE.length, played: window.__PLAYED.length }));
+    console.log('prewarmed first-sound-ms', first, 'answer-ms', answered, 'voice-after-answer-ms', first - answered, JSON.stringify(r));
+    assert.equal(r.device, 0, '기기 목소리로 안 넘어감');
+    assert.ok(first - answered <= 500, `미리 올린 뒤 답→첫 소리 ${first - answered}ms ≤ 500ms`);
   });
 } finally { await browser?.close(); server.close(); }

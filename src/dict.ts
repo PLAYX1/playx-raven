@@ -83,6 +83,8 @@ const RAVI_HOME_COPY: Record<string, [string, string, string]> = {
   "말로 묻기": ["Ask by voice", "声で質問する", "语音提问"],
   "답 읽어 주기 꺼짐": ["Read replies aloud: off", "回答の読み上げ：オフ", "朗读回答：关"],
   "답 읽어 주기 켜짐": ["Read replies aloud: on", "回答の読み上げ：オン", "朗读回答：开"],
+  "글로 물어도 답 읽어 주기": ["Read replies aloud for typed questions too", "文字で聞いても回答を読み上げる", "打字提问也朗读回答"],
+  "소리로 듣기": ["Listen", "音声で聞く", "朗读"],
   "음성으로는 승인할 수 없어요": ["Voice cannot approve payments", "音声では承認できません", "语音无法批准付款"],
   "이 기기에서는 글로 물어봐 주세요": ["Please ask by typing on this device", "この機器では文字で質問してください", "请在此设备上打字提问"],
   "AI 음성": ["AI voice", "AI音声", "AI语音"],

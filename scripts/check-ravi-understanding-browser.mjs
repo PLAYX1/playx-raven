@@ -54,7 +54,7 @@ try {
     await settle(page);
     assert.equal(await page.$('#ravi-face'),null,'old hidden webp hero has been removed');
     assert.equal(await page.$eval('#ravi-home-slot',el=>!!el.querySelector('#chat-log')),false);
-    await page.click('#ravi-open'); await settle(page);
+    await page.click('#rv-header-ravi'); await settle(page);
     assert.equal(await visible(page,'#ravi-panel'),true);
     assert.equal(await page.$eval('#ravi-panel-rig',el=>!!el.querySelector('svg')),true);
     assert.equal(await page.$eval('#ravi-panel',el=>el.parentElement.tagName),'BODY');
@@ -94,14 +94,15 @@ try {
     for (const lang of ['ko','en','ja','zh']) {
       // Switch through the actual language selector; dynamic chips repaint from capabilities.
       await page.$eval(`[data-language="${lang}"]`,el=>el.click()); await settle(page);
-      assert.equal(await page.$$eval('[data-ravi-starter]',els=>els.length),4);
-      for (const topic of caps.guides.filter(g=>g.starter)) {
-        await page.click(`.rv-quick [data-ravi-input="${topic.id}"]`);
+      // 11-29 시작 칩은 최대 3개 · 가게 칩(주문 보기)은 판매자만 · 대화가 시작되면 숨는다(클릭 이벤트는 그대로 같은 길).
+      assert.equal(await page.$$eval('[data-ravi-starter]',els=>els.length),3);
+      for (const topic of caps.guides.filter(g=>g.starter&&g.category!=='shop')) {
+        await page.$eval(`.rv-quick [data-ravi-input="${topic.id}"]`,el=>el.click());
         assert.equal(await page.$eval('#chat-q',el=>el.value),translated(topic.say,lang));
         await page.click('#chat-go'); await settle(page);
         assert.equal(await page.$eval('#chat-log .msg.ai:last-child [data-guide]',el=>el.dataset.guide),topic.id);
       }
-      await page.click('[data-ravi-help]'); await settle(page);
+      await page.click('#ravi-more'); await page.click('#ravi-menu [data-ravi-help]'); await settle(page);
       const help = await page.$eval('#chat-log .msg.ai:last-child',el=>el.innerText);
       if(lang!=='ko')assert.ok(!/[가-힣]/.test(help));
       await page.click('#chat-log .msg.ai:last-child [data-ravi-input="phone"]');

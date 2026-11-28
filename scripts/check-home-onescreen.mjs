@@ -75,7 +75,9 @@ const homeHTML=html.slice(homeStart,html.indexOf('<section class="page"',homeSta
 // 0.9.48(대표 「쉽고 세련되고」·「똑같은 내용이 반복으로 안 나오게」): 내 돈이 제목 바로 아래 첫째 — 내 돈 → 라비 한 줄 → 오늘 카드 → 새 자산 만들기 → 보관함.
 //   노드 알약(#v2-node)은 첫 화면에서 뺐다(노드 상태는 왼쪽 아래 점 #d-sum-row 한 곳) — 없어야 한다.
 assert.ok(!homeHTML.includes('id="v2-node"'),'0.9.48: 첫 화면 노드 알약은 없다(왼쪽 아래 노드 점과 같은 말)');
-const order=['id="overview-balance"','id="v2-ravi-say"','id="v2-ravi-mic"','id="rv-home-cards"','id="v2-create"','id="v2-mine-list"','class="v2-old"'].map(id=>homeHTML.indexOf(id));
+// 11-29 라비 입구는 왼쪽 막대 한 곳 — 첫 화면의 라비 줄(두 번째 얼굴·말풍선·마이크)은 없다.
+assert.ok(!homeHTML.includes('id="v2-ravi-say"')&&!homeHTML.includes('id="v2-ravi-mic"'),'11-29: 첫 화면에 두 번째 라비 입구가 없다');
+const order=['id="overview-balance"','id="rv-home-cards"','id="v2-create"','id="v2-mine-list"','class="v2-old"'].map(id=>homeHTML.indexOf(id));
 assert.ok(order.every((x,i)=>x>=0 && (!i||x>order[i-1])),'DOM reading and keyboard order follows the new home');
 const oldOrder=['rv-home-balance','rv-home-safety','rv-home-activity"','ravi-home-slot','rv-home-today','rv-home-extras'].map(id=>homeHTML.indexOf(id,homeHTML.indexOf('class="v2-old"')));
 assert.ok(oldOrder.every((x,i)=>x>=0 && (!i||x>oldOrder[i-1])),'folded old cards keep their order');

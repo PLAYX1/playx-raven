@@ -56,6 +56,8 @@ import { createRaviHome } from "./ravi-home";
 import { mountRaviLifecycle } from "./ravi-lifecycle";
 import { createPromoCard } from "./ravi-promo-card";
 import { isPromoRequest } from "./ravi-promo";
+import { mountRaviMenu } from "./ravi-menu";
+import { voiceCopy } from "./ravi-voice-copy";
 import { isRaviHelp, raviHelpHtml, raviStarterHtml, RAVI_GREETING, RAVI_ACTIONS, RAVI_SCREENS, raviActionAllowed, containsRaviSecret } from "./ravi-guide";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 let raviHome: ReturnType<typeof createRaviHome> | null = null;
@@ -20030,9 +20032,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   navTips();
   const navEl = document.querySelector("body > nav");
   if (navEl) new MutationObserver(navTips).observe(navEl, { subtree: true, childList: true, characterData: true });
-  $("rv-room-ravi-face").appendChild(raviFace("sleep", 50, { round: true }));
+  // 11-29 이야기 목록의 라비 줄은 뺐다 — 라비 입구는 왼쪽 막대 한 곳.
   applyRaviCharacter();
-  $("rv-room-ravi").onclick = wakeRavi;
   // 0.9.0 — 「내 색」 없앰. 이름은 이야기와 같은 이름표(talk-identity.ts 가 저장 결과를 확인한다).
   $("rv-profile-save").onclick = async () => {
     const name = ($("rv-profile-name") as HTMLInputElement).value.trim();
@@ -20049,16 +20050,21 @@ window.addEventListener("DOMContentLoaded", async () => {
     if (r.ok && pk) tkNames.set(pk, { ...(tkNames.get(pk) || {}), name: r.name });
   };
   $("rv-add-friend").onclick = () => { showPage("settings"); document.getElementById("rvp-card")?.scrollIntoView(); };
+  // 11-29 빈 대화에서만 보이는 시작 칩 최대 3개(ravi-home.css 가 대화가 시작되면 숨긴다). 가게 칩은 판매자만.
+  const raviSeller = () => !!homeHasShop || sellerModeOn();
   const paintRaviStarters = () => {
     const quick = document.querySelector(".rv-quick")!;
     quick.querySelectorAll("[data-rv-question], [data-ravi-starters]").forEach(el => el.remove());
     const host = document.createElement("span");
     host.dataset.raviStarters = "";
-    host.innerHTML = raviStarterHtml(copyHtml);
+    host.innerHTML = raviStarterHtml(copyHtml, { shop: raviSeller(), max: 3, help: false });
     quick.prepend(host);
   };
   paintRaviStarters();
   window.addEventListener("desktop-language-change", paintRaviStarters);
+  const raviMenu = mountRaviMenu({ seller: raviSeller, help: () => { chatHtml("ai", raviHelpHtml(copyHtml)); raviHome?.open(); } });
+  // 창을 열 때마다 가게 유무를 다시 본다(가게를 만들거나 판매자 기능을 켠 뒤에도 맞게).
+  new MutationObserver(() => { if (!$("ravi-panel").hidden) { paintRaviStarters(); raviMenu.paint(); } }).observe($("ravi-panel"), { attributes: true, attributeFilter: ["hidden"] });
   $("rv-send-request").onclick = () => { $("rv-send-card").hidden = false; $("rv-send-to").focus(); };
   $("rv-send-close").onclick = () => { $("rv-send-card").hidden = true; raviHome?.open(); };
   ["rv-send-to", "rv-send-amount"].forEach(id => $(id).addEventListener("input", () => { $("rv-send-continue").hidden = true; $("rv-send-summary").textContent = ""; }));
@@ -20093,7 +20099,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     // The original review recalculates fee and requires the owner's existing confirmation.
     await reviewSend();
   };
-  raviHome = createRaviHome({ invoke: rawInvoke, voiceProvider: () => aiProvider || "", afterLanding: afterRaviLanding, wake: wakeRavi, wallet: () => showPage("wallet"), report: () => openReport(), send: () => { void chatSend(); }, tools: () => showPage("ravi"), companion: mode => { void invoke("companion_signal", { kind: mode === "listening" || mode === "speaking" ? "idle" : mode }).catch(() => {}); } });
+  raviHome = createRaviHome({ invoke: rawInvoke, voiceProvider: () => aiProvider || "", micReason: () => { const p = aiProvider || ""; return ["openai", "google", "groq"].includes(p) ? "" : voiceCopy(p ? "unsupported_provider" : "key"); }, afterLanding: afterRaviLanding, wake: wakeRavi, wallet: () => showPage("wallet"), report: () => openReport(), send: () => { void chatSend(); }, tools: () => showPage("ravi"), companion: mode => { void invoke("companion_signal", { kind: mode === "listening" || mode === "speaking" ? "idle" : mode }).catch(() => {}); } });
   // 라비 인물·위기 대답 묶음은 입력칸에 처음 들어갈 때 미리 읽는다(첫 질문이 기다리지 않게) — ravi-persona-lazy.ts.
   $("chat-q").addEventListener("focus", () => { void loadRaviPersona(); }, { once: true });
   raviAgentUI = createRaviAgentUI({ invoke, keyed: () => aiProvider, key: wakeRavi, dock: () => raviHome?.open(false), landed: finishRaviLanding, afterLanding: afterRaviLanding, tz: tzMin });

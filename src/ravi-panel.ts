@@ -39,7 +39,10 @@ export function createRaviPanel(send: () => void, changed: () => void, afterLand
     const ownedFocus = panel.contains(document.activeElement);
     open = false; paint(); save();
     if (ownedFocus && !suspended) {
-      const trigger = el("page-home").classList.contains("on") ? el("ravi-open") : launcher;
+      // 11-29 라비 입구는 왼쪽 막대 한 곳 — 보이면 그리로 돌려준다(옛 첫 화면 단추·둥근 단추는 숨겨져 있다).
+      const rail = document.getElementById("rv-header-ravi");
+      const trigger = rail && typeof rail.getClientRects === "function" && rail.getClientRects().length ? rail
+        : el("page-home").classList.contains("on") ? el("ravi-open") : launcher;
       trigger.focus({ preventScroll: true });
     }
   }

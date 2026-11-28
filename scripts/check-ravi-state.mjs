@@ -90,8 +90,10 @@ const fakeDoc = {
   querySelector:()=>({id:active}), querySelectorAll:selector=>selector.includes('.sheet:not')?blockedNodes:[],
   addEventListener:(name,fn)=>listeners.set(name,fn), body:{classList:{toggle(){}}},
 };
+let lastUtterance;
 const fakeWindow = {addEventListener:(name,fn)=>listeners.set(name,fn),
-  setTimeout:fn=>{timers.set(++timerId,fn);return timerId;}, SpeechRecognition:Recognition};
+  setTimeout:fn=>{timers.set(++timerId,fn);return timerId;}, SpeechRecognition:Recognition,
+  speechSynthesis:{getVoices:()=>voices,speak:u=>lastUtterance=u,cancel(){}}, SpeechSynthesisUtterance:Utterance};
 const controllerSource = readFileSync('src/ravi-home.ts','utf8').replace(/^import .*;\n/gm,'');
 const controllerExports = {};
 let panelOpen = true, panelSuspended = false, rigIndex = 0;
@@ -106,7 +108,14 @@ assert.equal(element('ravi-conversation').parent.id,'ravi-home-slot');
 controller.reply('synthetic basic guide');assert.equal(currentMode,'sleep','basic guide does not bypass checked-key wake');
 controller.connected(true); assert.equal(currentMode,'idle'); assert.ok(woke>0);
 controller.thinking(); assert.equal(currentMode,'thinking');
-controller.reply('synthetic reply'); assert.equal(currentMode,'speaking'); assert.equal(element('ravi-caption').textContent,'깨어났어요. 무엇을 도와드릴까요?','home greeting stays concise');
+controller.reply('synthetic reply'); assert.equal(currentMode,'idle','11-29 typed question: silent, never a false speaking status');
+assert.equal(lastUtterance,undefined,'typed question is not read aloud');
+// Spoken question: the transcript marks the turn; the answer is read, and 「speaking」 starts only with real audio.
+element('rv-voice').onclick(); recognition.onresult({results:[{0:{transcript:'말로 물음'},isFinal:true}]}); recognition.onend(); controller.sent();
+controller.thinking(); controller.reply('synthetic spoken reply'); assert.equal(lastUtterance.text,'synthetic spoken reply');
+assert.equal(currentMode,'idle','no speaking status before audio actually starts'); lastUtterance.onstart(); assert.equal(currentMode,'speaking');
+controller.sent(); controller.reply('next typed reply'); assert.notEqual(currentMode,'speaking','the next typed turn is silent again'); controller.reply('x'); lastUtterance=undefined;
+element('rv-voice').onclick(); recognition.onresult({results:[{0:{transcript:'다시'},isFinal:true}]}); recognition.onend(); controller.sent(); controller.reply('spoken again'); lastUtterance.onstart(); assert.equal(currentMode,'speaking'); assert.equal(element('ravi-caption').textContent,'깨어났어요. 무엇을 도와드릴까요?','home greeting stays concise');
 blockedNodes=[element('send-review')]; observer(); assert.deepEqual(rigPauses,[true,true,true],'all live rigs pause on approval');assert.equal(element('rv-voice').disabled,true);assert.equal(element('ravi-read').disabled,true); assert.equal(framePaused,true); assert.equal(currentMode,'idle'); assert.equal(timers.size,0);
 controller.reply('late reply'); assert.equal(currentMode,'idle');
 blockedNodes=[]; observer(); assert.equal(framePaused,false);

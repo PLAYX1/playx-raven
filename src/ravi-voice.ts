@@ -25,6 +25,8 @@ export function createRaviVoice(api: {
   transcript(text: string): void;
   listening(on: boolean): void;
   boundary(): void;
+  /** 11-29 소리가 실제로 나기 시작한 순간(라비 목소리 첫 조각 또는 기기 목소리 onstart). 「말하는 중」은 이때부터만. */
+  started?(): void;
   ended(): void;
   unavailable(): void;
   // 라비 목소리(Supertonic): 없으면 기존처럼 기기 목소리만 쓴다. 실패·느림·리소스 없음은 모두 기기 목소리로 넘어간다.
@@ -45,7 +47,7 @@ export function createRaviVoice(api: {
   };
   return {
     supported: !!api.Recognition,
-    setEnabled(on: boolean) { enabled = on; if (!on) { cancel(); api.ended(); } else if (api.ravi && api.preferRavi?.()) void api.ravi.warm(); },
+    setEnabled(on: boolean, warm = true) { enabled = on; if (!on) { cancel(); api.ended(); } else if (warm && api.ravi && api.preferRavi?.()) void api.ravi.warm(); },
     stop: cancel,
     listen() {
       if (recognition) { cancel(); return; }
@@ -72,7 +74,7 @@ export function createRaviVoice(api: {
         cancel();
         const session = epoch;
         api.aiVoice?.(true); // 만드는 동안에도 「AI 음성」이 보인다(기계 음성임을 숨기지 않는다)
-        api.ravi.speak(text, { started: () => { if (session === epoch) { api.boundary(); if (bubble) api.aiTag?.(bubble); } } }).then(result => {
+        api.ravi.speak(text, { started: () => { if (session === epoch) { api.started?.(); api.boundary(); if (bubble) api.aiTag?.(bubble); } } }).then(result => {
           if (session !== epoch) return;
           if (result === "played") { api.aiVoice?.(false); api.ended(); }
           else if (result === "fallback") { api.aiVoice?.(false); deviceSpeak(text, session, true); }
@@ -93,6 +95,7 @@ export function createRaviVoice(api: {
     if (!voice) { api.unavailable(); return giveUp(); }
     const u = new api.utterance(text);
     u.voice = voice; u.lang = "ko-KR"; u.rate = 1;
+    u.onstart = () => { if (session === epoch && api.allowed()) api.started?.(); };
     u.onboundary = () => { if (session === epoch && api.allowed()) api.boundary(); };
     u.onend = u.onerror = () => { if (session === epoch) api.ended(); };
     try { api.synthesis.speak(u); return true; } catch { api.unavailable(); return giveUp(); }

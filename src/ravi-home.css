@@ -16,13 +16,17 @@
 #ravi-panel button:focus-visible, #ravi-panel textarea:focus-visible, #ravi-launcher:focus-visible { outline:3px solid #a94622; outline-offset:-3px; }
 #ravi-panel button:disabled { opacity:.5; }
 #ravi-panel .ravi-panel-head { display:flex; align-items:center; gap:8px; padding:8px 12px; flex:none; border-bottom:1px solid var(--line); }
-#ravi-panel #ravi-panel-stage { width:64px; height:64px; padding:0; border:0; background:transparent; }
+#ravi-panel #ravi-panel-stage { width:48px; height:48px; min-height:0; padding:0; border:0; background:transparent; }
 .ravi-panel-title { flex:1; min-width:0; }
-.ravi-panel-title strong { font-size:17px; }
-#ravi-panel-state { font-size:13px; line-height:1.4; margin:4px 0 0; overflow-wrap:anywhere; }
+/* 11-29 머리 글은 늘 한 줄(400px 창에서 「라비의 목소 / 리」로 꺾이던 것) — 넘치면 말줄임. */
+.ravi-panel-title strong { display:block; font-size:17px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#ravi-panel-state { font-size:13px; line-height:1.4; margin:2px 0 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; overflow-wrap:normal; }
+#ravi-panel #ravi-more { width:40px; padding:0; display:grid; place-items:center; }
+#ravi-panel #ravi-more svg { width:20px; height:20px; }
+#ravi-panel #ravi-more[aria-expanded="true"] { background:#eef0f7; border-color:#1f224e; }
 #ravi-panel #ravi-chatwrap { flex:1; min-height:0; display:flex; width:100%; }
 #ravi-panel #chat { position:relative; inset:auto; width:100%; height:100%; min-height:0; max-width:none; display:flex; flex-direction:column; border:0; padding:0; box-shadow:none; background:#fff; color:var(--text); overflow:hidden; }
-#ravi-panel .ravi-history { order:1; flex:1; min-height:0; position:relative; display:flex; }
+#ravi-panel .ravi-history { order:1; flex:1; min-height:0; position:relative; display:flex; flex-direction:column; }
 #ravi-panel #chat-log { flex:1; min-height:0; max-height:none; padding:16px; overflow:auto; overscroll-behavior:contain; overflow-anchor:none; font-size:16px; }
 #ravi-panel .msg { font-size:16px; line-height:1.6; max-width:95%; padding:10px 12px; margin-bottom:12px; overflow-wrap:anywhere; }
 #ravi-panel .msg.ai { display:flex; gap:8px; background:#f7fafb; border:1px solid var(--line); }
@@ -30,23 +34,43 @@
 #ravi-panel .msg .ravi-face { width:32px !important; height:32px !important; animation:none; }
 #ravi-panel .msg.me { background:#1f224e; color:#fff; }
 #ravi-panel #ravi-new { position:absolute; bottom:8px; left:50%; transform:translateX(-50%); background:#1f224e; color:#fff; border:0; box-shadow:0 2px 10px #1f224e30; }
-#ravi-panel .rv-quick { order:2; display:flex; flex-wrap:nowrap; overflow-x:auto; flex:none; gap:8px; margin:0; padding:8px 12px; max-width:none; overscroll-behavior:contain; }
-#ravi-panel .rv-quick button { white-space:nowrap; border-radius:999px; }
-#ravi-panel .ravi-voice-row { order:3; flex:none; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:0 12px 8px; }
-#ravi-panel .ravi-voice-row p { font-size:12px; margin:0; }
-#ravi-panel #ravi-read[aria-pressed="true"] { color:#a94621; }
+/* 11-29 시작 칩은 대화 기록 칸 안 · 빈 대화(내가 한 말이 아직 없음)에서만 · 최대 3개. */
+#ravi-panel .rv-quick { order:2; display:flex; flex-wrap:wrap; flex:none; gap:8px; margin:0; padding:4px 12px 8px; max-width:none; }
+#ravi-panel .rv-quick button { white-space:nowrap; border-radius:999px; min-height:36px; padding:6px 12px; }
+#ravi-panel .rv-quick [data-ravi-starter]:nth-of-type(n+4) { display:none; }
+#ravi-panel .ravi-mic-why { order:3; flex:none; margin:0; padding:0 12px 8px; font-size:12px; line-height:1.4; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#ravi-panel .ravi-mic-why[hidden] { display:none; }
+#ravi-panel .ravi-history:has(#chat-log .msg.me) :is(.rv-quick, .ravi-mic-why) { display:none; }
+/* 「더 보기」 메뉴: 머리 아래 오른쪽에 뜬다. 모든 줄은 한 줄(버튼 두 줄 금지). */
+#ravi-panel .ravi-menu { position:absolute; top:64px; right:12px; z-index:4; display:flex; flex-direction:column; align-items:stretch; gap:4px; width:max-content; max-width:calc(100% - 24px); padding:8px; background:#fff; border:1px solid var(--line); border-radius:14px; box-shadow:0 8px 28px #1f224e26; }
+#ravi-panel .ravi-menu[hidden] { display:none; }
+#ravi-panel .ravi-menu button { justify-content:flex-start; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; border-color:transparent; border-radius:10px; }
+#ravi-panel .ravi-menu button:hover { background:#f2f4f9; }
+#ravi-panel .ravi-menu .chat-mode { display:flex; flex-direction:column; gap:4px; padding:0; }
+#ravi-panel .ravi-menu .chat-mode button { font-size:14px; min-height:40px; }
+#ravi-panel .ravi-menu .chat-mode button[hidden] { display:none; }
+/* 「그냥 묻기」 하나뿐이면 고를 것이 없다 — 「두 곳에 묻기」가 있을 때만 둘 다 보인다. */
+#ravi-panel .ravi-menu .chat-mode:not(:has([data-mode="debate"]:not([hidden]))) [data-mode] { display:none; }
+#ravi-panel .ravi-menu .chat-mode button.on { background:#eef0f7; }
+#ravi-panel #ravi-read { display:flex; align-items:center; gap:10px; }
+#ravi-panel #ravi-read::after { content:""; flex:none; width:30px; height:18px; border-radius:9px; background:#d9e1ec; box-shadow:inset -12px 0 0 2px #fff, inset 0 0 0 2px #d9e1ec; }
+#ravi-panel #ravi-read[aria-pressed="true"]::after { background:#a94621; box-shadow:inset 12px 0 0 2px #fff, inset 0 0 0 2px #a94621; }
+#ravi-panel .ravi-menu-note { margin:4px 8px 0; font-size:12px; color:var(--muted); white-space:nowrap; }
+/* 마이크: 홈 줄과 같은 선 아이콘. 받아쓰기에 키가 필요한데 없으면 흐리게(숨기지 않는다). */
+#ravi-panel #rv-voice { width:44px; padding:0; display:grid; place-items:center; }
+#ravi-panel #rv-voice svg { width:22px; height:22px; }
+#ravi-panel #rv-voice[aria-disabled="true"] { opacity:.45; }
+#ravi-panel #rv-voice[aria-pressed="true"] { color:#a94621; border-color:#a94621; }
+/* 글로 물은 답의 스피커 단추 */
+#ravi-panel .msg.ai .ravi-say { align-self:flex-start; width:36px; min-height:36px; height:36px; padding:0; display:grid; place-items:center; border-radius:50%; color:var(--muted); }
+#ravi-panel .msg.ai .ravi-say svg { width:18px; height:18px; }
 #ravi-panel .chat-in { order:4; flex:none; display:flex; align-items:center; padding:8px 12px; gap:6px; border-top:1px solid var(--line); background:#fff; }
 #ravi-panel #chat-q { min-width:0; flex:1; height:64px; min-height:64px; max-height:64px; resize:none; margin:0; padding:8px; font-family:inherit; font-size:16px; line-height:1.4; border:1px solid var(--line); border-radius:12px; background:#f7fafb; color:var(--text); }
 #ravi-panel #chat-go { background:#1f224e; color:#fff; }
-#ravi-panel .chat-mode { order:0; flex:none; display:flex; flex-wrap:nowrap; overflow-x:auto; gap:6px; padding:6px 12px; border:0; }
-#ravi-panel .chat-mode button { white-space:nowrap; font-size:13px; min-height:32px; padding:4px 10px; }
-#ravi-panel .chat-mode button.on { border-color:#1f224e; background:#eef0f7; }
 #ravi-panel #ravi-key, #ravi-panel #rv-send-card { position:absolute; inset:0 0 86px; z-index:2; overflow:auto; margin:0; border:0; border-radius:0; background:#fff; padding:16px; }
 #ravi-panel.reviewing .chat-in { visibility:hidden; }
 #ravi-launcher { position:fixed; right:20px; bottom:20px; width:72px; height:72px; padding:0; border:1px solid #d9e1ec; border-radius:50%; background:#f7fafb; box-shadow:0 6px 24px #1f224e30; z-index:65; }
 .ravi-sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
-.ravi-promo-entry { flex:none; padding:0 12px 6px; }
-.ravi-promo-entry button { min-height:32px; font-size:13px; }
 #ravi-panel .ravi-promo-card { min-width:0; width:100%; box-sizing:border-box; }
 #ravi-panel .ravi-promo-card h3 { margin:0 0 8px; }
 #ravi-panel .promo-actions, #ravi-panel .promo-tabs { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
@@ -71,7 +95,9 @@
 .ravi-approval-note { font-size:16px; margin:16px 0; }
 @media(max-width:740px) {
   #ravi-conversation { padding:12px; }
-  #ravi-panel { right:8px; bottom:8px; max-width:calc(100vw - 104px); }
+  /* 11-29 좁은 창: 왼쪽 그림 줄을 뺀 폭 전체 · 위아래 전체(서랍). 「크게」는 뜻이 없어 숨긴다. */
+  #ravi-panel, #ravi-panel.large { left:calc(var(--rv-rail-w, 64px) + 8px); right:8px; top:8px; bottom:8px; width:auto; height:auto; max-width:none; }
+  #ravi-panel #ravi-expand { display:none; }
   #ravi-panel .ravi-panel-head { gap:4px; padding:6px; }
   #ravi-panel button { padding:6px; }
   #ravi-panel .chat-in { padding:6px; }

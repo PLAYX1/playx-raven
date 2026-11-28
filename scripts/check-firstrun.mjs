@@ -192,7 +192,7 @@ if (process.argv.includes('--browser')) {
       assert.equal(await page.evaluate(()=>window.__FIRST_CALLS.some(n=>['pairing_request_open','pairing_show_qr','send_rvn','send_asset'].includes(n))),false);
       await page.evaluate(()=>cancelAnimationFrame(window.__FIRST_FRAME));
       // 11-17: 첫 화면은 떠 있는 라비 대신 「라비 한 줄」 말풍선이 라비를 연다(얼굴 하나).
-      await page.evaluate(()=>{const say=document.getElementById('v2-ravi-say');(say&&say.getClientRects().length?say:document.getElementById('ravi-launcher')).click();});
+      await page.evaluate(()=>{const say=document.getElementById('rv-header-ravi');(say&&say.getClientRects().length?say:document.getElementById('ravi-launcher')).click();});
       assert.equal(await page.$eval('#ravi-panel',el=>!!el.getClientRects().length),true);
       await context.close();
     }

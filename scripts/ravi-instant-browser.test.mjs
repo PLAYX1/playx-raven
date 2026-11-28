@@ -72,11 +72,10 @@ async function openApp({ extra = {} } = {}) {
   return page;
 }
 const cmds = (page) => page.evaluate(() => window.__args.map((x) => x.cmd));
-/** 첫 화면 라비 한 줄(#v2-ravi-say)로 대화칸을 열고 친다. 답 말풍선이 나올 때까지의 시간도 잰다. */
+/** 왼쪽 막대 라비(#rv-header-ravi, 11-29 하나뿐인 입구)로 대화칸을 열고 친다. 답 말풍선이 나올 때까지의 시간도 잰다. */
 async function ask(page, text) {
   if (!(await page.$eval('#ravi-panel', (e) => !e.hidden && !!e.getClientRects().length))) {
-    await page.evaluate(() => document.getElementById('v2-ravi-say')?.scrollIntoView());
-    await page.click('#v2-ravi-say');
+    await page.click('#rv-header-ravi');
     await page.waitForFunction(() => document.activeElement?.id === 'chat-q', { timeout: 8000 });
     // 그림을 남길 때만 대화칸을 「크게」로(답 말풍선이 잘리지 않게). 판정에는 영향 없다.
     if (shots) await page.click('#ravi-expand').catch(() => {});

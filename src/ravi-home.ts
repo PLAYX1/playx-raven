@@ -11,7 +11,7 @@ const labels: Record<RaviMode, string> = {
   sleep: "잠듦 · 느린 숨", idle: "깨어 있음 · 곁에 있어요", listening: "듣는 중 · 편하게 말해 주세요",
   thinking: "생각 중 · 조각을 모아요", speaking: "말하는 중 · 라비의 목소리", joy: "기쁨 · 고마워요",
 };
-export function createRaviHome(api: { afterLanding?(run: () => void): void; wake(): void; wallet(): void; report(): void; send(): void; tools(): void; companion?(mode: RaviMode): void; voiceProvider?(): string; invoke?(cmd: string, args?: Record<string, unknown>): Promise<unknown> }) {
+export function createRaviHome(api: { afterLanding?(run: () => void): void; wake(): void; wallet(): void; report(): void; send(): void; tools(): void; companion?(mode: RaviMode): void; voiceProvider?(): string; micReason?(): string; invoke?(cmd: string, args?: Record<string, unknown>): Promise<unknown> }) {
   const byId = (id: string) => document.getElementById(id)!;
   const home = byId("ravi-home-slot");
   const conversation = byId("ravi-conversation");
@@ -24,6 +24,8 @@ export function createRaviHome(api: { afterLanding?(run: () => void): void; wake
   const read = byId("ravi-read") as HTMLButtonElement;
   let connected = false, background = document.hidden, mode: RaviMode = "sleep";
   let speakingTimer = 0, joyTimer = 0, speechEpoch = 0;
+  // 11-29 말로 물은 질문의 답만 저절로 읽는다(글로 친 질문은 조용히 + 말풍선 스피커 단추). 받아쓴 글이 입력칸에 들어오면 켠다.
+  let spokenDraft = false, turnSpoken = false;
   const visible = (el: Element) => !!el.getClientRects().length;
   function externalApproval(): boolean {
     return Array.from(document.querySelectorAll(".ravi-lifecycle[open], .sheet:not(.hidden), #askwrap.on, #rpwrap, #onboard:not(.hidden), #hello, #send-review, #qrwrap, #phone-tx-send:not([hidden])")).some(visible);
@@ -82,12 +84,14 @@ export function createRaviHome(api: { afterLanding?(run: () => void): void; wake
     synthesis: window.speechSynthesis,
     utterance: window.SpeechSynthesisUtterance,
     allowed: () => !blocked(),
-    transcript(text) { input.value = text; transcript.textContent = text; [rig, small, face].forEach(r => r.pose.level = Math.min(1, text.length / 24)); },
+    transcript(text) { spokenDraft = true; input.value = text; transcript.textContent = text; [rig, small, face].forEach(r => r.pose.level = Math.min(1, text.length / 24)); },
     listening(on) {
       mic.setAttribute("aria-pressed", String(on));
       if (on) { clearSpeech(); setMode("listening"); } else if (mode === "listening") resting();
     },
     boundary() { [rig, small, face].forEach(r => r.pose.level = .9); },
+    // 「말하는 중」은 소리가 실제로 날 때만(11-29 — 말하지 않는데 「말하는 중」이 떠 있었다).
+    started() { if (connected && !blocked() && mode !== "speaking") { setMode("speaking"); [rig, small, face].forEach(r => r.pose.level = .7); } },
     ended() { clearSpeech(); resting(); },
     unavailable() { transcript.textContent = t("이 기기에서는 글로 물어봐 주세요"); },
   });
@@ -95,29 +99,41 @@ export function createRaviHome(api: { afterLanding?(run: () => void): void; wake
   mic.onclick = () => voice.listen();
   const microphone = api.voiceProvider ? mountRaviMicrophone({
     provider: api.voiceProvider, allowed: () => !blocked(),
-    transcript(text) { input.value = text; input.dispatchEvent(new Event("input", { bubbles: true })); },
+    transcript(text) { spokenDraft = true; input.value = text; input.dispatchEvent(new Event("input", { bubbles: true })); },
     quiet() { voice.stop(); clearSpeech(); },
     listening(on) { if (on) setMode("listening"); else if (mode === "listening") resting(); },
   }) : undefined;
   function stopVoice() { microphone?.stop(); voice.stop(); }
+  // 11-29 마이크는 숨기지 않는다. 받아쓰기에 키가 필요한데 없으면 흐리게 + 이유 한 줄(빈 대화에서 보임 · 누르면 같은 안내).
+  const micWhy = document.getElementById("ravi-mic-why");
+  function paintMic() {
+    const reason = api.micReason?.() || "";
+    mic.hidden = false;
+    mic.setAttribute("aria-disabled", String(!!reason));
+    mic.title = reason || t("말로 묻기");
+    if (micWhy) { micWhy.textContent = reason; micWhy.hidden = !reason; }
+  }
+  if (api.micReason) paintMic();
   let readEnabled = false;
-  // 0.9.46: 「답 읽어 주기」를 기억한다(옛 판은 켤 때마다 꺼짐으로 돌아갔다). 기본 꺼짐.
+  // 0.9.46: 기억한다. 11-29 뜻이 바뀌었다 — 말로 물으면 늘 읽고, 이 스위치는 「글로 물어도 읽기」(기본 꺼짐 · 메뉴 안).
   const readKey = "rv-ravi-read-aloud";
+  voice.setEnabled(true, false);
   const applyRead = (on: boolean) => {
     readEnabled = on;
     read.setAttribute("aria-pressed", String(readEnabled));
-    read.textContent = t(readEnabled ? "답 읽어 주기 켜짐" : "답 읽어 주기 꺼짐");
-    voice.setEnabled(readEnabled);
+    read.textContent = t("글로 물어도 답 읽어 주기");
+    if (on && raviSpeech && kind.value === "ravi") void raviSpeech.warm();
   };
   read.onclick = () => {
     applyRead(!readEnabled);
     try { localStorage.setItem(readKey, readEnabled ? "1" : "0"); } catch { /* 이번 실행만 */ }
     void pack?.then(p => p?.setWant(wantRavi));
   };
-  try { if (localStorage.getItem(readKey) === "1") applyRead(true); } catch { /* 기본 꺼짐 */ }
   // 설정 「라비 목소리」: 라비 목소리(기본) / 기기 목소리. 기존 읽어 주기 켜짐·꺼짐과 따로 저장한다.
   const kind = byId("ravi-voice-kind") as HTMLSelectElement, kindNote = byId("ravi-voice-kind-note");
   try { kind.value = localStorage.getItem("rv-ravi-voice") === "device" ? "device" : "ravi"; } catch { kind.value = "ravi"; }
+  applyRead(false);
+  try { if (localStorage.getItem(readKey) === "1") applyRead(true); } catch { /* 기본 꺼짐 */ }
   // 라비 목소리 받기(모델은 설치 파일에 없다): 설정 카드 + 말풍선 옆 안내. 끝나면 합성 엔진을 새로 만든다.
   // 380MB 받기 안내(말풍선 옆)는 「답 읽어 주기」를 켠 사람에게만.
   const wantRavi = () => readEnabled && kind.value === "ravi";
@@ -199,12 +215,44 @@ export function createRaviHome(api: { afterLanding?(run: () => void): void; wake
   window.addEventListener("blur", () => { if (microphone?.state === "requesting") return; background = true; sync(); });
   window.addEventListener("focus", () => { background = document.hidden; sync(); });
   window.addEventListener("pagehide", () => { background = true; sync(); });
+  // 받아쓴 글을 다 지우면 다음 질문은 글로 친 것이다.
+  input.addEventListener("input", () => { if (!input.value.trim()) spokenDraft = false; });
+  function speakNow(text: string, bubble?: Element) {
+    resting();   // 소리가 실제로 나면 started() 가 「말하는 중」으로 바꾼다
+    const session = speechEpoch;
+    if (voice.speak(text, bubble)) {
+      // Long utterances must also terminate if the WebView drops its onend event.
+      // 라비 목소리는 불러오기·만들기가 먼저라서 기기 목소리 기준 시간(글자당 0.2초)으로는 말하는 도중에 끊긴다 — 그만큼 더 기다린다.
+      const allowance = raviSpeech && (() => { try { return localStorage.getItem("rv-ravi-voice") !== "device"; } catch { return true; } })() ? 75000 : 0;
+      speakingTimer = window.setTimeout(() => { if (session === speechEpoch) { stopVoice(); resting(); } }, Math.min(200000, Math.max(8000, text.length * 200) + allowance));
+      return true;
+    }
+    return false;
+  }
+  // 글로 물은 답에는 스피커 단추 하나(누르면 그 답만 읽는다). 소리 내기는 승인이 아니다 — 돈·키와 상관없다.
+  const SPEAKER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>';
+  function addSpeaker(bubble: Element | undefined, text: string) {
+    if (!bubble || bubble.querySelector(".ravi-say") || typeof document.createElement !== "function") return;
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "ravi-say"; b.innerHTML = SPEAKER;
+    b.setAttribute("aria-label", t("소리로 듣기")); b.title = t("소리로 듣기");
+    b.onclick = () => { clearSpeech(); stopVoice(); if (!blocked()) speakNow(text, bubble); };
+    bubble.append(b);
+  }
+  // 앱이 켜지고 한가할 때 작은 라비 목소리(ko-v2, 한국어)를 미리 올려 둔다 — 첫 소리를 빠르게. 화면은 막지 않는다(워커).
+  if (raviSpeech && lang === "ko") {
+    const idle = (run: () => void) => { const w = window as Window & { requestIdleCallback?(cb: () => void, o?: { timeout: number }): number }; if (w.requestIdleCallback) w.requestIdleCallback(run, { timeout: 8000 }); else window.setTimeout(run, 1500); };
+    window.setTimeout(() => idle(() => { if (kind.value === "ravi" && !document.hidden) void ko().then(k => k.warm()).catch(() => false); }), 4000);
+  }
+  // 창을 열 때·마이크를 누를 때 한 번 더(5분 쉬면 내려 두므로) — 이미 올라와 있으면 시간만 늘린다.
+  const rewarm = () => { if (raviSpeech && lang === "ko" && kind.value === "ravi") void ko().then(k => k.warm()).catch(() => false); };
+  mic.addEventListener("pointerdown", rewarm);
   resting(); sync();
   return {
     background(value: boolean) { background = value; sync(); },
-    open: panel.open,
+    open(focus?: boolean) { rewarm(); panel.open(focus); },
     message: panel.message,
-    sent: panel.sent,
+    sent() { turnSpoken = spokenDraft; spokenDraft = false; panel.sent(); },
     page(id: string) {
       if (id === "ravi") panel.open(false);
       sync();
@@ -217,6 +265,7 @@ export function createRaviHome(api: { afterLanding?(run: () => void): void; wake
     connected(value: boolean) {
       const wake = value && !connected;
       connected = value; if (wake) [rig, small, face].forEach(r => r.wake());
+      if (api.micReason) paintMic();
       if (!["speaking", "listening", "joy"].includes(mode)) resting();
       caption.textContent = t(value ? "깨어났어요. 무엇을 도와드릴까요?" : "라비가 잠들어 있어요. 눌러서 깨워 주세요.");
     },
@@ -224,17 +273,9 @@ export function createRaviHome(api: { afterLanding?(run: () => void): void; wake
       if (!text.trim()) return;
       clearSpeech(); stopVoice();
       if (blocked()) { resting(); return; }
-      if (!connected) { resting(); voice.speak(text, bubble); return; }
-      setMode("speaking"); [rig, small, face].forEach(r => r.pose.level = .7);
-      const session = speechEpoch;
-      if (voice.speak(text, bubble)) {
-        // Long utterances must also terminate if the WebView drops its onend event.
-        // 라비 목소리는 불러오기(처음 몇 초)·만들기(문장 길이만큼)가 먼저라서 기기 목소리 기준 시간(글자당 0.2초)으로는 말하는 도중에 끊긴다 — 그만큼 더 기다린다.
-        const allowance = raviSpeech && (() => { try { return localStorage.getItem("rv-ravi-voice") !== "device"; } catch { return true; } })() ? 75000 : 0;
-        speakingTimer = window.setTimeout(() => { if (session === speechEpoch) { stopVoice(); resting(); } }, Math.min(200000, Math.max(8000, text.length * 200) + allowance));
-      } else {
-        speakingTimer = window.setTimeout(() => { if (session === speechEpoch) resting(); }, Math.min(12000, Math.max(1400, text.length * 90)));
-      }
+      // 11-29 말로 물었으면 읽고(라비 목소리 ko-v2), 글로 물었으면 조용히 + 스피커 단추. 메뉴 「글로 물어도 답 읽어 주기」가 켜져 있으면 늘 읽는다.
+      if ((turnSpoken || readEnabled) && speakNow(text, bubble)) return;
+      resting(); addSpeaker(bubble, text);
     },
     joy() {
       if (!connected || blocked()) return;

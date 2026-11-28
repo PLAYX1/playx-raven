@@ -1,7 +1,7 @@
 // 0.9.46 흐름 시험(영구) — 실제 dist 를 가짜 IPC(desktop-fixture)로 띄워 **진짜로 눌러** 본다.
 //   A) confirm()/alert() → 앱 안 확인 창 sure() 로 바꾼 곳: 누르면 창이 뜨고, 「취소」면 IPC 가 안 불리고, 「예」면 불린다.
 //   B) 게임 페이지 「다른 판매자 게임 함께 보관하기 (돕기)」 카드 → 「모든 게임」 저장 = arcade_share_set {mode:'all'}.
-//   C) 첫 화면 라비 한 줄(#v2-ravi-say)을 누르면 대화칸이 열리고 글자를 칠 수 있다(대표 신고, 0.9.45).
+//   C) 라비 입구(11-29부터 왼쪽 막대 #rv-header-ravi 하나)를 누르면 대화칸이 열리고 글자를 칠 수 있다(대표 신고, 0.9.45).
 // 노드·지갑·네트워크 없음. 보내기·잠금 해제 계열은 desktop-fixture 가 거절한다.
 import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -83,7 +83,7 @@ async function waitAsk(page) {
 
 /* ── C) 라비 한 줄 ──────────────────────────────────────────────── */
 async function raviSayTypes(page) {
-  await page.click('#v2-ravi-say');
+  await page.click('#rv-header-ravi');
   await page.waitForFunction(() => !document.getElementById('ravi-panel').hidden && document.activeElement?.id === 'chat-q', { timeout: 6000 })
     .catch(() => {});
   const st = await page.evaluate(() => ({
@@ -116,8 +116,7 @@ test('C 라비 한 줄 → 인사(짜잔!) 진행 중에 눌러도 인사가 끝
   const page = await openApp({ start: '0' });
   const during = await page.evaluate(() => document.documentElement.hasAttribute('data-ravi-arriving') || !!document.querySelector('.ravi-arrival'));
   // 인사 덮개 밖을 누르면 인사는 비킨다(11-14) — 그 누름이 라비 한 줄이면 대화칸이 열려야 한다.
-  await page.evaluate(() => document.getElementById('v2-ravi-say').scrollIntoView());
-  await page.click('#v2-ravi-say');
+  await page.click('#rv-header-ravi');
   await page.waitForFunction(() => !document.documentElement.hasAttribute('data-ravi-arriving'), { timeout: 20000 }).catch(() => {});
   await page.waitForFunction(() => document.activeElement?.id === 'chat-q', { timeout: 8000 }).catch(() => {});
   const st = await page.evaluate(() => ({ during: null, hidden: document.getElementById('ravi-panel').hidden, shown: !!document.getElementById('ravi-panel').getClientRects().length, focus: document.activeElement?.id || document.activeElement?.tagName, arriving: document.documentElement.hasAttribute('data-ravi-arriving') }));
@@ -142,7 +141,7 @@ test('C 라비 한 줄 → 창을 가렸다 돌아온 직후 첫 누름도 대�
   }, on);
   await hide(true); await sleep(300); await hide(false);
   await page.mouse.move(400, 300);
-  await page.click('#v2-ravi-say');
+  await page.click('#rv-header-ravi');
   await page.waitForFunction(() => document.activeElement?.id === 'chat-q', { timeout: 4000 }).catch(() => {});
   const st = await page.evaluate(() => ({ rest: !!document.querySelector('.ravi-lifecycle[open]'), shown: !!document.getElementById('ravi-panel').getClientRects().length, focus: document.activeElement?.id || document.activeElement?.tagName }));
   await page.keyboard.type('abc'); st.value = await page.$eval('#chat-q', (e) => e.value);

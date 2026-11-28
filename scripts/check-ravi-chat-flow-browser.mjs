@@ -100,7 +100,7 @@ try {
     await page.waitForFunction(() => !document.documentElement.hasAttribute('data-ravi-arriving'));
     await page.addStyleTag({ content: '#onboard,#hello{display:none!important}' });
     await settle(page);
-    await page.click('#ravi-open'); await settle(page);
+    await page.click('#rv-header-ravi'); await settle(page);
     const ask = async q => {
       const n = await page.$$eval('#chat-log .msg', els => els.length);
       await page.$eval('#chat-q', (el, v) => { el.value = v; }, q);
@@ -199,7 +199,7 @@ try {
     await page.goto(origin, { waitUntil: 'networkidle0' });
     await page.waitForFunction(() => !document.documentElement.hasAttribute('data-ravi-arriving'));
     await page.addStyleTag({ content: '#onboard,#hello{display:none!important}' });
-    await page.click('#ravi-open'); await settle(page);
+    await page.click('#rv-header-ravi'); await settle(page);
     const lastAi = () => page.$eval('#chat-log .msg.ai:last-child', e => e.textContent.replace(/\s+/g, ' ').trim());
     await page.$eval('#chat-q', el => { el.value = '레이븐코인은 언제 만들어졌어?'; }); await page.click('#chat-go'); await settle(page);
     assert.match(await lastAi(), /AI 열쇠를 넣으면 더 잘 답해요/, '열쇠 없음: 안내 + 한 줄');

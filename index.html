@@ -3469,7 +3469,6 @@
               <label class="tk-filter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="tk-filter" type="search" autocomplete="off" spellcheck="false" placeholder="이름·내용 찾기" aria-label="이름·내용 찾기" /></label>
               <button type="button" class="tk-iconbtn" id="tk-newdm" aria-label="새 쪽지" title="새 쪽지"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
             </div>
-            <button id="rv-room-ravi" class="rv-room-ravi" type="button"><span id="rv-room-ravi-face"></span><span><b>라비</b><small>AI 도우미</small></span></button>
             <div id="tk-chats" class="tk-chats"></div>
             <div id="tk-friends" class="tk-chats" hidden></div>
             <div id="tk-squarebox" hidden>
@@ -4073,11 +4072,7 @@
             </div>
           </div>
           <div class="v2-today">
-            <div class="v2-ravi" role="region" aria-label="라비">
-              <span id="v2-ravi-face" class="v2-ravi-face" aria-hidden="true"></span>
-              <button id="v2-ravi-say" class="v2-ravi-say" type="button"><span id="v2-ravi-t">「이 폴더 음반으로 올려 줘」처럼 말해도 돼요</span></button>
-              <button id="v2-ravi-mic" class="v2-mic" type="button" aria-label="라비에게 말로 하기" title="라비에게 말로 하기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
-            </div>
+            <!-- 11-29 라비 입구는 왼쪽 막대 한 곳(페이블 판정). 첫 화면의 두 번째 라비 얼굴·말풍선·마이크 줄은 뺐다. -->
             <!-- 11-11 라비 카드(src/ravi-cards.ts): 최대 3장 · 돈 → 주문 → 준비된 것(폰과 같은 순서). 여는 단추만. -->
             <div id="rv-home-cards" class="rv-cards" role="region" aria-label="오늘 볼 것" aria-live="polite"></div>
           </div>
@@ -4474,15 +4469,10 @@
       <div id="chat">
         <!-- 여태 이 창은 양식 채우기 전용이었다. 사장님이 "이거 어떻게 생각해"
              라고 물으면 엉뚱하게 메뉴를 고쳤다. 무엇을 시키는지 먼저 고르게 한다. -->
-        <div class="chat-mode" id="chat-mode">
-          <!-- 0.4.8-B 열쇠가 없을 때만 보인다(refreshKeys). 없어도 라비 안내로 답한다. -->
-          <button type="button" class="keyopen" id="ravi-keyopen" hidden>AI 열쇠 넣기</button>
-          <button class="on" data-mode="fill" title="말로 알려주면 화면을 채웁니다">그냥 묻기</button>
-          <button data-mode="debate" title="서로 다른 AI 두 곳에 같은 것을 묻습니다">두 곳에 묻기</button>
-        </div>
 
-        <div class="ravi-history"><div id="chat-log" role="log" aria-label="대화 기록" aria-live="off" tabindex="0"></div><button id="ravi-new" type="button" hidden>새 답 ↓</button></div>
-        <div class="rv-quick"><button id="rv-send-request" type="button">RVN 보내기 요청</button></div>
+        <div class="ravi-history"><div id="chat-log" role="log" aria-label="대화 기록" aria-live="off" tabindex="0"></div><button id="ravi-new" type="button" hidden>새 답 ↓</button>
+          <!-- 11-29 빈 대화에서만 · 최대 3개(ravi-home.css). 보내기 요청·도움말은 머리 「더 보기」 메뉴로. -->
+          <div class="rv-quick"></div><p id="ravi-mic-why" class="ravi-mic-why" hidden></p></div>
         <div id="rv-send-card" class="card" hidden>
           <button id="rv-send-close" type="button">닫기</button><h3>보내기 요청 확인</h3><p>라비는 직접 보내지 않아요. 받는 사람과 금액을 적고 수수료를 확인하세요.</p>
           <label>받는 주소 <input id="rv-send-to" autocomplete="off" /></label>
@@ -4492,7 +4482,6 @@
           <button id="rv-send-continue" type="button" hidden>기존 보내기 화면에서 직접 확정</button>
         </div>
 
-        <div class="ravi-voice-row"><button id="ravi-read" type="button" aria-pressed="false">답 읽어 주기 꺼짐</button><p>음성으로는 승인할 수 없어요</p></div>
         <div id="ravi-pack-nudge" class="ravi-pack-nudge" hidden><p id="ravi-pack-nudge-text" role="status" aria-live="polite" translate="no"></p><span><button id="ravi-pack-nudge-get" type="button">받기</button><button id="ravi-pack-nudge-later" type="button">나중에</button></span></div>
         <div id="ravi-voice-surface" translate="no" hidden>
           <p id="ravi-voice-note" role="status" aria-live="polite"></p>
@@ -4501,7 +4490,7 @@
           <button id="ravi-mic-settings" type="button" hidden></button>
         </div>
         <div class="chat-in">
-          <button id="ravi-plus" type="button" aria-label="라비 도구 열기" aria-expanded="false">＋</button><textarea id="chat-q" rows="2" placeholder="라비에게 말하기" aria-label="라비에게 말하기" autocomplete="off"></textarea><button id="rv-voice" type="button" aria-label="말로 묻기" aria-pressed="false" hidden>🎙</button>
+          <button id="ravi-plus" type="button" aria-label="라비 도구 열기" aria-expanded="false">＋</button><textarea id="chat-q" rows="2" placeholder="라비에게 말하기" aria-label="라비에게 말하기" autocomplete="off"></textarea><button id="rv-voice" type="button" aria-label="말로 묻기" aria-pressed="false" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
           <button id="chat-go">보내기</button>
         </div>
         <!-- 0.4.8-B AI 열쇠 넣기 카드(라비 화면 안에서 바로). 그리는 것은 main.ts openKeyCard. -->
@@ -6505,11 +6494,25 @@ THE SOFTWARE.</pre></details>
       <header class="ravi-panel-head">
         <button id="ravi-panel-stage" type="button" aria-label="잠든 라비 깨우기"><span id="ravi-panel-rig"></span></button>
         <div class="ravi-panel-title"><strong>라비와 대화</strong><p id="ravi-panel-state" role="status"></p></div>
+        <button id="ravi-more" type="button" aria-label="더 보기" title="더 보기" aria-haspopup="true" aria-expanded="false" aria-controls="ravi-menu"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
         <button id="ravi-expand" type="button" aria-pressed="false">크게</button>
         <button id="ravi-collapse" type="button" aria-label="대화창 접기">접기</button>
       </header>
       <p id="ravi-announcement" class="ravi-sr-only" role="status" aria-live="polite"></p>
-      <div class="ravi-promo-entry"><button id="ravi-promo-open" type="button" class="ghost">+ 홍보 만들기</button></div>
+      <!-- 11-29 위 두 줄(홍보·묻기 방식)과 늘 떠 있던 「답 읽어 주기」 칩은 여기로. 돈·키·삭제는 여기서도 실제 화면 단추로만 끝난다. -->
+      <div id="ravi-menu" class="ravi-menu" role="group" aria-label="더 보기" hidden>
+        <button id="ravi-read" type="button" aria-pressed="false">글로 물어도 답 읽어 주기</button>
+        <div class="chat-mode" id="chat-mode">
+          <!-- 0.4.8-B 열쇠가 없을 때만 보인다(refreshKeys). 없어도 라비 안내로 답한다. -->
+          <button type="button" class="keyopen" id="ravi-keyopen" hidden>AI 열쇠 넣기</button>
+          <button class="on" data-mode="fill" title="말로 알려주면 화면을 채웁니다">그냥 묻기</button>
+          <button data-mode="debate" title="서로 다른 AI 두 곳에 같은 것을 묻습니다">두 곳에 묻기</button>
+        </div>
+        <button id="ravi-menu-help" type="button" data-ravi-help>도움말</button>
+        <button id="rv-send-request" type="button">RVN 보내기 요청</button>
+        <button id="ravi-promo-open" type="button" data-ravi-seller hidden>+ 홍보 만들기</button>
+        <p class="ravi-menu-note">음성으로는 승인할 수 없어요</p>
+      </div>
     </aside>
     <button id="ravi-launcher" type="button" aria-label="라비와 대화" aria-controls="ravi-panel" aria-expanded="false"><span id="ravi-launcher-rig"></span></button>
   </body>

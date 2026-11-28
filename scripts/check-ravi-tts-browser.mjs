@@ -112,7 +112,7 @@ try {
     await page.goto(origin, { waitUntil: 'networkidle0' });
     await page.waitForFunction(() => !document.documentElement.hasAttribute('data-ravi-arriving'));
     await page.addStyleTag({ content: '#onboard,#hello,.ravi-lifecycle{display:none!important}' });
-    await settle(page); await page.click('#ravi-open'); await settle(page);
+    await settle(page); await page.click('#rv-header-ravi'); await settle(page);
     try { await body(page); } catch (e) { console.log('FAIL', name, 'errors=', errors.slice(0, 5), 'log=', await page.$eval('#chat-log', x => x.textContent.slice(0, 300)).catch(() => '?'), 'lic=', await page.evaluate(() => document.getElementById('about-supertonic-license-text')?.textContent.slice(0, 60) + '|' + document.getElementById('about-supertonic-license')?.open + '|' + window.__CALLS.filter(c => c === 'ravi_tts_read').length), 'dbg=', await page.evaluate(() => JSON.stringify(window.__ttsdbg)), 'state=', await page.evaluate(() => JSON.stringify({ hidden: document.hidden, focus: document.hasFocus(), panel: [document.getElementById('ravi-panel').hidden, getComputedStyle(document.getElementById('ravi-panel')).display, document.getElementById('ravi-panel').getClientRects().length], approval: Array.from(document.querySelectorAll('.ravi-lifecycle[open], .sheet:not(.hidden), #askwrap.on, #rpwrap, #onboard:not(.hidden), #hello, #send-review, #qrwrap, #phone-tx-send:not([hidden])')).filter(e => e.getClientRects().length).map(e => e.id || e.className) })), 'worker=', await page.evaluate(() => JSON.stringify(window.__WLOG)), 'tts-calls=', await page.evaluate(() => window.__CALLS.filter(c => c.startsWith('ravi_tts')).length).catch(() => '?')); throw e; }
     const r = { name, errors }; report.push(r);
     assert.deepEqual(errors, [], name + ' 오류 없음'); await context.close();
@@ -124,7 +124,7 @@ try {
   };
   // A. 정상
   await scenario('A 라비 목소리', { }, async page => {
-    await page.click('#ravi-read'); await sleep(300);
+    await page.$eval('#ravi-read', el => el.click()); await sleep(300);
     const t0 = Date.now(); await ask(page);
     await page.waitForFunction(() => !document.getElementById('ravi-ai-voice').hidden, { timeout: 5000 });
     const shownWhileMaking = true;
@@ -153,7 +153,7 @@ try {
   });
   // B. 리소스 없음 → 기기 목소리
   await scenario('B 리소스 없음', { missing: true }, async page => {
-    await page.click('#ravi-read'); await sleep(300); await ask(page);
+    await page.$eval('#ravi-read', el => el.click()); await sleep(300); await ask(page);
     await page.waitForFunction(() => window.__DEVICE.length >= 1, { timeout: 8000 });
     assert.match(await page.evaluate(() => window.__DEVICE[0]), /라비예요/);
     assert.equal(await page.evaluate(() => window.__PLAYED.length), 0);
@@ -164,7 +164,7 @@ try {
   // C. 설정 기기 목소리
   await scenario('C 기기 목소리 선택', { pref: 'device' }, async page => {
     assert.equal(await page.$eval('#ravi-voice-kind', e => e.value), 'device');
-    await page.click('#ravi-read'); await sleep(300); await ask(page);
+    await page.$eval('#ravi-read', el => el.click()); await sleep(300); await ask(page);
     await page.waitForFunction(() => window.__DEVICE.length >= 1, { timeout: 8000 });
     assert.ok(!(await page.evaluate(() => window.__CALLS)).some(c => c.startsWith('ravi_tts_read')), '모델을 읽지 않았다');
   });
@@ -181,7 +181,7 @@ try {
     await page.waitForFunction(() => /받았어요/.test(document.getElementById('ravi-pack-note').textContent), { timeout: 15000 });
     assert.equal(await page.$eval('#ravi-pack-nudge', e => e.hidden), true, '다 받으면 안내가 사라진다');
     assert.equal(await page.$eval('#ravi-voice-kind', e => e.value), 'ravi');
-    await page.click('#ravi-read'); await sleep(300); await ask(page);
+    await page.$eval('#ravi-read', el => el.click()); await sleep(300); await ask(page);
     await page.waitForFunction(() => !document.getElementById('ravi-ai-voice').hidden, { timeout: 5000 });
     await page.waitForFunction(() => window.__PLAYED.length >= 1, { timeout: Number(process.env.RV_WAIT || 150000) });
     assert.equal(await page.evaluate(() => window.__DEVICE.length), 0, '받은 뒤에는 기기 목소리를 안 썼다');
@@ -203,7 +203,7 @@ try {
     await page.waitForFunction(() => /인터넷이 끊겼/.test(document.getElementById('ravi-pack-note').textContent), { timeout: 15000 });
     assert.match(await cardNote(page), /기기 목소리/);
     assert.equal(await page.$eval('#ravi-pack-get', e => e.textContent), '다시 받기');
-    await page.click('#ravi-read'); await sleep(300); await ask(page);
+    await page.$eval('#ravi-read', el => el.click()); await sleep(300); await ask(page);
     await page.waitForFunction(() => window.__DEVICE.length >= 1, { timeout: 8000 });
     assert.equal(await page.evaluate(() => window.__PLAYED.length), 0);
     assert.equal(await page.$$eval('#chat-log .msg.ai .ai-voice-tag', e => e.length), 0, '폴백 답에는 AI 음성 표시 없음');

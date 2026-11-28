@@ -59,7 +59,7 @@ try {
     await settle(page);
     assert.equal(await page.$('#ravi-face'),null,'old hidden webp hero has been removed');
     assert.equal(await page.$eval('#ravi-home-slot',el=>!!el.querySelector('#chat-log')),false);
-    await page.click('#ravi-open'); await settle(page);
+    await page.click('#rv-header-ravi'); await settle(page);
     assert.equal(await visible(page,'#ravi-panel'),true);
     assert.equal(await page.$eval('#ravi-panel-rig',el=>!!el.querySelector('svg')),true);
     assert.equal(await page.$eval('#ravi-panel',el=>el.parentElement.tagName),'BODY');
@@ -86,7 +86,7 @@ try {
     await page.click('#ravi-new'); await settle(page);
     assert.equal(await page.$eval('#chat-log',el=>el.scrollHeight-el.scrollTop-el.clientHeight<3),true);
     assert.equal(await visible(page,'#ravi-new'),false);
-    await page.click('nav a[data-page="wallet"]'); await settle(page);
+    await page.$eval('nav a[data-page="wallet"]',el=>el.click()); await settle(page); // 11-29 지갑 메뉴 글자는 「지갑」(home) — 옛 wallet 링크는 숨김
     // Draw the real production navigation toast with synthetic copy and face dependencies.
     await page.evaluate(code=>{
       const PAGE_NAMES={wallet:'지갑'},copyHtml=s=>s,t=s=>s,escapeHtml=s=>s,raviState='sleep';
@@ -116,8 +116,8 @@ try {
     assert.equal(await visible(page,'#ravi-panel'),true);
     assert.equal(await page.evaluate(()=>window.__CALLS.some(c=>c==='send_rvn'||c==='send_asset')),false);
     // Keyboard remains nonmodal and a late response never steals focus from the page.
-    await page.focus('#desktop-preferences'); await page.keyboard.press('Escape'); await settle(page);
-    assert.equal(await visible(page,'#ravi-panel'),false); assert.equal(await page.evaluate(()=>document.activeElement.id),'desktop-preferences');
+    await page.focus('#rv-header-ravi'); await page.keyboard.press('Escape'); await settle(page);
+    assert.equal(await visible(page,'#ravi-panel'),false); assert.equal(await page.evaluate(()=>document.activeElement.id),'rv-header-ravi');
     await page.reload({waitUntil:'networkidle0'}); await page.addStyleTag({content:'#onboard,#hello{display:none!important}'}); await settle(page);
     assert.equal(await visible(page,'#ravi-panel'),false,'collapsed state persists');
     await page.click('#rv-header-ravi'); await settle(page);
