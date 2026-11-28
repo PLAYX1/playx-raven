@@ -7,3 +7,7 @@
 #post-office-card .po-status { font-weight: 700; margin: 6px 0 2px; overflow-wrap: anywhere; }
 #post-office-card .po-status.ok { color: var(--ok, #1a7f37); }
 #post-office-card .po-acts button { min-height: 44px; white-space: nowrap; }
+#post-office-card .po-core { margin-top: 12px; }
+#post-office-card .po-core summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-weight: 600; white-space: nowrap; }
+#post-office-card .po-field { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; }
+#post-office-card .po-field input, #post-office-card .po-field textarea { width: 100%; box-sizing: border-box; font-family: ui-monospace, monospace; font-size: 12px; }

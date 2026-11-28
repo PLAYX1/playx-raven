@@ -484,6 +484,9 @@ fn customer_path(path: &str) -> bool {
             | "/api/ship"
             // 릴레이는 열려 있어야 한다. 닫으면 이 컴퓨터가 릴레이가 아니다.
             | "/api/relay"
+            // 11-28 우체국 건강 상태(개수뿐 · 사람 정보 없음).
+            | "/relay/health"
+            | "/api/relay/health"
             | "/api/qr"
             | "/api/offer"
             | "/api/check-address"
@@ -586,7 +589,7 @@ thread_local! { pub(crate) static TEST_NOT_SHOP: std::cell::Cell<bool> = const {
 /// 짝 맺기·토큰 인증이 있는 길(가게 연결 봉함 /api/scan/sealed · /admin · /staff · /scan · /api/admin/* …)은 예전 그대로 —
 /// 원격 관리를 끄면 401 REMOTE_OFF(폰이 「원격 관리 꺼짐」을 안내), 켜면 토큰으로 들어온다. 가게 컴퓨터는 전부 예전 그대로.
 pub(crate) fn relay_only_blocks(outside: bool, shop: bool, remote_admin: bool, path: &str) -> bool {
-    outside && !shop && !remote_admin && path != "/api/relay" && customer_path(path)
+    outside && !shop && !remote_admin && path != "/api/relay" && !RELAY_HEALTH_PATHS.contains(&path) && customer_path(path)
 }
 
 /// 11-26 오락실 판매자 게이트웨이: 바깥 `/ipfs/<root>[/…]` 중 root 가 **이 컴퓨터가 붙잡은 내 게임**(arcade_keep::serves)이면
@@ -2731,6 +2734,10 @@ async fn api_order(
 async fn relay_upgrade(req: axum::extract::Request) -> axum::response::Response {
     use axum::extract::FromRequestParts;
     let (mut parts, _) = req.into_parts();
+    // 11-28 NIP-11: 웹소켓이 아니고 `Accept: application/nostr+json` 이면 릴레이 소개(+ rv_post_office)를 준다.
+    if wants_nip11(&parts.headers) {
+        return nip11_response();
+    }
     // 11-12 IP 당 상한(relay.rs client_ip) — 붙은 곳을 연결 정보와 (터널이면) 전달 머리말로 가린다.
     let peer = parts.extensions.get::<axum::extract::ConnectInfo<std::net::SocketAddr>>().map(|c| c.0);
     let ip = crate::relay::client_ip(peer, &parts.headers);
@@ -2739,11 +2746,46 @@ async fn relay_upgrade(req: axum::extract::Request) -> axum::response::Response 
             // 11-23 비공개 글(4470·열쇠 꾸러미)은 이 컴퓨터 안에서 붙은 연결에만 — 터널·같은 와이파이에는 안 내준다.
             let private_ok = peer.is_some_and(|p| p.ip().is_loopback()) && !from_outside(&parts.headers)
                 && !parts.headers.contains_key("cf-connecting-ip") && !parts.headers.contains_key("x-forwarded-for");
-            ws.max_message_size(512 * 1024).max_frame_size(512 * 1024).on_upgrade(move |s| crate::relay::serve_with(s, ip, private_ok)).into_response()
+            // 11-28 부하 시험: 연결마다 읽기·쓰기 버퍼가 기본 128KB 씩이라 연결 1만 개에 2GB 를 잡았다 → 16KB · 밀린 쓰기 4MB 상한(느린 폰 하나가 메모리를 못 채우게).
+            ws.max_message_size(512 * 1024).max_frame_size(512 * 1024)
+                .read_buffer_size(crate::relay::WS_BUFFER).write_buffer_size(crate::relay::WS_BUFFER).max_write_buffer_size(crate::relay::WS_MAX_BACKLOG)
+                .on_upgrade(move |s| crate::relay::serve_with(s, ip, private_ok)).into_response()
         }
         Err(e) => e.into_response(),
     }
 }
+
+/// NIP-11 물음인가(웹소켓 올라타기가 아닌 GET + Accept: application/nostr+json).
+pub(crate) fn wants_nip11(h: &HeaderMap) -> bool {
+    let upgrade = h.get(header::UPGRADE).and_then(|v| v.to_str().ok()).is_some_and(|v| v.eq_ignore_ascii_case("websocket"));
+    !upgrade && h.get(header::ACCEPT).and_then(|v| v.to_str().ok()).is_some_and(|v| v.to_ascii_lowercase().contains("application/nostr+json"))
+}
+
+fn nip11_response() -> axum::response::Response {
+    (
+        StatusCode::OK,
+        [
+            (header::CONTENT_TYPE, "application/nostr+json"),
+            (header::ACCESS_CONTROL_ALLOW_ORIGIN, "*"),
+            (header::CACHE_CONTROL, "no-store"),
+        ],
+        crate::post_core::nip11_json().to_string(),
+    )
+        .into_response()
+}
+
+/// 11-28 `/relay/health` · `/api/relay/health` — 앱·운영자 목록(C1)이 이 우체국이 살아 있나 본다. 사람 정보 없음(개수·바이트·판뿐).
+async fn relay_health() -> axum::response::Response {
+    (
+        StatusCode::OK,
+        [(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*"), (header::CACHE_CONTROL, "no-store")],
+        Json(crate::post_core::health_json()),
+    )
+        .into_response()
+}
+
+/// 바깥에도 여는 우체국 건강 상태 길.
+pub(crate) const RELAY_HEALTH_PATHS: [&str; 2] = ["/relay/health", "/api/relay/health"];
 
 #[derive(serde::Deserialize)]
 struct SlotsBody {
@@ -3777,6 +3819,8 @@ fn build_phone_router(st: ServerState) -> axum::Router {
         // 🔴 `/relay` 로 두면 `/{name}`(라비 그림)이 먼저 삼킨다 — 실측으로
         // 404 였다. **두 칸짜리 경로**면 그 규칙에 안 걸린다.
         .route("/api/relay", get(relay_upgrade))
+        .route(RELAY_HEALTH_PATHS[0], get(relay_health))
+        .route(RELAY_HEALTH_PATHS[1], get(relay_health))
         // 체인 POS ③ — 매장이 보내는 봉한 매출 묶음(본점 PC 에서만 받는다. 증서 판정은 처리기 안에서).
         .route(crate::chain_sales::SALES_PATH, post(chain_sales_route)
             .layer(axum::extract::DefaultBodyLimit::max(crate::chain_sales::MAX_REQUEST_BYTES)));
@@ -3998,6 +4042,7 @@ pub async fn start_phone_server(
     // 릴레이가 받은 것을 5초에 한 번 디스크에 내린다.
     crate::relay::start_saver();
     crate::relay::start_own_backup();
+    crate::post_core::on_server_start();
     // 🔴 밀린 개발비를 **사장이 안 눌러도** 스스로 보낸다. 지갑이 풀려 있는
     //    순간에만 나가고, 암호는 어디에도 안 적는다.
     crate::devfee::start_auto_pay();

@@ -399,7 +399,7 @@ pub(crate) fn absorb(events: Vec<Value>) {
                 any = true;
                 let _ = live().send(e);
             } else if ok && why == crate::post_office::TOOK {
-                let _ = post_live().send(e);
+                deliver_taken(&e);
             }
         }
         if any { start_saver(); }
@@ -457,7 +457,9 @@ pub(crate) fn verify(e: &Value) -> bool {
         return false;
     };
     let msg: [u8; 32] = hash.into();
-    Secp256k1::verification_only()
+    // 11-28 부하 시험: 확인할 때마다 문맥을 새로 만들던 것을 한 번만(겉봉이 쏟아질 때 CPU 가 여기서 샌다).
+    static CTX: std::sync::OnceLock<Secp256k1<secp256k1::VerifyOnly>> = std::sync::OnceLock::new();
+    CTX.get_or_init(Secp256k1::verification_only)
         .verify_schnorr(&s, &msg, &xpk)
         .is_ok()
 }
@@ -1287,10 +1289,110 @@ fn big_relay() -> bool {
     }
     g.0
 }
-/// (전체 연결 상한, IP 당 상한).
+/// (전체 연결 상한, IP 당 상한). 11-28 핵심 우체국은 2만·IP 당 64(post_office::CORE_CAPS — 통신사 NAT 뒤 폰들).
 fn conn_caps() -> (usize, usize) {
+    if crate::post_office::setting().role == crate::post_office::Role::Core {
+        let c = crate::post_office::CORE_CAPS;
+        return (c.conns, c.conns_per_ip);
+    }
     if big_relay() { (MAX_CONNS, MAX_CONNS_PER_IP) } else { (SMALL_CONNS, SMALL_CONNS_PER_IP) }
 }
+
+/// 건강 상태(post_core::health_json)용: 지금 붙은 연결 수.
+pub(crate) fn open_conns() -> usize { OPEN_CONNS.load(std::sync::atomic::Ordering::Relaxed) }
+/// 건강 상태용: (전체 연결 상한, IP 당 상한).
+pub(crate) fn conn_limits() -> (usize, usize) { conn_caps() }
+/// 건강 상태용: 이 컴퓨터 릴레이가 들고 있는 (우체국 말고) 글 수.
+pub(crate) fn stored_count() -> usize { peek(|v| v.len()) }
+
+// ── 11-28 겉봉 바로 배달(받는 사람별 길) ──────────────────────────────────────
+//
+// 전에는 새로 맡은 겉봉을 **모든 연결**에 방송했다(POST_LIVE · 256개 뒤처지면 잃음). 연결 1만 개면 겉봉 하나에 1만 번 비교하고,
+// 바쁜 때 느린 폰은 쪽지를 놓쳤다. 이제 `#p` 를 적어 듣는 연결만 받는 사람(p)별로 적어 두고 그 연결에만 넣는다(O(그 사람의 기기 수)).
+// 「나만·친구만」 글·꾸러미는 수가 적어 예전 방송(POST_LIVE) 그대로.
+
+type MailTx = tokio::sync::mpsc::Sender<Value>;
+static MAIL_ROUTES: Mutex<Option<std::collections::HashMap<String, Vec<(u64, MailTx)>>>> = Mutex::new(None);
+static NEXT_CONN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+/// 한 연결이 듣는 받는 사람 수 상한.
+const MAIL_KEYS_PER_CONN: usize = 256;
+
+/// 한 연결의 길. 끊기면(떨어지면) 지운다.
+struct MailRoute {
+    id: u64,
+    tx: MailTx,
+    keys: Vec<String>,
+}
+
+impl MailRoute {
+    fn new(tx: MailTx) -> Self {
+        MailRoute { id: NEXT_CONN.fetch_add(1, std::sync::atomic::Ordering::Relaxed), tx, keys: vec![] }
+    }
+    /// 지금 열린 구독에서 겉봉을 들을 받는 사람들.
+    fn keys_of(subs: &[(String, Vec<Value>)]) -> Vec<String> {
+        let mut out: Vec<String> = Vec::new();
+        for (_, fs) in subs {
+            for f in fs {
+                let kinds_ok = f.get("kinds").and_then(Value::as_array).is_none_or(|a| a.iter().any(|k| k.as_i64() == Some(1059)));
+                if !kinds_ok { continue; }
+                for p in f.get("#p").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str) {
+                    let p = p.to_ascii_lowercase();
+                    if p.len() == 64 && !out.contains(&p) && out.len() < MAIL_KEYS_PER_CONN { out.push(p); }
+                }
+            }
+        }
+        out
+    }
+    fn set(&mut self, keys: Vec<String>) {
+        if keys == self.keys { return; }
+        let mut g = MAIL_ROUTES.lock().unwrap_or_else(|e| e.into_inner());
+        let m = g.get_or_insert_with(Default::default);
+        for k in &self.keys {
+            if let Some(v) = m.get_mut(k) { v.retain(|(i, _)| *i != self.id); if v.is_empty() { m.remove(k); } }
+        }
+        for k in &keys { m.entry(k.clone()).or_default().push((self.id, self.tx.clone())); }
+        self.keys = keys;
+    }
+}
+impl Drop for MailRoute {
+    fn drop(&mut self) { self.set(vec![]); }
+}
+
+/// 새로 맡은 우체국 글을 듣는 연결에 넣는다. 겉봉은 받는 사람별 길로, 나머지는 방송.
+pub(crate) fn deliver_taken(e: &Value) {
+    if e.get("kind").and_then(Value::as_i64) != Some(crate::post_office::KIND_WRAP) {
+        let _ = post_live().send(e.clone());
+        return;
+    }
+    let Some(p) = crate::post_office::wrap_recipient(e) else { return };
+    let txs: Vec<MailTx> = MAIL_ROUTES.lock().unwrap_or_else(|e| e.into_inner()).as_ref()
+        .and_then(|m| m.get(&p)).map(|v| v.iter().map(|(_, t)| t.clone()).collect()).unwrap_or_default();
+    for t in txs { let _ = t.try_send(e.clone()); }
+}
+
+/// 핵심 우체국 상대에게서 받은 겉봉(맞추기)을 맡는다 — 이 컴퓨터를 듣는 폰에도 바로 넣는다. 다시 다른 핵심에 보내지는 않는다(모두가 서로 맞춘다).
+pub(crate) fn take_from_peer(e: Value) -> bool {
+    let (ok, why) = store(e.clone());
+    if ok && why == crate::post_office::TOOK {
+        deliver_taken(&e);
+        return true;
+    }
+    if ok && why.is_empty() {
+        let _ = live().send(e);
+        return true;
+    }
+    false
+}
+
+/// 웹소켓 읽기·쓰기 버퍼(연결마다). 기본 128KB 는 연결 1만 개에 2GB 였다(11-28 부하 시험).
+pub(crate) const WS_BUFFER: usize = 16 * 1024;
+/// 읽지 않는 상대에게 밀린 쓰기 상한 — 넘으면 그 연결 보내기가 실패해 끊는다.
+pub(crate) const WS_MAX_BACKLOG: usize = 4 * 1024 * 1024;
+
+/// 한 연결이 1분에 올릴 수 있는 글(연결 방 글 빼고). 11-28: 「한 번 붙어 200개」는 오래 붙어 있는 메신저 폰을 막았다 → 1분 창으로.
+const EVENTS_PER_MINUTE: usize = 120;
+/// 한 연결이 동시에 열어 둘 수 있는 NIP-77 맞추기.
+const MAX_NEGS: usize = 4;
 /// 한 연결이 1분에 보낼 수 있는 물음(REQ) 수와 받아 갈 수 있는 답 크기.
 const REQ_PER_MINUTE: usize = 120;
 const OUT_BYTES_PER_MINUTE: usize = 16 * 1024 * 1024;
@@ -1364,6 +1466,41 @@ fn author_budget_ok(pubkey: &str) -> bool {
 const PING_EVERY_SECS: u64 = 60;
 const SILENT_CLOSE_SECS: u64 = 150;
 
+enum NegRefuse {
+    Auth,
+    Why(String),
+}
+
+/// NIP-77 열기: 겉봉(1059)만 · `#p`(≤64명)를 적었거나 인증한 핵심이면 전부. 첫 답(hex)까지 만든다.
+fn neg_open(filter: &Value, first_hex: &str, peer: bool) -> Result<(negentropy::Negentropy<'static, negentropy::NegentropyStorageVector>, String), NegRefuse> {
+    use negentropy::{Id, Negentropy, NegentropyStorageVector};
+    let kinds_ok = filter.get("kinds").and_then(Value::as_array).is_some_and(|k| !k.is_empty() && k.iter().all(|x| x.as_i64() == Some(1059)));
+    if !kinds_ok {
+        return Err(NegRefuse::Why("blocked: 이 우체국은 겉봉(kind 1059)만 맞춥니다".into()));
+    }
+    let ps: Option<Vec<String>> = filter.get("#p").and_then(Value::as_array)
+        .map(|a| a.iter().filter_map(Value::as_str).map(|p| p.to_ascii_lowercase()).filter(|p| p.len() == 64).take(64).collect());
+    if ps.as_ref().is_some_and(|p| p.is_empty()) {
+        return Err(NegRefuse::Why("invalid: #p".into()));
+    }
+    if ps.is_none() && !peer {
+        return Err(NegRefuse::Auth);
+    }
+    let since = filter.get("since").and_then(Value::as_i64).unwrap_or(0);
+    let until = filter.get("until").and_then(Value::as_i64).unwrap_or(i64::MAX);
+    let items = crate::post_wraps::neg_items(ps.as_deref(), since, until, crate::post_core::NEG_MAX_ITEMS)
+        .map_err(|n| NegRefuse::Why(format!("blocked: 너무 많습니다({n}) — since 를 좁혀 주세요")))?;
+    let mut st = NegentropyStorageVector::with_capacity(items.len());
+    for (at, id) in items {
+        st.insert(at, Id::from_byte_array(id)).map_err(|e| NegRefuse::Why(format!("error: {e}")))?;
+    }
+    st.seal().map_err(|e| NegRefuse::Why(format!("error: {e}")))?;
+    let mut neg = Negentropy::owned(st, crate::post_core::NEG_FRAME).map_err(|e| NegRefuse::Why(format!("error: {e}")))?;
+    let first = hex::decode(first_hex).map_err(|_| NegRefuse::Why("error: 첫 메시지가 hex 가 아닙니다".into()))?;
+    let out = neg.reconcile(&first).map_err(|e| NegRefuse::Why(format!("error: {e}")))?;
+    Ok((neg, hex::encode(out)))
+}
+
 /// IP 상한 없이(시험·regtest 가 쓴다). 앱의 /api/relay 는 serve_from 을 쓴다.
 #[allow(dead_code)]
 pub async fn serve(ws: WebSocket) {
@@ -1403,8 +1540,14 @@ pub async fn serve_with(mut ws: WebSocket, ip: Option<std::net::IpAddr>, private
     //
     // 한 번 붙어서 200개까지. 더 보내려면 다시 붙어야 하고, 그건 눈에 띈다.
     // (연결 방 글은 오래 붙어 있는 폰이 쓰므로 따로 1분 180개로 센다.)
-    let mut sent = 0usize;
+    let mut event_times: std::collections::VecDeque<std::time::Instant> = Default::default();
     let mut pair_times: std::collections::VecDeque<std::time::Instant> = Default::default();
+    // 11-28 받는 사람별 겉봉 길 · NIP-42 인증(핵심끼리) · NIP-77 맞추기.
+    let (mail_tx, mut mail_rx) = tokio::sync::mpsc::channel::<Value>(1024);
+    let mut mail = MailRoute::new(mail_tx);
+    let mut challenge: Option<String> = None;
+    let mut authed: Option<String> = None;
+    let mut negs: std::collections::HashMap<String, negentropy::Negentropy<'static, negentropy::NegentropyStorageVector>> = Default::default();
     let mut subs: Vec<(String, Vec<Value>)> = Vec::new();
     // 제미나이 E3: 연결마다 1분 물음 수·답 크기.
     let mut req_times: std::collections::VecDeque<std::time::Instant> = Default::default();
@@ -1422,6 +1565,16 @@ pub async fn serve_with(mut ws: WebSocket, ip: Option<std::net::IpAddr>, private
                 if heard.elapsed().as_secs() >= SILENT_CLOSE_SECS || !matches!(pinged, Ok(Ok(()))) {
                     let _ = ws.send(Message::Close(None)).await;
                     return;
+                }
+                continue;
+            }
+            got = mail_rx.recv() => {
+                if let Some(e) = got {
+                    let hits: Vec<String> = subs.iter().filter(|(_, fs)| fs.iter().any(|f| matches(&e, f) && named_for(&e, f))).map(|(id, _)| id.clone()).collect();
+                    for id in hits {
+                        let pushed = tokio::time::timeout(std::time::Duration::from_secs(10), ws.send(Message::Text(json!(["EVENT", id, e]).to_string().into()))).await;
+                        if !matches!(pushed, Ok(Ok(()))) { return; }
+                    }
                 }
                 continue;
             }
@@ -1471,6 +1624,7 @@ pub async fn serve_with(mut ws: WebSocket, ip: Option<std::net::IpAddr>, private
         match cmd {
             "EVENT" => {
                 let Some(e) = a.get(1).cloned() else { continue };
+                let peer = authed.as_deref().is_some_and(crate::post_core::is_core_peer);
                 let id = e.get("id").and_then(Value::as_str).unwrap_or("").to_string();
                 let pairing = e.get("kind").and_then(Value::as_i64) == Some(42)
                     && crate::pairing::net::is_pairing_room(room_of(&e));
@@ -1481,14 +1635,19 @@ pub async fn serve_with(mut ws: WebSocket, ip: Option<std::net::IpAddr>, private
                     }
                     pair_times.push_back(now);
                     pair_times.len() > PAIR_PER_MINUTE
+                } else if peer {
+                    // 인증한 핵심 우체국(맞추기·바로 보내기) — 상대가 대역폭을 스스로 묶는다(post_core PEER_BYTES_PER_MIN).
+                    false
                 } else {
-                    sent += 1;
+                    let now = std::time::Instant::now();
+                    while event_times.front().is_some_and(|t| now.duration_since(*t).as_secs() >= 60) { event_times.pop_front(); }
+                    event_times.push_back(now);
                     // 우체국: 겉봉 글쓴이는 1회용 열쇠라 열쇠별 예산이 안 든다 → 바깥 IP 마다 한 시간 예산(post_office.rs).
                     let wrap_over = e.get("kind").and_then(Value::as_i64) == Some(crate::post_office::KIND_WRAP)
                         && ip.is_some_and(|ip| !crate::post_office::ip_wrap_budget_ok(ip));
                     wrap_over ||
                     // 열쇠별 예산은 **서명이 맞는 글만** 센다(11-07 재검사: 남의 공개키를 적은 가짜 글로 그 사람을 막을 수 있었다).
-                    sent > 200 || (verify(&e) && !author_budget_ok(e.get("pubkey").and_then(Value::as_str).unwrap_or("")))
+                    event_times.len() > EVENTS_PER_MINUTE || (verify(&e) && !author_budget_ok(e.get("pubkey").and_then(Value::as_str).unwrap_or("")))
                 };
                 if limited {
                     let _ = ws
@@ -1508,7 +1667,9 @@ pub async fn serve_with(mut ws: WebSocket, ip: Option<std::net::IpAddr>, private
                         if r.0 && r.1.is_empty() {
                             let _ = live().send(e);
                         } else if r.0 && r.1 == crate::post_office::TOOK {
-                            let _ = post_live().send(e);
+                            // 손님·폰이 맡긴 겉봉은 다른 핵심 우체국에도 곧바로(핵심일 때만 줄이 있다). 상대에게서 온 것은 다시 안 보낸다.
+                            if !peer { crate::post_core::forward_new(&e); }
+                            deliver_taken(&e);
                         }
                         r
                     }
@@ -1526,7 +1687,9 @@ pub async fn serve_with(mut ws: WebSocket, ip: Option<std::net::IpAddr>, private
                 while req_times.front().is_some_and(|t| now_i.duration_since(*t).as_secs() >= 60) { req_times.pop_front(); }
                 req_times.push_back(now_i);
                 if now_i.duration_since(out_window.0).as_secs() >= 60 { out_window = (now_i, 0); }
-                if req_times.len() > REQ_PER_MINUTE || out_window.1 > OUT_BYTES_PER_MINUTE {
+                // 인증한 핵심 우체국은 맞추기에서 빠진 것을 100개씩 연달아 묻는다 — 연결별 물음 상한을 안 건다(상대가 분당 바이트로 스스로 묶는다).
+                let peer_req = authed.as_deref().is_some_and(crate::post_core::is_core_peer);
+                if !peer_req && (req_times.len() > REQ_PER_MINUTE || out_window.1 > OUT_BYTES_PER_MINUTE) {
                     let _ = ws.send(Message::Text(json!(["CLOSED", sub, "rate-limited: 잠시 뒤에 다시 물어 주세요"]).to_string().into())).await;
                     continue;
                 }
@@ -1549,6 +1712,21 @@ pub async fn serve_with(mut ws: WebSocket, ip: Option<std::net::IpAddr>, private
                 });
                 // 우체국 맡은 글 — 사람을 적은 물음(4470·꾸러미=authors, 1059=#p)에만. 넓은 물음에는 안 섞인다.
                 hits.extend(crate::post_office::answer(&filters, cap));
+                // 11-28 인증한 핵심 우체국만: 사람을 안 적은 겉봉 물음(ids · 시각 범위) — 맞추기에서 빠진 것을 받아 간다.
+                if authed.as_deref().is_some_and(crate::post_core::is_core_peer) {
+                    for f in &filters {
+                        let only_wraps = f.get("kinds").and_then(Value::as_array).is_some_and(|k| !k.is_empty() && k.iter().all(|x| x.as_i64() == Some(1059)));
+                        if !only_wraps || f.get("#p").is_some() { continue; }
+                        if let Some(ids) = f.get("ids").and_then(Value::as_array) {
+                            let ids: Vec<[u8; 32]> = ids.iter().filter_map(Value::as_str).filter_map(crate::post_wraps::id_of).take(cap).collect();
+                            hits.extend(crate::post_wraps::by_ids(&ids));
+                        } else {
+                            let since = f.get("since").and_then(Value::as_i64).unwrap_or(0);
+                            let until = f.get("until").and_then(Value::as_i64).unwrap_or(i64::MAX);
+                            hits.extend(crate::post_wraps::by_time(since, until, cap));
+                        }
+                    }
+                }
                 {
                     let g = EPHEMERAL.lock().unwrap_or_else(|x| x.into_inner());
                     let cut = now_secs() - EPHEMERAL_TTL_SECS;
@@ -1578,12 +1756,74 @@ pub async fn serve_with(mut ws: WebSocket, ip: Option<std::net::IpAddr>, private
                 while subs.len() > MAX_SUBS {
                     subs.remove(0);
                 }
+                mail.set(MailRoute::keys_of(&subs));
             }
             // 구독을 끊는다.
             "CLOSE" => {
                 if let Some(sub) = a.get(1).and_then(Value::as_str) {
                     subs.retain(|(id, _)| id != sub);
                 }
+                mail.set(MailRoute::keys_of(&subs));
+            }
+            // NIP-42 — 핵심 우체국끼리만 쓴다(도전은 넓은 겉봉 맞추기를 물을 때 보낸다).
+            "AUTH" => {
+                let Some(e) = a.get(1) else { continue };
+                let id = e.get("id").and_then(Value::as_str).unwrap_or("").to_string();
+                let who = challenge.as_deref().and_then(|c| crate::post_core::check_auth(e, c));
+                let ok = who.is_some();
+                if ok { authed = who; }
+                let why = if ok { "" } else { "auth-required: 인증이 맞지 않습니다" };
+                let _ = ws.send(Message::Text(json!(["OK", id, ok, why]).to_string().into())).await;
+            }
+            // NIP-77 negentropy — 겉봉(1059)만. `#p` 를 적은 것은 누구나(REQ 와 같은 노출), 안 적은 것은 인증한 핵심 우체국만.
+            "NEG-OPEN" => {
+                let Some(sub) = a.get(1).and_then(Value::as_str).map(|x| x.chars().take(64).collect::<String>()) else { continue };
+                let now_i = std::time::Instant::now();
+                while req_times.front().is_some_and(|t| now_i.duration_since(*t).as_secs() >= 60) { req_times.pop_front(); }
+                req_times.push_back(now_i);
+                if req_times.len() > REQ_PER_MINUTE {
+                    let _ = ws.send(Message::Text(json!(["NEG-ERR", sub, "rate-limited: 잠시 뒤에 다시"]).to_string().into())).await;
+                    continue;
+                }
+                let filter = a.get(2).cloned().unwrap_or(json!({}));
+                let peer = authed.as_deref().is_some_and(crate::post_core::is_core_peer);
+                let reply = match neg_open(&filter, a.get(3).and_then(Value::as_str).unwrap_or(""), peer) {
+                    Ok((neg, msg)) => {
+                        negs.remove(&sub);
+                        if negs.len() >= MAX_NEGS {
+                            if let Some(k) = negs.keys().next().cloned() { negs.remove(&k); }
+                        }
+                        negs.insert(sub.clone(), neg);
+                        json!(["NEG-MSG", sub, msg])
+                    }
+                    Err(NegRefuse::Auth) => {
+                        let c = challenge.get_or_insert_with(crate::post_core::new_challenge).clone();
+                        let _ = ws.send(Message::Text(json!(["AUTH", c]).to_string().into())).await;
+                        json!(["NEG-ERR", sub, "auth-required: 핵심 우체국만 전체를 맞춥니다"])
+                    }
+                    Err(NegRefuse::Why(w)) => json!(["NEG-ERR", sub, w]),
+                };
+                let line = reply.to_string();
+                out_window.1 += line.len();
+                let _ = ws.send(Message::Text(line.into())).await;
+            }
+            "NEG-MSG" => {
+                let Some(sub) = a.get(1).and_then(Value::as_str).map(str::to_string) else { continue };
+                let msg = a.get(2).and_then(Value::as_str).and_then(|h| hex::decode(h).ok());
+                let reply = match (negs.get_mut(&sub), msg) {
+                    (Some(neg), Some(m)) => match neg.reconcile(&m) {
+                        Ok(out) => json!(["NEG-MSG", sub, hex::encode(out)]),
+                        Err(e) => { negs.remove(&sub); json!(["NEG-ERR", sub, format!("error: {e}")]) }
+                    },
+                    (None, _) => json!(["NEG-ERR", sub, "closed: 열린 맞추기가 없습니다"]),
+                    (_, None) => { negs.remove(&sub); json!(["NEG-ERR", sub, "error: 메시지가 hex 가 아닙니다"]) }
+                };
+                let line = reply.to_string();
+                out_window.1 += line.len();
+                let _ = ws.send(Message::Text(line.into())).await;
+            }
+            "NEG-CLOSE" => {
+                if let Some(sub) = a.get(1).and_then(Value::as_str) { negs.remove(sub); }
             }
             _ => {}
         }
@@ -2498,5 +2738,186 @@ mod tests {
         assert_eq!(st["my_backfill"], false);
         *TEST_OWNER.lock().unwrap() = None;
         *STORE.lock().unwrap() = None;
+    }
+
+    async fn spawn_relay() -> (std::net::SocketAddr, tokio::task::JoinHandle<()>) {
+        let app = axum::Router::new().route("/r", axum::routing::get(|ws: axum::extract::ws::WebSocketUpgrade| async move {
+            ws.on_upgrade(|s| super::serve_with(s, None, false))
+        }));
+        let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = l.local_addr().unwrap();
+        (addr, tokio::spawn(async move { axum::serve(l, app).await.unwrap() }))
+    }
+
+    async fn next_v(ws: &mut (impl futures_util::Stream<Item = Result<tokio_tungstenite::tungstenite::Message, tokio_tungstenite::tungstenite::Error>> + Unpin)) -> Value {
+        use futures_util::StreamExt;
+        loop {
+            let m = tokio::time::timeout(std::time::Duration::from_secs(5), ws.next()).await.expect("답이 없다").unwrap().unwrap();
+            if let tokio_tungstenite::tungstenite::Message::Text(t) = m { return serde_json::from_str(&t).unwrap(); }
+        }
+    }
+
+    /// 11-28 NIP-77: 폰이 「내 겉봉 중 빠진 것만」 받는다 — `#p` 를 적으면 누구나(REQ 와 같은 노출).
+    #[tokio::test]
+    async fn negentropy_by_p_finds_exactly_the_missing_wraps() {
+        use futures_util::SinkExt;
+        use negentropy::{Id, Negentropy, NegentropyStorageVector};
+        use tokio_tungstenite::tungstenite::Message as M;
+        let _g = OWNER_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _p = crate::post_office::TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        *TEST_OWNER.lock().unwrap() = None;
+        crate::post_wraps::reset();
+        crate::post_office::set_on(true);
+        let t = now_secs();
+        let bob = crate::shopkey::pubkey_of(&[0x52u8; 32]).unwrap();
+        let ws_: Vec<Value> = (0..5u8).map(|i| crate::shopkey::sign_with(&[0x60 + i; 32], 1059, json!([["p", bob.clone()]]), &format!("w{i}"), t - i as i64).unwrap()).collect();
+        for e in &ws_ { assert_eq!(store(e.clone()).1, crate::post_office::TOOK); }
+        // 다른 사람 겉봉은 맞추기에 안 섞인다.
+        let other = crate::shopkey::pubkey_of(&[0x53u8; 32]).unwrap();
+        store(crate::shopkey::sign_with(&[0x70; 32], 1059, json!([["p", other]]), "x", t).unwrap());
+        // 폰은 0·1 번을 이미 가졌고, 우체국에 없는 것 하나(가짜 id)를 가졌다.
+        let idb = |e: &Value| crate::post_wraps::id_of(e["id"].as_str().unwrap()).unwrap();
+        let mut st = NegentropyStorageVector::new();
+        st.insert(ws_[0]["created_at"].as_u64().unwrap(), Id::from_byte_array(idb(&ws_[0]))).unwrap();
+        st.insert(ws_[1]["created_at"].as_u64().unwrap(), Id::from_byte_array(idb(&ws_[1]))).unwrap();
+        st.insert(t as u64, Id::from_byte_array([9u8; 32])).unwrap();
+        st.seal().unwrap();
+        let mut neg = Negentropy::owned(st, 0).unwrap();
+        let first = neg.initiate().unwrap();
+        let (addr, srv) = spawn_relay().await;
+        let (mut a, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/r")).await.unwrap();
+        a.send(M::Text(json!(["NEG-OPEN", "n1", { "kinds": [1059], "#p": [bob] }, hex::encode(first)]).to_string().into())).await.unwrap();
+        let (mut have, mut need) = (vec![], vec![]);
+        loop {
+            let v = next_v(&mut a).await;
+            assert_eq!(v[0], "NEG-MSG", "{v}");
+            let msg = hex::decode(v[2].as_str().unwrap()).unwrap();
+            match neg.reconcile_with_ids(&msg, &mut have, &mut need).unwrap() {
+                Some(next) => a.send(M::Text(json!(["NEG-MSG", "n1", hex::encode(next)]).to_string().into())).await.unwrap(),
+                None => break,
+            }
+        }
+        a.send(M::Text(json!(["NEG-CLOSE", "n1"]).to_string().into())).await.unwrap();
+        let mut need: Vec<[u8; 32]> = need.iter().map(|i| *i.as_bytes()).collect();
+        need.sort();
+        let mut want: Vec<[u8; 32]> = ws_[2..].iter().map(idb).collect();
+        want.sort();
+        assert_eq!(need, want, "빠진 겉봉 셋만");
+        assert_eq!(have.len(), 1, "우체국에 없는 것 하나");
+        // 겉봉 말고 다른 종류는 안 맞춘다.
+        a.send(M::Text(json!(["NEG-OPEN", "n2", { "kinds": [1] }, "61"]).to_string().into())).await.unwrap();
+        let v = next_v(&mut a).await;
+        assert_eq!(v[0], "NEG-ERR");
+        srv.abort();
+        crate::post_office::set_on(false);
+    }
+
+    /// 11-28 핵심끼리: 사람을 안 적은 맞추기·물음은 NIP-42 로 인증한 핵심 우체국만. 다른 사람에게는 AUTH 도전 + 거절.
+    #[tokio::test]
+    async fn broad_wrap_sync_is_only_for_authenticated_core_peers() {
+        use futures_util::SinkExt;
+        use tokio_tungstenite::tungstenite::Message as M;
+        let _g = OWNER_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _p = crate::post_office::TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        *TEST_OWNER.lock().unwrap() = None;
+        crate::post_wraps::reset();
+        crate::post_office::set_on(true);
+        crate::post_office::set_role(crate::post_office::Role::Core, None, None);
+        let t = now_secs();
+        let carol = crate::shopkey::pubkey_of(&[0x54u8; 32]).unwrap();
+        let w = crate::shopkey::sign_with(&[0x71; 32], 1059, json!([["p", carol]]), "c", t).unwrap();
+        assert_eq!(store(w.clone()).1, crate::post_office::TOOK);
+        let (addr, srv) = spawn_relay().await;
+        // 모르는 사람: 넓은 맞추기 → AUTH 도전 + 거절 · 넓은 물음(ids) → 아무것도.
+        let (mut x, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/r")).await.unwrap();
+        x.send(M::Text(json!(["NEG-OPEN", "b", { "kinds": [1059] }, "61"]).to_string().into())).await.unwrap();
+        assert_eq!(next_v(&mut x).await[0], "AUTH");
+        let v = next_v(&mut x).await;
+        assert!(v[0] == "NEG-ERR" && v[2].as_str().unwrap().starts_with("auth-required"), "{v}");
+        x.send(M::Text(json!(["REQ", "q", { "kinds": [1059], "ids": [w["id"]] }]).to_string().into())).await.unwrap();
+        assert_eq!(next_v(&mut x).await[0], "EOSE", "인증 없이 남의 겉봉을 ids 로 받아 갔다");
+        // 믿지 않는 열쇠로 인증해도 안 된다.
+        let mut stranger = crate::post_core::Peer::new(tokio_tungstenite::connect_async(format!("ws://{addr}/r")).await.unwrap().0, "ws://x");
+        stranger.auth(&[0x99u8; 32]).await.unwrap();
+        // (인증은 맞아도) 상대 목록에 없으면 넓은 물음은 여전히 빈손.
+        stranger.ws.send(M::Text(json!(["REQ", "q", { "kinds": [1059], "ids": [w["id"]] }]).to_string().into())).await.unwrap();
+        assert_eq!(next_v(&mut stranger.ws).await[0], "EOSE");
+        // 믿는 핵심 열쇠: 인증 → ids 로 받아 가고, 넓은 맞추기가 열린다.
+        let peer_sk = [0x77u8; 32];
+        crate::post_core::TEST_PEERS.with(|c| c.borrow_mut().push(crate::shopkey::pubkey_of(&peer_sk).unwrap()));
+        let mut peer = crate::post_core::Peer::new(tokio_tungstenite::connect_async(format!("ws://{addr}/r")).await.unwrap().0, "ws://x");
+        peer.auth(&peer_sk).await.unwrap();
+        peer.ws.send(M::Text(json!(["REQ", "q", { "kinds": [1059], "ids": [w["id"]] }]).to_string().into())).await.unwrap();
+        let v = next_v(&mut peer.ws).await;
+        assert_eq!(v[0], "EVENT");
+        assert_eq!(v[2]["id"], w["id"]);
+        assert_eq!(next_v(&mut peer.ws).await[0], "EOSE");
+        // 같은 창고끼리 맞추면 오갈 것이 없다(맞추기 길이 끝까지 도는지).
+        assert_eq!(peer.reconcile(t - 3600).await.unwrap(), (0, 0));
+        srv.abort();
+        crate::post_core::TEST_PEERS.with(|c| c.borrow_mut().clear());
+        crate::post_office::set_role(crate::post_office::Role::Helper, None, None);
+        crate::post_office::set_on(false);
+    }
+
+    #[test]
+    fn nip11_has_the_post_office_block() {
+        let v = crate::post_core::nip11_json();
+        assert_eq!(v["rv_post_office"]["v"], 1);
+        assert!(v["rv_post_office"]["role"] == "helper" || v["rv_post_office"]["role"] == "core");
+        assert_eq!(v["rv_post_office"]["nip77"], true);
+        assert!(v["supported_nips"].as_array().unwrap().iter().any(|n| n == 77));
+        let mut h = axum::http::HeaderMap::new();
+        h.insert("accept", "application/nostr+json".parse().unwrap());
+        assert!(crate::server::wants_nip11(&h));
+        h.insert("upgrade", "websocket".parse().unwrap());
+        assert!(!crate::server::wants_nip11(&h), "웹소켓 올라타기는 릴레이로");
+        let h = crate::post_core::health_json();
+        for k in ["ok", "version", "uptime_secs", "connections", "events_stored", "held", "held_bytes", "disk_free", "role"] {
+            assert!(h.get(k).is_some(), "건강 상태에 {k} 가 없다");
+        }
+        let text = h.to_string();
+        assert!(!text.contains("pubkey") && !text.contains("wss://"), "건강 상태에 사람·주소 정보: {text}");
+    }
+
+    /// 부하 시험용 릴레이 서버(기본은 건너뜀). scripts/relay-loadtest.mjs 가 여기에 붙는다.
+    /// 환경: RV_BENCH_PORT(18790) · RV_BENCH_SECS(120) · RV_BENCH_ROLE(core|helper) · RV_BENCH_SK(hex, 핵심끼리 인증 열쇠)
+    ///       RV_BENCH_TRUST(믿는 상대 공개키, 쉼표) · RV_BENCH_PEERS(맞출 상대 ws://127.0.0.1:…/r, 쉼표).
+    /// 예: `RV_BENCH_PORT=18790 cargo test --release --lib relay_bench_server -- --ignored --nocapture`
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+    #[ignore]
+    async fn relay_bench_server() {
+        let env = |k: &str, d: &str| std::env::var(k).unwrap_or_else(|_| d.to_string());
+        let port: u16 = env("RV_BENCH_PORT", "18790").parse().unwrap();
+        let secs: u64 = env("RV_BENCH_SECS", "120").parse().unwrap();
+        let role = crate::post_office::Role::parse(&env("RV_BENCH_ROLE", "core"));
+        let _ = crate::post_office::BENCH.set(crate::post_office::Setting { on: true, notice: false, role, region: "bench".into(), peers: vec![] });
+        if let Ok(h) = std::env::var("RV_BENCH_SK") {
+            let mut k = [0u8; 32];
+            hex::decode_to_slice(h, &mut k).unwrap();
+            let _ = crate::post_core::BENCH_SK.set(k);
+        }
+        for pk in env("RV_BENCH_TRUST", "").split(',').filter(|x| x.len() == 64) {
+            crate::post_core::BENCH_TRUST.lock().unwrap().push(pk.to_string());
+        }
+        crate::post_wraps::reset();
+        crate::post_core::raise_nofile();
+        let app = axum::Router::new()
+            .route("/r", axum::routing::get(|ws: axum::extract::ws::WebSocketUpgrade| async move {
+                ws.max_message_size(512 * 1024).max_frame_size(512 * 1024)
+                    .read_buffer_size(super::WS_BUFFER).write_buffer_size(super::WS_BUFFER).max_write_buffer_size(super::WS_MAX_BACKLOG)
+                    .on_upgrade(|s| super::serve_with(s, None, false))
+            }))
+            .route("/relay/health", axum::routing::get(|| async { axum::Json(crate::post_core::health_json()) }));
+        let l = tokio::net::TcpListener::bind(("127.0.0.1", port)).await.unwrap();
+        eprintln!("[bench] relay ws://127.0.0.1:{port}/r role={} secs={secs}", role.as_str());
+        let srv = tokio::spawn(async move { axum::serve(l, app).await.unwrap() });
+        for u in env("RV_BENCH_PEERS", "").split(',').filter(|x| x.starts_with("ws://127.0.0.1:")) {
+            crate::post_core::bench_peer(u.to_string());
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(secs)).await;
+        eprintln!("[bench] done held={:?} sync={}", crate::post_wraps::counts(), crate::post_core::sync_state());
+        srv.abort();
+        crate::post_wraps::reset();
     }
 }

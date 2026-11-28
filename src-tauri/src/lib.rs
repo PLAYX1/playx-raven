@@ -182,6 +182,8 @@ mod node_keeper;
 // 11-08 — 릴레이 나누기: 레이븐볼트 데스크탑끼리 서로 릴레이가 된다(켠 사람만). 규약 docs/RELAY-SHARE.md.
 mod relay_share;
 mod post_office;
+mod post_core;
+mod post_wraps;
 mod talk_live;
 mod relay_keeper;
 mod text_zoom;
@@ -806,6 +808,7 @@ pub fn run() {
             relay_share::relay_share_set_own,
             post_office::post_office_get,
             post_office::post_office_set,
+            post_office::post_office_set_role,
             talk_live::talk_live_status,
             relay_keeper::relay_keeper_get,
             relay_keeper::relay_keeper_check,

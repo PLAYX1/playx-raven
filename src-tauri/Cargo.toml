@@ -92,6 +92,9 @@ qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 # (`/api/scan/sealed`)이 열어 낸 요청을 기존 처리기에 그대로 넣는 데도 쓴다.
 # axum 이 이미 쓰는 판이라 새로 받거나 새로 짓는 코드는 없다.
 tower = { version = "0.5", features = ["util"] }
+# 11-28 우체국 키우기: NIP-77 negentropy(핵심 우체국끼리 겉봉 맞추기 · 폰의 「빠진 쪽지만」 받기).
+# rust-nostr 의 참조 구현 · MIT(PolyForm Shield 와 함께 쓸 수 있다) · 의존 0개.
+negentropy = "0.5"
 
 # Match Raven Core / Boost file_lock; std File::try_lock uses flock on Unix.
 [target.'cfg(unix)'.dependencies]

@@ -479,6 +479,8 @@ pub async fn tailscale_fixed_setup() -> Value {
         return json!({ "state": "not_answering", "url": url });
     }
     let published = crate::map::adopt_fixed_shop_url(&url).unwrap_or(false);
+    // 11-28 우체국: 이 고정 주소를 우체국 주소로도 쓴다(바깥 주소 칸이 비어 있을 때만) — 동의 한 번으로 다른 분들이 찾는 우체국이 된다.
+    crate::relay_share::adopt_fixed_relay(&url);
     crate::arcade_keep::address_changed();
     json!({ "state": "ready", "url": url, "published": published })
 }

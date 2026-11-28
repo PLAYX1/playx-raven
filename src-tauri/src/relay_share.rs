@@ -64,6 +64,8 @@ const TICK_SECS: u64 = 10 * 60;
 pub const FULL_SECS: i64 = 6 * 3600;
 /// 주소가 그대로여도 이만큼 지나면 10002 를 다시 올린다(이웃 찾기의 14일 창 안에 머물게).
 const REANNOUNCE_SECS: i64 = 24 * 3600;
+/// 11-28 우체국 표를 단 알림은 12시간마다 새로 올린다 — 꺼진 컴퓨터는 스스로 못 빼므로, 앱이 36시간 넘은 우체국 알림을 버린다(앱 쪽 약속).
+pub const POST_REANNOUNCE_SECS: i64 = 12 * 3600;
 const FIRST_DELAY_SECS: u64 = 60;
 
 static RUNNING: AtomicBool = AtomicBool::new(false);
@@ -552,7 +554,10 @@ async fn probe_inner(url: &str, check_dns: bool) -> bool {
         }
         use futures_util::{SinkExt, StreamExt};
         use tokio_tungstenite::tungstenite::Message;
-        let Ok(mut ws) = connect_ws(url).await else { return false };
+        // 11-28: 내 주소로 스스로 들어와 보는 시험(check_dns=false)은 고정 IP 확인 없이 붙는다 —
+        //   테일스케일 컴퓨터에서는 내 ts.net 이 100.x(MagicDNS)로 풀려 공개 주소 검사에 걸렸다.
+        let conn = if check_dns { connect_ws(url).await } else { tokio_tungstenite::connect_async(url).await.map(|(w, _)| w).map_err(|e| e.to_string()) };
+        let Ok(mut ws) = conn else { return false };
         let sub = "rvprobe";
         let req = json!(["REQ", sub, { "kinds": [LIST_KIND], "limit": 1 }]).to_string();
         if ws.send(Message::Text(req.into())).await.is_err() {
@@ -835,7 +840,13 @@ fn outside_url() -> Option<String> {
     let st = crate::tunnel::tunnel_status();
     if st["running"].as_bool().unwrap_or(false) {
         if let Some(u) = st["url"].as_str() {
-            return clean_relay_url(&format!("{}/api/relay", u.replacen("https://", "wss://", 1)));
+            let tunnel = clean_relay_url(&format!("{}/api/relay", u.replacen("https://", "wss://", 1)));
+            // 11-28: 임시 trycloudflare 보다 사람이 받은 고정 주소(테일스케일 퍼널 등)가 있으면 그것을 — 우체국 주소는 바뀌지 않아야 찾는다.
+            let own = current().own_url.as_deref().and_then(clean_relay_url);
+            if let (Some(t), Some(o)) = (&tunnel, &own) {
+                if !crate::post_core::is_stable_url(t) { return Some(o.clone()); }
+            }
+            return tunnel;
         }
     }
     // 기본은 클라우드플레어(「바깥 접속」). 그게 꺼져 있으면 사람이 직접 적은 주소(테일스케일 등).
@@ -872,7 +883,8 @@ pub fn announce_plan(s: &Share, outside: Option<&str>, at: i64) -> Announce {
 pub fn announce_plan_with(s: &Share, outside: Option<&str>, at: i64, post: bool) -> Announce {
     match (s.enabled || post, outside) {
         (true, Some(u)) => {
-            if s.announced_url.as_deref() != Some(u) || at - s.announced_at >= REANNOUNCE_SECS || s.problem.is_some() || s.announced_post != post {
+            let every = if post { POST_REANNOUNCE_SECS } else { REANNOUNCE_SECS };
+            if s.announced_url.as_deref() != Some(u) || at - s.announced_at >= every || s.problem.is_some() || s.announced_post != post {
                 Announce::TryWith(u.to_string())
             } else {
                 Announce::Nothing
@@ -920,7 +932,8 @@ fn forward_list(msg: &str) {
 async fn announce_step() {
     let at = now();
     let s = current();
-    let post = crate::post_office::on();
+    // 11-28: 켜져 있어도 배터리·종량제·디스크 부족·핵심인데 임시 주소면 우체국 표를 뺀다(post_core::advertise_pause).
+    let post = crate::post_office::on() && crate::post_core::advertise_pause().is_none();
     let plan = announce_plan_with(&s, outside_url().as_deref(), at, post);
     if s.enabled && outside_url().is_none() {
         update(|x| x.problem = Some("no-outside".into()));
@@ -945,7 +958,8 @@ async fn announce_step() {
             // 바깥 주소로 **스스로** 들어와 본다. 터널 주소는 cloudflare 이름이라 DNS 검사도 그대로 건다.
             // 기본 릴레이와 같은 주소(N100 자기 주소)는 DNS 공개 검사를 건너뛴다 — N100 자신에게선 ts.net 이 100.x(MagicDNS)로 풀린다.
             //   실제로 웹소켓으로 붙어 REQ→EOSE 가 오는지만 본다.
-            if !probe_inner(&url, !is_default(&url)).await {
+            let own = s.own_url.as_deref().and_then(clean_relay_url);
+            if !probe_inner(&url, !is_default(&url) && own.as_deref() != Some(url.as_str())).await {
                 // 옛 주소를 계속 알리면 이웃이 죽은 곳에 붙는다 — 뺀 목록으로 바꿔 둔다.
                 if s.announced_url.is_some() && publish_list(&sk, None, false).await {
                     update(|x| {
@@ -1049,6 +1063,25 @@ pub(crate) fn post_announce_state() -> (bool, bool) {
 /// 지금 알리고 있는 내 릴레이 주소 — 켜져 있고, 지금 바깥 주소로 스스로 들어와 본 뒤 그 주소를 알린 때만.
 /// 릴레이 지킴이 확인(relay_keeper.rs, docs/KEEPER-THANKS.md §1)이 이것만 쓴다.
 pub(crate) fn sharing_url() -> Option<String> {
+    sharing_url_inner()
+}
+
+/// 지금 바깥에서 붙을 수 있는 내 릴레이 주소(post_core 알리기 판단·건강 상태가 쓴다).
+pub(crate) fn current_outside_url() -> Option<String> { outside_url() }
+
+/// 11-28 테일스케일 고정 주소를 받았을 때(사람이 동의해 켠 한 번) — 내 바깥 주소 칸이 비어 있으면 그 주소를 우체국 주소로 쓴다.
+pub(crate) fn adopt_fixed_relay(https_url: &str) {
+    let Some(u) = clean_relay_url(&format!("{}/api/relay", https_url.trim_end_matches('/').replacen("https://", "wss://", 1))) else { return };
+    let changed = update(|s| {
+        if s.own_url.as_deref().is_some_and(|x| !x.trim().is_empty()) { return false; }
+        s.own_url = Some(u.clone());
+        s.problem = None;
+        true
+    });
+    if changed { kick_now(); }
+}
+
+fn sharing_url_inner() -> Option<String> {
     let s = current();
     let outside = outside_url();
     (s.enabled && outside.is_some() && s.announced_url == outside).then_some(outside).flatten()
